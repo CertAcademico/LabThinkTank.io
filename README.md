@@ -1,6 +1,6 @@
-![LabThinkTank Banner](Imagen Cert Academico.png)
-
-
+<p align="center">
+  <img src="Imagen Cert Academico.png" alt="CertAcademico LabThinkTank" width="800">
+</p>
 
 # LabThinkTank.io
 

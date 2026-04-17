@@ -1,3 +1,7 @@
+![LabThinkTank Banner](Imagen Cert Academico.png)
+
+
+
 # LabThinkTank.io
 
 # ⚖️ Aviso Legal y Términos de Uso - LabThinkTank.io

@@ -1,4 +1,79 @@
-<p align="center">
+# LabThinkTank.io
+
+Cybersecurity Research, Offensive Security & Training Framework
+
+---
+
+## Core Domains
+
+- Linux
+- Networking
+- Bash Scripting
+- OSINT
+- Pentesting
+- Threat Intelligence
+- Malware Analysis
+- AI Security
+
+---
+
+## Repository Architecture
+
+```text
+assets/
+automation/
+containers/
+docs/
+labs/
+reports/
+templates/
+tools/
+```
+
+---
+
+## Methodologies
+
+- MITRE ATT&CK
+- OWASP
+- PTES
+- NIST
+
+---
+
+## Labs
+
+- Linux CLI
+- Bash Scripting
+- Networking
+- TryHackMe
+- HackTheBox
+
+---
+
+## Offensive Security Areas
+
+- Reconnaissance
+- Enumeration
+- Web Exploitation
+- Cloud Security
+- Post-Exploitation
+- Threat Hunting
+
+---
+
+## Deployment
+
+```bash
+git clone https://github.com/CertAcademico/LabThinkTank.io.git
+cd LabThinkTank.io
+```
+
+---
+
+## Organization
+
+CertAcademico<p align="center">
   <img src="Imagen Cert Academico.png" alt="CertAcademico LabThinkTank" width="800">
 </p>
 

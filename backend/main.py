@@ -1,22 +1,34 @@
 import os
+from contextlib import asynccontextmanager
+
 import requests
 import anthropic
 from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+from db import init_db
 from intelligence.threat_engine import get_threat_feed, add_uploaded_iocs
 from intelligence.actor_engine import get_threat_actors
 from intelligence.campaign_engine import get_campaigns
+from intelligence.misp_engine import fetch_misp_iocs, get_misp_status
 from ai.ai_engine import analyze_ioc
-from services.findings_service import get_findings
+from services.findings_service import get_findings, add_finding
 from services.upload_service import parse_upload
 from services.enrichment_service import enrich_ioc
 from intelligence.ioa_engine import get_ioas
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_db()
+    yield
+
+
 app = FastAPI(
     title="CTI-Lab API",
     description="AI Native Cyber Threat Intelligence Platform",
-    version="1.0.0"
+    version="1.1.0",
+    lifespan=lifespan,
 )
 
 _CORS_ORIGINS = os.environ.get(
@@ -33,34 +45,24 @@ app.add_middleware(
 )
 
 
+# ── Health ────────────────────────────────────────────────────────────────────
+
 @app.get("/")
 def home():
-    return {
-        "platform": "CTI-Lab",
-        "status": "running",
-        "version": "1.0.0"
-    }
+    return {"platform": "CTI-Lab", "status": "running", "version": "1.1.0"}
 
+
+# ── Missions ──────────────────────────────────────────────────────────────────
 
 @app.get("/missions")
 def missions():
     return [
-        {
-            "id": 1,
-            "title": "Operacion Black Lynx",
-            "difficulty": "medium",
-            "type": "phishing",
-            "status": "active"
-        },
-        {
-            "id": 2,
-            "title": "Ransomware Universidad",
-            "difficulty": "critical",
-            "type": "ransomware",
-            "status": "active"
-        }
+        {"id": 1, "title": "Operacion Black Lynx",   "difficulty": "medium",   "type": "phishing",   "status": "active"},
+        {"id": 2, "title": "Ransomware Universidad",  "difficulty": "critical", "type": "ransomware", "status": "active"},
     ]
 
+
+# ── Threat Intelligence ───────────────────────────────────────────────────────
 
 @app.get("/ioc-feed")
 def ioc_feed():
@@ -82,6 +84,55 @@ def findings():
     return get_findings()
 
 
+@app.post("/findings")
+def create_finding(payload: dict = Body(...)):
+    return add_finding(
+        severity    = payload.get("severity", "MEDIUM"),
+        title       = payload.get("title", ""),
+        description = payload.get("description", ""),
+        mitre       = payload.get("mitre", ""),
+        source      = payload.get("source", "manual"),
+    )
+
+
+@app.get("/ioas")
+def ioas():
+    return get_ioas()
+
+
+# ── MISP ──────────────────────────────────────────────────────────────────────
+
+@app.get("/misp/status")
+def misp_status():
+    return get_misp_status()
+
+
+@app.get("/misp/iocs")
+def misp_iocs(limit: int = 50):
+    try:
+        iocs = fetch_misp_iocs(limit=min(limit, 200))
+        return {"count": len(iocs), "iocs": iocs}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"MISP fetch failed: {e}")
+
+
+@app.post("/misp/import")
+def misp_import(limit: int = 50):
+    """Pull IOCs from MISP and persist them into the local DB."""
+    try:
+        iocs = fetch_misp_iocs(limit=min(limit, 200))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"MISP fetch failed: {e}")
+    added = add_uploaded_iocs(iocs)
+    return {
+        "fetched": len(iocs),
+        "added":   len(added),
+        "skipped": len(iocs) - len(added),
+    }
+
+
+# ── File Upload ───────────────────────────────────────────────────────────────
+
 @app.post("/upload")
 async def upload_export(file: UploadFile = File(...)):
     allowed = {".csv", ".json", ".txt", ".stix"}
@@ -91,22 +142,18 @@ async def upload_export(file: UploadFile = File(...)):
 
     raw = await file.read()
     if len(raw) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large. Maximum size is 5 MB.")
+        raise HTTPException(status_code=413, detail="File too large. Maximum 5 MB.")
 
     try:
         parsed = parse_upload(file.filename or "", raw)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Parse error: {str(e)}")
+        raise HTTPException(status_code=422, detail=f"Parse error: {e}")
 
     added = add_uploaded_iocs(parsed)
+    return {"parsed": len(parsed), "added": len(added), "skipped": len(parsed) - len(added), "iocs": added}
 
-    return {
-        "parsed": len(parsed),
-        "added": len(added),
-        "skipped": len(parsed) - len(added),
-        "iocs": added
-    }
 
+# ── AI ────────────────────────────────────────────────────────────────────────
 
 @app.get("/ai/analyze/{ioc}")
 def ai_analysis(ioc: str):
@@ -118,16 +165,11 @@ def enrich(ioc: str):
     return enrich_ioc(ioc)
 
 
-@app.get("/ioas")
-def ioas():
-    return get_ioas()
-
-
 @app.post("/ai/chat")
 def ai_chat(payload: dict = Body(...)):
     prompt = payload.get("message", "")
 
-    iocs = get_threat_feed()
+    iocs   = get_threat_feed()
     actors = get_threat_actors()
 
     ioc_summary = "\n".join(
@@ -150,33 +192,20 @@ TRACKED THREAT ACTORS:
 Use this context when answering. Be concise and technical."""
 
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
-
     if anthropic_key:
         client = anthropic.Anthropic(api_key=anthropic_key)
         message = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1024,
-            system=[
-                {
-                    "type": "text",
-                    "text": system_context,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
+            system=[{"type": "text", "text": system_context, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": prompt}],
         )
         return {"response": message.content[0].text}
 
-    # Fallback to Ollama when no Anthropic key is configured
     ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
     response = requests.post(
         f"{ollama_url}/api/generate",
-        json={
-            "model": "llama3",
-            "prompt": f"{system_context}\n\nUser query: {prompt}\n\nProvide a technical cybersecurity response.",
-            "stream": False,
-        },
+        json={"model": "llama3", "prompt": f"{system_context}\n\nUser query: {prompt}\n\nProvide a technical cybersecurity response.", "stream": False},
         timeout=60,
     )
-    data = response.json()
-    return {"response": data["response"]}
+    return {"response": response.json()["response"]}

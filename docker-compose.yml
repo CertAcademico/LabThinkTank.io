@@ -5,14 +5,20 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    volumes:
+      - cti_data:/data
     environment:
-      # If Ollama runs on the host machine (not in Docker), use host.docker.internal
+      - DB_PATH=/data/cti.db
+      # Ollama — if running on host machine use host.docker.internal
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
       - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY:-}
       - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY:-}
       - SHODAN_API_KEY=${SHODAN_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - CORS_ORIGINS=*
+      # MISP — leave blank to use public botvrij.eu feed (no auth needed)
+      - MISP_URL=${MISP_URL:-}
+      - MISP_KEY=${MISP_KEY:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -37,3 +43,6 @@ services:
     command: tunnel --no-autoupdate --url http://frontend:80
     depends_on:
       - frontend
+
+volumes:
+  cti_data:

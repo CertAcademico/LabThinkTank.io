@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import AuthPage      from './components/AuthPage'
-import GlobalOverview from './components/GlobalOverview'
+import AuthPage        from './components/AuthPage'
+import AdminPanel      from './components/AdminPanel'
+import GlobalOverview  from './components/GlobalOverview'
 import ThreatGraphView from './components/ThreatGraphView'
-import AICopilot      from './components/AICopilot'
-import ATTCKMatrix    from './components/ATTCKMatrix'
-import ThreatTimeline from './components/ThreatTimeline'
-import IOCIOABoard    from './components/IOCIOABoard'
-import IntelFeed      from './components/IntelFeed'
-import SandboxLab     from './components/SandboxLab'
+import AICopilot       from './components/AICopilot'
+import ATTCKMatrix     from './components/ATTCKMatrix'
+import ThreatTimeline  from './components/ThreatTimeline'
+import IOCIOABoard     from './components/IOCIOABoard'
+import IntelFeed       from './components/IntelFeed'
+import SandboxLab      from './components/SandboxLab'
+import ChallengeArena  from './components/ChallengeArena'
 
-type ViewId = 'overview' | 'graph' | 'copilot' | 'attack' | 'timeline' | 'ioc' | 'feeds' | 'sandbox'
+type ViewId = 'overview' | 'graph' | 'copilot' | 'attack' | 'timeline' | 'ioc' | 'feeds' | 'sandbox' | 'retos'
 
 const NAV: { id: ViewId; label: string; tag?: string; icon: string; group?: string }[] = [
   { id: 'overview',  label: 'Threat Overview',  icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',                                                         group: 'Plataforma' },
@@ -21,6 +23,7 @@ const NAV: { id: ViewId; label: string; tag?: string; icon: string; group?: stri
   { id: 'ioc',       label: 'IOC / IOA Board',  icon: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z',               group: 'Plataforma' },
   { id: 'feeds',     label: 'Intel Feeds',      icon: 'M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16M5 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',                                group: 'Plataforma' },
   { id: 'sandbox',   label: 'Sandbox Lab',      icon: 'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3', tag: 'LAB', group: 'Educación' },
+  { id: 'retos',     label: 'Mis Retos',        icon: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4', tag: 'RETO', group: 'Educación' },
 ]
 
 function NavIcon({ d }: { d: string }) {
@@ -47,7 +50,15 @@ function Clock() {
 
 function Shell() {
   const { user, logout } = useAuth()
-  const [view, setView]  = useState<ViewId>('overview')
+  const [view,      setView]      = useState<ViewId>('overview')
+  const [adminMode, setAdminMode] = useState(false)
+
+  // Admin goes straight to admin panel on first login
+  const isAdmin = user?.role === 'admin'
+
+  if (isAdmin && adminMode) {
+    return <AdminPanel onExitAdmin={() => setAdminMode(false)} />
+  }
 
   const renderView = () => {
     switch (view) {
@@ -59,6 +70,7 @@ function Shell() {
       case 'ioc':       return <IOCIOABoard />
       case 'feeds':     return <IntelFeed />
       case 'sandbox':   return <SandboxLab />
+      case 'retos':     return <ChallengeArena />
     }
   }
 
@@ -112,9 +124,11 @@ function Shell() {
                     </span>
                     {item.tag && (
                       <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0"
-                            style={item.id === 'sandbox'
-                              ? { background: 'rgba(74,222,128,0.12)', color: '#4ade80' }
-                              : { background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}>
+                            style={
+                              item.id === 'sandbox' ? { background: 'rgba(74,222,128,0.12)',   color: '#4ade80' }
+                            : item.id === 'retos'   ? { background: 'rgba(250,204,21,0.12)',   color: '#facc15' }
+                            :                         { background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }
+                            }>
                         {item.tag}
                       </span>
                     )}
@@ -128,16 +142,25 @@ function Shell() {
         {/* User + status */}
         <div className="px-4 py-3 border-t space-y-2" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
           {user && (
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-xs text-slate-400 truncate">{user.name}</p>
-                <p className="text-[9px] text-slate-700 truncate">{user.email}</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs text-slate-400 truncate">{user.name}</p>
+                  <p className="text-[9px] text-slate-700 truncate">{user.email}</p>
+                </div>
+                <button onClick={logout}
+                        className="text-[9px] text-slate-700 hover:text-slate-500 shrink-0 px-1.5 py-1 rounded transition-colors"
+                        style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+                  Salir
+                </button>
               </div>
-              <button onClick={logout}
-                      className="text-[9px] text-slate-700 hover:text-slate-500 shrink-0 px-1.5 py-1 rounded transition-colors"
-                      style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-                Salir
-              </button>
+              {isAdmin && (
+                <button onClick={() => setAdminMode(true)}
+                        className="w-full text-[10px] font-bold py-1.5 rounded-lg transition-all"
+                        style={{ background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)', color: '#f97316' }}>
+                  ⚙ Panel de Admin
+                </button>
+              )}
             </div>
           )}
           <div className="flex items-center gap-2">

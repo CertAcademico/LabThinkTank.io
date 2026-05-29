@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import HelpBot from './HelpBot'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -1008,6 +1009,9 @@ sys.stdout = _cap
           </div>
         </div>
       </div>
+
+      {/* ── Help Bot ───────────────────────────────────────────────────────── */}
+      <HelpBot currentCode={code} lessonTitle={`${track.label} — ${lesson.title}`} />
 
       {/* ── Footer nav ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">

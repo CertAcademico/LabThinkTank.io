@@ -40,9 +40,58 @@ def init_db() -> None:
                 created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
             );
 
+            CREATE TABLE IF NOT EXISTS datasets (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                source      TEXT NOT NULL DEFAULT 'manual',
+                data_json   TEXT NOT NULL DEFAULT '[]',
+                schema_json TEXT NOT NULL DEFAULT '{}',
+                created_by  TEXT NOT NULL,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS challenges (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                title       TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                objective   TEXT NOT NULL DEFAULT '',
+                dataset_id  INTEGER REFERENCES datasets(id),
+                criteria    TEXT NOT NULL DEFAULT '',
+                deadline    TEXT,
+                status      TEXT NOT NULL DEFAULT 'active',
+                created_by  TEXT NOT NULL,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS challenge_assignments (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                challenge_id INTEGER NOT NULL REFERENCES challenges(id),
+                user_email   TEXT    NOT NULL,
+                assigned_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(challenge_id, user_email)
+            );
+
+            CREATE TABLE IF NOT EXISTS submissions (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                challenge_id INTEGER NOT NULL REFERENCES challenges(id),
+                user_email   TEXT NOT NULL,
+                user_name    TEXT NOT NULL DEFAULT '',
+                code         TEXT NOT NULL DEFAULT '',
+                output       TEXT NOT NULL DEFAULT '',
+                plots_json   TEXT NOT NULL DEFAULT '[]',
+                notes        TEXT NOT NULL DEFAULT '',
+                score        INTEGER,
+                feedback     TEXT NOT NULL DEFAULT '',
+                submitted_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
             CREATE INDEX IF NOT EXISTS idx_iocs_ioc ON iocs(ioc);
             CREATE INDEX IF NOT EXISTS idx_iocs_source ON iocs(source);
             CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+            CREATE INDEX IF NOT EXISTS idx_assign_challenge ON challenge_assignments(challenge_id);
+            CREATE INDEX IF NOT EXISTS idx_assign_user ON challenge_assignments(user_email);
+            CREATE INDEX IF NOT EXISTS idx_submissions_challenge ON submissions(challenge_id);
         """)
 
 

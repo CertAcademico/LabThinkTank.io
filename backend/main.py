@@ -92,6 +92,62 @@ def home():
     return {"platform": "CTI-Lab", "status": "running", "version": "1.1.0"}
 
 
+# ── Search ────────────────────────────────────────────────────────────────────
+
+@app.get("/search")
+def search(q: str = "", authorization: str = Header(None)):
+    _require_user(authorization)
+    q = q.strip().lower()
+    if len(q) < 2:
+        return {"iocs": [], "actors": [], "campaigns": [], "ttps": []}
+
+    feed    = get_threat_feed()
+    actors  = get_threat_actors()
+    camps   = get_campaigns()
+    ioas    = get_ioas()
+
+    def _match(text: str) -> bool:
+        return q in str(text).lower()
+
+    ioc_results = [
+        ioc for ioc in feed
+        if _match(ioc.get("ioc","")) or _match(ioc.get("threat_actor",""))
+        or _match(ioc.get("mitre","")) or _match(ioc.get("type",""))
+        or _match(ioc.get("country",""))
+    ][:10]
+
+    actor_results = [
+        {"name": a["name"], "country": a["country"], "severity": a["severity"],
+         "active_campaign": a["active_campaign"], "motivation": a["motivation"],
+         "ttps": a.get("ttps",[])}
+        for a in actors
+        if _match(a["name"]) or _match(str(a.get("aliases","")))
+        or any(_match(t) for t in a.get("ttps",[]))
+        or _match(a.get("active_campaign","")) or _match(a.get("motivation",""))
+    ][:5]
+
+    camp_results = [
+        {"name": c["name"], "actor": c["actor"], "status": c["status"],
+         "last_activity": c["last_activity"], "ioc_count": c.get("ioc_count",0)}
+        for c in camps
+        if _match(c["name"]) or _match(c.get("actor",""))
+        or _match(c.get("description","")) or any(_match(m) for m in c.get("mitre",[]))
+    ][:5]
+
+    ttp_results = [
+        {"ttp": i["ttp"], "ttp_name": i["ttp_name"], "tactic": i["tactic"],
+         "priority": i["priority"], "attributed_actor": i["attributed_actor"],
+         "ioa": i.get("ioa","")}
+        for i in ioas
+        if _match(i["ttp"]) or _match(i["ttp_name"])
+        or _match(i["tactic"]) or _match(i.get("ioa",""))
+        or _match(i.get("attributed_actor",""))
+    ][:5]
+
+    return {"iocs": ioc_results, "actors": actor_results,
+            "campaigns": camp_results, "ttps": ttp_results}
+
+
 # ── Missions ──────────────────────────────────────────────────────────────────
 
 @app.get("/missions")

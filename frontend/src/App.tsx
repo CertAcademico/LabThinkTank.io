@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { BadgeRow, type Badge } from './components/BadgeCard'
+import IOCSearch from './components/IOCSearch'
 import AuthPage        from './components/AuthPage'
 import AdminPanel      from './components/AdminPanel'
 import GlobalOverview  from './components/GlobalOverview'
@@ -204,13 +205,7 @@ function Shell() {
             <p className="text-[10px] text-slate-600 font-mono">CTI Nexus · Enterprise Cyber Intelligence</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs text-slate-500"
-                 style={{ background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.06)' }}>
-              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-              </svg>
-              <span>Buscar IOC, actor, TTP...</span>
-            </div>
+            <IOCSearch onNavigate={v => setView(v as ViewId)} />
             <button className="relative p-2 rounded-lg border"
                     style={{ background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.06)' }}>
               <svg viewBox="0 0 24 24" className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" strokeWidth="1.5">

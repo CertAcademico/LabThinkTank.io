@@ -742,3 +742,67 @@ def student_team(authorization: str = Header(None)):
             LIMIT 1
         """, (user["email"],)).fetchone()
     return dict(row) if row else None
+
+
+# ── CTF Phases (Admin) ────────────────────────────────────────────────────────
+
+@app.get("/admin/ctf-phases")
+def admin_ctf_phases(authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM ctf_phases ORDER BY order_idx"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/admin/ctf-phases")
+def admin_create_ctf_phase(payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        max_order = conn.execute("SELECT COALESCE(MAX(order_idx),0) FROM ctf_phases").fetchone()[0]
+        cur = conn.execute(
+            "INSERT INTO ctf_phases (order_idx, name, category, reto_count, group_label, emoji) VALUES (?,?,?,?,?,?)",
+            (max_order + 1, payload.get("name","Nueva fase"), payload.get("category",""),
+             payload.get("reto_count", 0), payload.get("group_label",""), payload.get("emoji","📅")),
+        )
+    return {"id": cur.lastrowid}
+
+
+@app.patch("/admin/ctf-phases/{phase_id}")
+def admin_update_ctf_phase(phase_id: int, payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        if "status" in payload:
+            if payload["status"] not in ("active", "inactive"):
+                raise HTTPException(status_code=400, detail="status debe ser 'active' o 'inactive'")
+            conn.execute("UPDATE ctf_phases SET status = ? WHERE id = ?", (payload["status"], phase_id))
+        if "solves" in payload:
+            conn.execute("UPDATE ctf_phases SET solves = ? WHERE id = ?", (payload["solves"], phase_id))
+        if "name" in payload:
+            conn.execute("UPDATE ctf_phases SET name = ? WHERE id = ?", (payload["name"], phase_id))
+        if "reto_count" in payload:
+            conn.execute("UPDATE ctf_phases SET reto_count = ? WHERE id = ?", (payload["reto_count"], phase_id))
+        if "emoji" in payload:
+            conn.execute("UPDATE ctf_phases SET emoji = ? WHERE id = ?", (payload["emoji"], phase_id))
+    return {"ok": True}
+
+
+@app.delete("/admin/ctf-phases/{phase_id}")
+def admin_delete_ctf_phase(phase_id: int, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute("DELETE FROM ctf_phases WHERE id = ?", (phase_id,))
+    return {"ok": True}
+
+
+# ── CTF Phases (Student) ──────────────────────────────────────────────────────
+
+@app.get("/student/ctf-phases")
+def student_ctf_phases(authorization: str = Header(None)):
+    _require_user(authorization)
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, order_idx, name, category, reto_count, group_label, emoji, status, solves FROM ctf_phases ORDER BY order_idx"
+        ).fetchall()
+    return [dict(r) for r in rows]

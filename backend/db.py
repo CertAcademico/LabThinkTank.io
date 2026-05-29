@@ -121,6 +121,19 @@ def init_db() -> None:
                 UNIQUE(user_email, badge_id)
             );
 
+            CREATE TABLE IF NOT EXISTS ctf_phases (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_idx   INTEGER NOT NULL DEFAULT 0,
+                name        TEXT    NOT NULL,
+                category    TEXT    NOT NULL DEFAULT '',
+                reto_count  INTEGER NOT NULL DEFAULT 0,
+                group_label TEXT    NOT NULL DEFAULT '',
+                emoji       TEXT    NOT NULL DEFAULT '📅',
+                status      TEXT    NOT NULL DEFAULT 'inactive',
+                solves      INTEGER NOT NULL DEFAULT 0,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            );
+
             CREATE INDEX IF NOT EXISTS idx_iocs_ioc ON iocs(ioc);
             CREATE INDEX IF NOT EXISTS idx_iocs_source ON iocs(source);
             CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -130,6 +143,27 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_user_badges ON user_badges(user_email);
         """)
         _seed_badges(conn)
+        _seed_ctf_phases(conn)
+
+
+CTF_PHASE_SEEDS = [
+    # (order_idx, name, category, reto_count, group_label, emoji, status, solves)
+    (1, 'Día 1',        'Fundamentos',   13, '',           '📅', 'inactive', 54),
+    (2, 'Día 2',        'Explotación',   13, '',           '📅', 'inactive', 30),
+    (3, 'Día 3',        'Encadenamiento', 5, '',           '🔥', 'inactive',  2),
+    (4, 'Día 4 — Fase 3', 'Avanzada',   50, 'G1 / G2 / G3', '☠️', 'inactive', 0),
+    (5, 'Fase 4',       'Muerte Letal',   0, '',           '☠️', 'inactive',  0),
+]
+
+
+def _seed_ctf_phases(conn) -> None:
+    existing = conn.execute("SELECT COUNT(*) FROM ctf_phases").fetchone()[0]
+    if existing:
+        return
+    conn.executemany(
+        "INSERT INTO ctf_phases (order_idx, name, category, reto_count, group_label, emoji, status, solves) VALUES (?,?,?,?,?,?,?,?)",
+        CTF_PHASE_SEEDS,
+    )
 
 
 BADGE_SEEDS = [

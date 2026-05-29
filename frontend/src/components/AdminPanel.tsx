@@ -15,7 +15,13 @@ interface Assignment { name: string; email: string; assigned_at: string; submitt
 interface Submission { id: number; challenge_id: number; challenge_title: string; user_name: string; user_email: string; code: string; output: string; plots_json: string; notes: string; score?: number; feedback: string; submitted_at: string }
 interface Stats      { students: number; active_challenges: number; datasets: number; submissions_today: number; pending_scoring: number; recent_submissions: { user_name: string; challenge: string; submitted_at: string; score?: number }[] }
 
-type Tab = 'dashboard' | 'users' | 'teams' | 'badges' | 'datasets' | 'retos' | 'submissions'
+type Tab = 'dashboard' | 'users' | 'teams' | 'badges' | 'fases' | 'datasets' | 'retos' | 'submissions'
+
+interface CtfPhase {
+  id: number; order_idx: number; name: string; category: string
+  reto_count: number; group_label: string; emoji: string
+  status: 'active' | 'inactive'; solves: number
+}
 
 const ROLE_OPTS = ['student', 'analyst', 'senior_analyst', 'instructor', 'admin']
 const ROLE_COLOR: Record<string, string> = {
@@ -557,6 +563,235 @@ function InsigniasTab({ allBadges, awarded, token, onRefresh }: {
   )
 }
 
+// ── Fases CTF Tab ────────────────────────────────────────────────────────────
+
+function FasesCTFTab({ phases, token, onRefresh }: {
+  phases: CtfPhase[]; token: string; onRefresh: () => void
+}) {
+  const [showForm, setShowForm] = useState(false)
+  const [form,     setForm]     = useState({ name: '', category: '', reto_count: '', group_label: '', emoji: '📅' })
+  const [loading,  setLoading]  = useState<number | null>(null)  // phase id being toggled
+  const [creating, setCreating] = useState(false)
+
+  const toggle = async (phase: CtfPhase) => {
+    setLoading(phase.id)
+    const nextStatus = phase.status === 'active' ? 'inactive' : 'active'
+    try {
+      await apiFetch(`/admin/ctf-phases/${phase.id}`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: nextStatus }),
+      })
+      onRefresh()
+    } catch (e) { alert(e) }
+    finally { setLoading(null) }
+  }
+
+  const create = async () => {
+    if (!form.name) return
+    setCreating(true)
+    try {
+      await apiFetch('/admin/ctf-phases', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          ...form,
+          reto_count: Number(form.reto_count) || 0,
+        }),
+      })
+      setShowForm(false)
+      setForm({ name: '', category: '', reto_count: '', group_label: '', emoji: '📅' })
+      onRefresh()
+    } catch (e) { alert(e) }
+    finally { setCreating(false) }
+  }
+
+  const del = async (id: number) => {
+    if (!confirm('¿Eliminar esta fase?')) return
+    await apiFetch(`/admin/ctf-phases/${id}`, token, { method: 'DELETE' }).catch(alert)
+    onRefresh()
+  }
+
+  const updateSolves = async (phase: CtfPhase, delta: number) => {
+    const next = Math.max(0, phase.solves + delta)
+    await apiFetch(`/admin/ctf-phases/${phase.id}`, token, {
+      method: 'PATCH', body: JSON.stringify({ solves: next }),
+    }).catch(alert)
+    onRefresh()
+  }
+
+  const active  = phases.filter(p => p.status === 'active').length
+  const inactive = phases.filter(p => p.status === 'inactive').length
+
+  return (
+    <div className="space-y-5">
+
+      {/* Summary bar */}
+      <div className="grid grid-cols-3 gap-4">
+        <StatCard label="Fases totales"    value={phases.length}  color="#a78bfa" />
+        <StatCard label="Activas"          value={active}         color="#4ade80" />
+        <StatCard label="Desactivadas"     value={inactive}       color="#475569" />
+      </div>
+
+      {/* Instructions */}
+      <div className="rounded-xl px-4 py-3 text-xs text-slate-400 leading-relaxed"
+           style={{ background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.1)' }}>
+        <span className="text-cyan-400 font-bold">Cómo funciona: </span>
+        Activa una fase para que los estudiantes puedan verla y acceder a sus retos.
+        Desactívala para ocultarla. El toggle cambia el estado en tiempo real.
+        Los <span className="text-yellow-400">solves</span> puedes ajustarlos manualmente con ±1.
+      </div>
+
+      {/* Add phase button */}
+      <div className="flex justify-end">
+        <button onClick={() => setShowForm(s => !s)}
+                className="px-4 py-2 rounded-lg text-xs font-bold"
+                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
+          {showForm ? 'Cancelar' : '+ Nueva fase'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="rounded-xl p-5 space-y-3" style={glass}>
+          <p className="text-xs font-bold text-slate-300">Nueva fase / día</p>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: 'Nombre *',     key: 'name',        placeholder: 'Día 5 — Post-Explotación' },
+              { label: 'Categoría',    key: 'category',    placeholder: 'Post-Explotación' },
+              { label: 'Nº de retos', key: 'reto_count',  placeholder: '20' },
+              { label: 'Grupos',       key: 'group_label', placeholder: 'G1 / G2 / G3' },
+            ].map(f => (
+              <div key={f.key} className="space-y-1">
+                <label className="text-[10px] text-slate-600">{f.label}</label>
+                <input value={(form as Record<string, string>)[f.key]}
+                       onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                       placeholder={f.placeholder}
+                       className="w-full rounded-lg px-3 py-2 text-xs text-slate-100 outline-none"
+                       style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }} />
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-[10px] text-slate-600">Emoji:</label>
+            <input value={form.emoji} onChange={e => setForm(p => ({ ...p, emoji: e.target.value }))}
+                   className="w-16 rounded-lg px-2 py-1.5 text-sm text-center outline-none"
+                   style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+            <span className="text-[10px] text-slate-700">Sugerencias: 📅 🔥 ☠️ ⚡ 🧨 🏴‍☠️ 🎯 💀</span>
+          </div>
+          <button onClick={create} disabled={creating || !form.name}
+                  className="px-5 py-2 rounded-lg text-xs font-bold disabled:opacity-40"
+                  style={{ background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.4)', color: '#a78bfa' }}>
+            {creating ? 'Creando...' : 'Crear fase →'}
+          </button>
+        </div>
+      )}
+
+      {/* Phase cards */}
+      <div className="space-y-3">
+        {phases.map(phase => {
+          const isActive  = phase.status === 'active'
+          const isLoading = loading === phase.id
+          const accentColor = isActive ? '#4ade80' : '#475569'
+
+          return (
+            <div key={phase.id}
+                 className="rounded-xl overflow-hidden transition-all"
+                 style={{
+                   ...glass,
+                   border: `1px solid ${isActive ? 'rgba(74,222,128,0.25)' : 'rgba(255,255,255,0.07)'}`,
+                   background: isActive ? 'rgba(74,222,128,0.04)' : 'rgba(15,23,42,0.6)',
+                 }}>
+              <div className="flex items-center gap-4 px-5 py-4">
+
+                {/* Emoji + order */}
+                <div className="flex flex-col items-center shrink-0 w-10">
+                  <span className="text-2xl">{phase.emoji}</span>
+                  <span className="text-[9px] text-slate-700 font-mono mt-0.5">#{phase.order_idx}</span>
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    <p className="text-sm font-bold text-slate-100">{phase.name}</p>
+                    {phase.category && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                            style={{ background: `${accentColor}15`, color: accentColor }}>
+                        {phase.category}
+                      </span>
+                    )}
+                    {phase.group_label && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded font-mono"
+                            style={{ background: 'rgba(255,255,255,0.06)', color: '#64748b' }}>
+                        {phase.group_label}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 text-[10px] text-slate-600">
+                    {phase.reto_count > 0 && <span>{phase.reto_count} retos</span>}
+                    <div className="flex items-center gap-1">
+                      <span>{phase.solves} solves</span>
+                      <button onClick={() => updateSolves(phase, 1)}
+                              className="px-1 rounded hover:text-slate-400 transition-colors">+</button>
+                      <button onClick={() => updateSolves(phase, -1)}
+                              className="px-1 rounded hover:text-slate-400 transition-colors">−</button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status label */}
+                <div className="shrink-0 text-right">
+                  <p className="text-[10px] font-bold"
+                     style={{ color: isActive ? '#4ade80' : '#475569' }}>
+                    {isActive ? 'Activado' : 'Desactivado'}
+                  </p>
+                  <p className="text-[9px] text-slate-700 mt-0.5">
+                    {isActive ? 'Visible para estudiantes' : 'Oculto para estudiantes'}
+                  </p>
+                </div>
+
+                {/* Toggle switch */}
+                <button
+                  onClick={() => toggle(phase)}
+                  disabled={isLoading}
+                  className="shrink-0 relative w-12 h-6 rounded-full transition-all duration-300 disabled:opacity-50 focus:outline-none"
+                  style={{
+                    background: isActive
+                      ? 'rgba(74,222,128,0.3)'
+                      : 'rgba(255,255,255,0.1)',
+                    border: `1px solid ${isActive ? 'rgba(74,222,128,0.6)' : 'rgba(255,255,255,0.15)'}`,
+                    boxShadow: isActive ? '0 0 10px rgba(74,222,128,0.3)' : 'none',
+                  }}
+                  title={isActive ? 'Desactivar fase' : 'Activar fase'}>
+                  <span
+                    className="absolute top-0.5 w-5 h-5 rounded-full transition-all duration-300 flex items-center justify-center"
+                    style={{
+                      left: isActive ? 'calc(100% - 22px)' : '2px',
+                      background: isActive ? '#4ade80' : '#475569',
+                      boxShadow: isActive ? '0 0 6px rgba(74,222,128,0.8)' : 'none',
+                    }}>
+                    {isLoading
+                      ? <span className="w-2.5 h-2.5 border border-white border-t-transparent rounded-full animate-spin block" />
+                      : <span className="text-[8px] font-bold text-white">{isActive ? '✓' : '○'}</span>
+                    }
+                  </span>
+                </button>
+
+                {/* Delete */}
+                <button onClick={() => del(phase.id)}
+                        className="shrink-0 text-[10px] px-2 py-1 rounded transition-colors"
+                        style={{ border: `1px solid ${RED}30`, color: RED }}>
+                  ✕
+                </button>
+              </div>
+            </div>
+          )
+        })}
+        {phases.length === 0 && (
+          <p className="text-xs text-slate-700 px-2">Sin fases creadas. Usa el botón de arriba.</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Datasets Tab ──────────────────────────────────────────────────────────────
 
 function DatasetsTab({ datasets, token, onRefresh }: {
@@ -1085,6 +1320,7 @@ const TABS: { id: Tab; label: string; icon: string; badge?: number }[] = [
   { id: 'users',       label: 'Usuarios',   icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' },
   { id: 'teams',       label: 'Equipos',    icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10' },
   { id: 'badges',      label: 'Insignias',  icon: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z' },
+  { id: 'fases',       label: 'Fases CTF',  icon: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z' },
   { id: 'datasets',    label: 'Datasets',   icon: 'M4 7h16M4 12h16M4 17h16' },
   { id: 'retos',       label: 'Retos',      icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' },
   { id: 'submissions', label: 'Entregas',   icon: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2' },
@@ -1100,6 +1336,7 @@ export default function AdminPanel({ onExitAdmin }: { onExitAdmin: () => void })
   const [teams,      setTeams]      = useState<Team[]>([])
   const [allBadges,  setAllBadges]  = useState<Badge[]>([])
   const [awarded,    setAwarded]    = useState<AwardedBadge[]>([])
+  const [phases,     setPhases]     = useState<CtfPhase[]>([])
 
   const tk = token ?? ''
 
@@ -1111,6 +1348,7 @@ export default function AdminPanel({ onExitAdmin }: { onExitAdmin: () => void })
     apiFetch('/admin/teams',           tk).then(setTeams).catch(() => {})
     apiFetch('/admin/badges',          tk).then(setAllBadges).catch(() => {})
     apiFetch('/admin/badges/awarded',  tk).then(setAwarded).catch(() => {})
+    apiFetch('/admin/ctf-phases',      tk).then(setPhases).catch(() => {})
   }, [tk])
 
   useEffect(() => {
@@ -1222,6 +1460,7 @@ export default function AdminPanel({ onExitAdmin }: { onExitAdmin: () => void })
           {tab === 'users'       && <UsersTab       users={users} challenges={challenges} allBadges={allBadges} token={tk} onRefresh={fetchAll} />}
           {tab === 'teams'       && <EquiposTab     teams={teams} users={users} challenges={challenges} token={tk} onRefresh={fetchAll} />}
           {tab === 'badges'      && <InsigniasTab   allBadges={allBadges} awarded={awarded} token={tk} onRefresh={fetchAll} />}
+          {tab === 'fases'       && <FasesCTFTab    phases={phases} token={tk} onRefresh={fetchAll} />}
           {tab === 'datasets'    && <DatasetsTab    datasets={datasets} token={tk} onRefresh={fetchAll} />}
           {tab === 'retos'       && <RetosTab       challenges={challenges} datasets={datasets} users={users} token={tk} onRefresh={fetchAll} />}
           {tab === 'submissions' && <SubmissionsTab token={tk} />}

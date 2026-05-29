@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { BadgeRow, type Badge } from './components/BadgeCard'
 import AuthPage        from './components/AuthPage'
 import AdminPanel      from './components/AdminPanel'
 import GlobalOverview  from './components/GlobalOverview'
@@ -48,10 +49,21 @@ function Clock() {
   )
 }
 
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
+
 function Shell() {
-  const { user, logout } = useAuth()
+  const { user, logout, token } = useAuth()
   const [view,      setView]      = useState<ViewId>('overview')
   const [adminMode, setAdminMode] = useState(false)
+  const [myBadges,  setMyBadges]  = useState<Badge[]>([])
+
+  useEffect(() => {
+    if (!token || user?.role === 'admin') return
+    fetch(`${API_URL}/student/badges`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(setMyBadges)
+      .catch(() => {})
+  }, [token, user?.role])
 
   // Admin goes straight to admin panel on first login
   const isAdmin = user?.role === 'admin'
@@ -161,6 +173,14 @@ function Shell() {
                   ⚙ Panel de Admin
                 </button>
               )}
+            </div>
+          )}
+          {myBadges.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[9px] text-slate-700 uppercase tracking-wider font-bold">
+                Mis insignias ({myBadges.length})
+              </p>
+              <BadgeRow badges={myBadges} />
             </div>
           )}
           <div className="flex items-center gap-2">

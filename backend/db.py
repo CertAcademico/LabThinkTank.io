@@ -86,13 +86,83 @@ def init_db() -> None:
                 submitted_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
+            CREATE TABLE IF NOT EXISTS teams (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                name       TEXT NOT NULL UNIQUE,
+                color      TEXT NOT NULL DEFAULT '#22d3ee',
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS team_members (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                team_id    INTEGER NOT NULL REFERENCES teams(id),
+                user_email TEXT    NOT NULL,
+                joined_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(team_id, user_email)
+            );
+
+            CREATE TABLE IF NOT EXISTS badges (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                org         TEXT NOT NULL,
+                name        TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                tier        TEXT NOT NULL DEFAULT 'bronze',
+                icon        TEXT NOT NULL DEFAULT 'star',
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS user_badges (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_email TEXT    NOT NULL,
+                badge_id   INTEGER NOT NULL REFERENCES badges(id),
+                awarded_by TEXT    NOT NULL,
+                awarded_at TEXT    NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(user_email, badge_id)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_iocs_ioc ON iocs(ioc);
             CREATE INDEX IF NOT EXISTS idx_iocs_source ON iocs(source);
             CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
             CREATE INDEX IF NOT EXISTS idx_assign_challenge ON challenge_assignments(challenge_id);
             CREATE INDEX IF NOT EXISTS idx_assign_user ON challenge_assignments(user_email);
             CREATE INDEX IF NOT EXISTS idx_submissions_challenge ON submissions(challenge_id);
+            CREATE INDEX IF NOT EXISTS idx_user_badges ON user_badges(user_email);
         """)
+        _seed_badges(conn)
+
+
+BADGE_SEEDS = [
+    # ── CertAcademico ────────────────────────────────────────────────────────
+    ("CertAcademico", "Explorador de Datos",       "Completó su primer ejercicio en el Sandbox Lab",          "bronze",   "book"),
+    ("CertAcademico", "Analista Junior",            "Dominó el track CTI & pandas",                            "silver",   "chart"),
+    ("CertAcademico", "Científico de Datos",        "Completó el track ETL & Limpieza de Datos",               "gold",     "flask"),
+    ("CertAcademico", "Maestro de Visualización",   "Completó el track de Visualización con Matplotlib",       "gold",     "eye"),
+    ("CertAcademico", "Ingeniero ML",               "Completó el track de Machine Learning con scikit-learn",  "platinum", "cpu"),
+    ("CertAcademico", "Experto CTI",                "Completó todos los tracks del Sandbox Lab",               "diamond",  "shield"),
+    # ── redciber ─────────────────────────────────────────────────────────────
+    ("redciber",      "Ciberdefensor",              "Realizó su primera entrega de reto de ciberseguridad",    "bronze",   "lock"),
+    ("redciber",      "Threat Hunter",              "Obtuvo 70 o más en un reto de análisis de amenazas",      "silver",   "search"),
+    ("redciber",      "SOC Analyst",                "Obtuvo 85 o más en un reto de operaciones de seguridad",  "gold",     "radar"),
+    ("redciber",      "Analista de Amenazas",       "Completó 3 retos con score ≥ 80",                        "platinum", "target"),
+    ("redciber",      "Red Team Ready",             "Análisis excepcional — reto completado con 100 puntos",   "diamond",  "fire"),
+    # ── LabThinkTank ─────────────────────────────────────────────────────────
+    ("LabThinkTank",  "Lab Explorer",               "Primera sesión activa en el laboratorio Python",          "bronze",   "beaker"),
+    ("LabThinkTank",  "Data Engineer",              "Pipeline ETL funcional y documentado",                    "silver",   "flow"),
+    ("LabThinkTank",  "ML Practitioner",            "Modelo de Machine Learning entrenado y evaluado",         "gold",     "brain"),
+    ("LabThinkTank",  "Innovation Award",           "Mejor visualización del reto — elegido por el docente",   "diamond",  "star"),
+    ("LabThinkTank",  "Campeón del Reto",           "Primer lugar en el ranking de un reto grupal",            "diamond",  "trophy"),
+]
+
+
+def _seed_badges(conn) -> None:
+    existing = conn.execute("SELECT COUNT(*) FROM badges").fetchone()[0]
+    if existing:
+        return
+    conn.executemany(
+        "INSERT INTO badges (org, name, description, tier, icon) VALUES (?,?,?,?,?)",
+        BADGE_SEEDS,
+    )
 
 
 @contextmanager

@@ -572,3 +572,173 @@ def student_submit(challenge_id: int, payload: dict = Body(...), authorization: 
              payload.get("code",""), payload.get("output",""), plots, payload.get("notes","")),
         )
     return {"id": cur.lastrowid, "created": True}
+
+
+# ── Admin: User roles ─────────────────────────────────────────────────────────
+
+ALLOWED_ROLES = {"student", "analyst", "senior_analyst", "instructor", "admin"}
+
+@app.patch("/admin/users/{email}/role")
+def admin_set_role(email: str, payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    role = payload.get("role", "")
+    if role not in ALLOWED_ROLES:
+        raise HTTPException(status_code=400, detail=f"Rol inválido. Opciones: {', '.join(ALLOWED_ROLES)}")
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET role = ? WHERE email = ?", (role, email))
+    return {"ok": True, "email": email, "role": role}
+
+
+# ── Admin: Teams ──────────────────────────────────────────────────────────────
+
+@app.get("/admin/teams")
+def admin_teams(authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        teams = conn.execute(
+            "SELECT id, name, color, created_by, created_at FROM teams ORDER BY created_at"
+        ).fetchall()
+        result = []
+        for t in teams:
+            members = conn.execute("""
+                SELECT u.name, u.email, u.role
+                FROM team_members tm JOIN users u ON tm.user_email = u.email
+                WHERE tm.team_id = ?
+            """, (t["id"],)).fetchall()
+            result.append({**dict(t), "members": [dict(m) for m in members]})
+    return result
+
+
+@app.post("/admin/teams")
+def admin_create_team(payload: dict = Body(...), authorization: str = Header(None)):
+    admin = _require_admin(authorization)
+    name = payload.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Nombre requerido")
+    with get_conn() as conn:
+        try:
+            cur = conn.execute(
+                "INSERT INTO teams (name, color, created_by) VALUES (?,?,?)",
+                (name, payload.get("color", "#22d3ee"), admin["email"]),
+            )
+        except Exception:
+            raise HTTPException(status_code=409, detail="Ya existe un equipo con ese nombre")
+    return {"id": cur.lastrowid, "name": name}
+
+
+@app.delete("/admin/teams/{team_id}")
+def admin_delete_team(team_id: int, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute("DELETE FROM team_members WHERE team_id = ?", (team_id,))
+        conn.execute("DELETE FROM teams WHERE id = ?", (team_id,))
+    return {"ok": True}
+
+
+@app.post("/admin/teams/{team_id}/members")
+def admin_add_team_member(team_id: int, payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    emails = payload.get("emails", [])
+    with get_conn() as conn:
+        for email in emails:
+            conn.execute(
+                "INSERT OR IGNORE INTO team_members (team_id, user_email) VALUES (?,?)",
+                (team_id, email),
+            )
+    return {"ok": True}
+
+
+@app.delete("/admin/teams/{team_id}/members/{email}")
+def admin_remove_team_member(team_id: int, email: str, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM team_members WHERE team_id = ? AND user_email = ?", (team_id, email)
+        )
+    return {"ok": True}
+
+
+# ── Admin: Badges ─────────────────────────────────────────────────────────────
+
+@app.get("/admin/badges")
+def admin_badges(authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM badges ORDER BY org, tier").fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/admin/badges/award")
+def admin_award_badge(payload: dict = Body(...), authorization: str = Header(None)):
+    admin = _require_admin(authorization)
+    email    = payload.get("user_email", "")
+    badge_id = payload.get("badge_id")
+    if not email or not badge_id:
+        raise HTTPException(status_code=400, detail="user_email y badge_id son requeridos")
+    with get_conn() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO user_badges (user_email, badge_id, awarded_by) VALUES (?,?,?)",
+                (email, badge_id, admin["email"]),
+            )
+        except Exception:
+            raise HTTPException(status_code=409, detail="El usuario ya tiene esta insignia")
+    return {"ok": True}
+
+
+@app.delete("/admin/badges/revoke")
+def admin_revoke_badge(payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM user_badges WHERE user_email = ? AND badge_id = ?",
+            (payload.get("user_email"), payload.get("badge_id")),
+        )
+    return {"ok": True}
+
+
+@app.get("/admin/badges/awarded")
+def admin_badges_awarded(authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT ub.user_email, u.name AS user_name, b.org, b.name AS badge_name,
+                   b.tier, b.icon, ub.awarded_by, ub.awarded_at, ub.badge_id
+            FROM user_badges ub
+            JOIN badges b ON ub.badge_id = b.id
+            JOIN users u ON ub.user_email = u.email
+            ORDER BY ub.awarded_at DESC
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── Student: Badges ───────────────────────────────────────────────────────────
+
+@app.get("/student/badges")
+def student_badges(authorization: str = Header(None)):
+    user = _require_user(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT b.id, b.org, b.name, b.description, b.tier, b.icon,
+                   ub.awarded_at, ub.awarded_by
+            FROM user_badges ub JOIN badges b ON ub.badge_id = b.id
+            WHERE ub.user_email = ?
+            ORDER BY ub.awarded_at DESC
+        """, (user["email"],)).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── Student: Team ─────────────────────────────────────────────────────────────
+
+@app.get("/student/team")
+def student_team(authorization: str = Header(None)):
+    user = _require_user(authorization)
+    with get_conn() as conn:
+        row = conn.execute("""
+            SELECT t.id, t.name, t.color,
+                   (SELECT COUNT(*) FROM team_members WHERE team_id = t.id) AS member_count
+            FROM team_members tm JOIN teams t ON tm.team_id = t.id
+            WHERE tm.user_email = ?
+            LIMIT 1
+        """, (user["email"],)).fetchone()
+    return dict(row) if row else None

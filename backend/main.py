@@ -3,10 +3,11 @@ from contextlib import asynccontextmanager
 
 import requests
 import anthropic
-from fastapi import Body, FastAPI, File, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import init_db
+from auth import register, login, verify_token
 from intelligence.threat_engine import get_threat_feed, add_uploaded_iocs
 from intelligence.actor_engine import get_threat_actors
 from intelligence.campaign_engine import get_campaigns
@@ -43,6 +44,42 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+@app.post("/auth/register")
+def auth_register(payload: dict = Body(...)):
+    try:
+        return register(
+            name=payload.get("name", ""),
+            email=payload.get("email", ""),
+            password=payload.get("password", ""),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/auth/login")
+def auth_login(payload: dict = Body(...)):
+    try:
+        token = login(
+            email=payload.get("email", ""),
+            password=payload.get("password", ""),
+        )
+        return {"token": token}
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+
+@app.get("/auth/me")
+def auth_me(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="No autenticado")
+    user = verify_token(authorization[7:])
+    if not user:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+    return user
 
 
 # ── Health ────────────────────────────────────────────────────────────────────

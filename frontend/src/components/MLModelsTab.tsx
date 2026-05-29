@@ -2,13 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
-interface PyodideInterface {
-  runPythonAsync: (code: string) => Promise<unknown>
-  loadPackagesFromImports: (code: string) => Promise<void>
-  globals: { set: (k: string, v: unknown) => void }
-}
-
-declare global { interface Window { loadPyodide?: (cfg: { indexURL: string }) => Promise<PyodideInterface> } }
+import type { PyodideInterface } from '../types/pyodide'
 
 interface Model {
   id: string

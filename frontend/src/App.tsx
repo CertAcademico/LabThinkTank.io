@@ -57,12 +57,17 @@ function Shell() {
   const [view,      setView]      = useState<ViewId>('overview')
   const [adminMode, setAdminMode] = useState(false)
   const [myBadges,  setMyBadges]  = useState<Badge[]>([])
+  const [teamBadges, setTeamBadges] = useState<Badge[]>([])
 
   useEffect(() => {
     if (!token || user?.role === 'admin') return
     fetch(`${API_URL}/student/badges`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : [])
       .then(setMyBadges)
+      .catch(() => {})
+    fetch(`${API_URL}/student/team-badges`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(setTeamBadges)
       .catch(() => {})
   }, [token, user?.role])
 
@@ -181,7 +186,15 @@ function Shell() {
               <p className="text-[9px] text-slate-700 uppercase tracking-wider font-bold">
                 Mis insignias ({myBadges.length})
               </p>
-              <BadgeRow badges={myBadges} />
+              <BadgeRow badges={myBadges} downloadable />
+            </div>
+          )}
+          {teamBadges.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[9px] text-slate-700 uppercase tracking-wider font-bold">
+                Mis insignias grupales ({teamBadges.length})
+              </p>
+              <BadgeRow badges={teamBadges} downloadable />
             </div>
           )}
           <div className="flex items-center gap-2">

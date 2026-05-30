@@ -9,12 +9,17 @@ const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
 interface Challenge {
   id: number; title: string; description: string; objective: string
-  criteria: string; deadline?: string; status: string; difficulty?: string
+  criteria: string; hints_json?: string; starts_at?: string; deadline?: string; stage?: string; status: string; difficulty?: string
   dataset_name?: string; schema_json?: string
   badge_id?: number; badge_name?: string; badge_org?: string
   badge_tier?: string; badge_icon?: string; min_score_badge?: number
   badge_earned?: number
   submitted: number; my_score?: number
+}
+
+interface SolvedChallenge {
+  id: number; title: string; stage?: string; difficulty?: string
+  score?: number; feedback?: string; submitted_at: string; badge_name?: string; badge_tier?: string
 }
 
 const TIER_COLOR: Record<string, string> = {
@@ -410,13 +415,14 @@ print(challenge_df.describe(include='all'))
 
 interface TeamChallenge {
   id: number; title: string; description: string; objective: string; criteria: string
-  difficulty: string; badge_name?: string; badge_org?: string; badge_tier?: string
+  hints_json?: string; deadline?: string; difficulty: string; badge_name?: string; badge_org?: string; badge_tier?: string
   min_score_badge?: number; dataset_name?: string; badge_earned?: number
+  submitted?: number; my_score?: number
 }
 interface TeamInfo {
-  team: { id: number; name: string; color: string }
-  challenges: TeamChallenge[]
-  members: { name: string; email: string; role: string }[]
+  team:        { id: number; name: string; color: string }
+  challenges:  TeamChallenge[]
+  members:     { name: string; email: string; role: string }[]
   team_badges: { id: number; name: string; org: string; tier: string; icon: string; awarded_at: string }[]
 }
 
@@ -425,32 +431,188 @@ const ROLE_META: Record<string, { label: string; color: string; short: string }>
   ciberseguridad:   { label: 'Ciberseguridad',      color: '#f97316', short: 'CS' },
   ciencia_datos:    { label: 'Ciencia de Datos',    color: '#a78bfa', short: 'CD' },
   machine_learning: { label: 'Machine Learning',    color: '#4ade80', short: 'ML' },
+  all:              { label: 'Todos',               color: '#facc15', short: '★'  },
+}
+
+const TAG_TO_ROLE: Record<string, string> = {
+  AD: 'analista_datos', CS: 'ciberseguridad',
+  CD: 'ciencia_datos',  ML: 'machine_learning', ALL: 'all',
+}
+
+interface RoleStep { roleKey: string; task: string }
+interface DatasetPayload {
+  name: string; description: string; data_json: string; schema_json: string; source: string
+}
+
+function parseRoleSteps(objective: string): RoleStep[] {
+  return objective.split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const m = line.match(/^\[([A-Z]+)\]\s*(.+)/)
+      if (m) return { roleKey: TAG_TO_ROLE[m[1]] ?? 'all', task: m[2].trim() }
+      return { roleKey: 'all', task: line }
+    })
+}
+
+/** Criteria breakdown: "Feature X (30%) + Classifier Y (25%)" → [{label, pct}] */
+function parseCriteria(criteria: string): { label: string; pct: string }[] {
+  return criteria.split('+').map(part => {
+    const m = part.trim().match(/^(.+?)\s*\((\d+%)\)$/)
+    return m ? { label: m[1].trim(), pct: m[2] } : { label: part.trim(), pct: '' }
+  })
+}
+
+function parseHints(raw?: string): string[] {
+  try {
+    const parsed = JSON.parse(raw || '[]')
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : []
+  } catch {
+    return []
+  }
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]!))
+}
+
+function formatRemaining(deadline?: string, now = new Date()) {
+  if (!deadline) return null
+  const target = new Date(deadline)
+  const diff = target.getTime() - now.getTime()
+  if (Number.isNaN(target.getTime())) return null
+  if (diff <= 0) return { label: 'Tiempo finalizado', expired: true, at: target }
+  const totalSeconds = Math.floor(diff / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return {
+    label: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`,
+    expired: false,
+    at: target,
+  }
 }
 
 function TeamChallengeCard({ teamInfo }: { teamInfo: TeamInfo }) {
+  const { user, token } = useAuth()
   const { team, challenges, members, team_badges } = teamInfo
   const [open, setOpen] = useState(true)
+  const [datasetOpen, setDatasetOpen] = useState<Record<number, boolean>>({})
+  const [datasets, setDatasets] = useState<Record<number, DatasetPayload | null>>({})
+  const [reports, setReports] = useState<Record<number, string>>({})
+  const [images, setImages] = useState<Record<number, string[]>>({})
+  const [submitting, setSubmitting] = useState<Record<number, boolean>>({})
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(id)
+  }, [])
 
   if (!challenges.length) return null
 
+  // Find current user's team role
+  const myMember  = members.find(m => m.email === user?.email)
+  const myRoleKey = myMember?.role ?? ''
+  const myRoleMeta = myRoleKey ? (ROLE_META[myRoleKey] ?? ROLE_META.analista_datos) : null
+
+  const loadDataset = async (challengeId: number) => {
+    setDatasetOpen(p => ({ ...p, [challengeId]: !p[challengeId] }))
+    if (datasets[challengeId] !== undefined) return
+    try {
+      const res = await fetch(`${API}/student/challenges/${challengeId}/dataset`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('Dataset no disponible')
+      const data = await res.json()
+      setDatasets(p => ({ ...p, [challengeId]: data }))
+    } catch {
+      setDatasets(p => ({ ...p, [challengeId]: null }))
+    }
+  }
+
+  const handleImages = async (challengeId: number, fileList: FileList | null) => {
+    const files = Array.from(fileList ?? []).filter(f => f.type.startsWith('image/')).slice(0, 4)
+    const encoded = await Promise.all(files.map(file => new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '')
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })))
+    setImages(p => ({ ...p, [challengeId]: encoded.filter(Boolean) }))
+  }
+
+  const exportReport = (challenge: TeamChallenge, steps: RoleStep[]) => {
+    const ds = datasets[challenge.id]
+    const rows = ds ? JSON.parse(ds.data_json || '[]').slice(0, 10) : []
+    const reportText = reports[challenge.id] || 'Informe pendiente de completar.'
+    const html = `<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>${escapeHtml(challenge.title)}</title>
+<style>body{font-family:Arial,sans-serif;line-height:1.5;color:#0f172a;margin:32px}h1{font-size:24px}h2{font-size:16px;margin-top:24px}table{border-collapse:collapse;width:100%;font-size:12px}td,th{border:1px solid #cbd5e1;padding:6px;text-align:left}pre{white-space:pre-wrap;background:#f8fafc;border:1px solid #cbd5e1;padding:12px}</style></head>
+<body><h1>${escapeHtml(challenge.title)}</h1><p><strong>Equipo:</strong> ${escapeHtml(team.name)} · <strong>Estudiante:</strong> ${escapeHtml(user?.name ?? '')}</p>
+<h2>Roles y tareas</h2><ul>${steps.map(s => `<li><strong>${escapeHtml(ROLE_META[s.roleKey]?.label ?? 'Equipo')}:</strong> ${escapeHtml(s.task)}</li>`).join('')}</ul>
+<h2>Criterios</h2><p>${escapeHtml(challenge.criteria)}</p>
+<h2>Informe de entrega</h2><pre>${escapeHtml(reportText)}</pre>
+${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.description || ds.source)}</p>${rows.length ? `<table><thead><tr>${Object.keys(rows[0]).map(c => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>${rows.map((r: Record<string, unknown>) => `<tr>${Object.keys(rows[0]).map(c => `<td>${escapeHtml(String(r[c] ?? ''))}</td>`).join('')}</tr>`).join('')}</tbody></table>` : ''}` : ''}
+</body></html>`
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${challenge.title.replace(/[^\w]+/g, '_').slice(0, 60)}_informe.html`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const submitTeamWork = async (challenge: TeamChallenge) => {
+    const notes = reports[challenge.id]?.trim() ?? ''
+    if (!notes) return alert('Escribe el texto de entrega antes de enviar.')
+    setSubmitting(p => ({ ...p, [challenge.id]: true }))
+    try {
+      const res = await fetch(`${API}/student/challenges/${challenge.id}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          code: '',
+          output: `Entrega grupal desde plataforma\nEquipo: ${team.name}\nRol: ${myRoleMeta?.label ?? 'Sin rol'}\nEstudiante: ${user?.name ?? ''}`,
+          notes,
+          plots: images[challenge.id] ?? [],
+        }),
+      })
+      if (!res.ok) throw new Error('No se pudo registrar la entrega')
+      alert('Entrega registrada.')
+    } catch (err) {
+      alert(String(err))
+    } finally {
+      setSubmitting(p => ({ ...p, [challenge.id]: false }))
+    }
+  }
+
   return (
     <div className="rounded-2xl overflow-hidden"
-         style={{ background: `${team.color}08`, border: `2px solid ${team.color}44`, boxShadow: `0 0 32px ${team.color}18` }}>
+         style={{ background: `${team.color}07`, border: `2px solid ${team.color}40`, boxShadow: `0 0 32px ${team.color}15` }}>
 
-      {/* Header */}
+      {/* ── Header ────────────────────────────────────────────────────── */}
       <button onClick={() => setOpen(o => !o)}
-              className="w-full flex items-center gap-3 px-5 py-4 text-left"
+              className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-white/[0.02] transition-colors"
               style={{ background: `${team.color}10` }}>
         <div className="w-3 h-3 rounded-full shrink-0 animate-pulse"
-             style={{ background: team.color, boxShadow: `0 0 8px ${team.color}` }} />
+             style={{ background: team.color, boxShadow: `0 0 10px ${team.color}` }} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold" style={{ color: team.color }}>
             🏆 Equipo {team.name} — Reto Grupal
           </p>
-          <p className="text-[10px] text-slate-500">
-            {challenges.length} reto(s) asignados · {members.length} miembros
-            {team_badges.length > 0 && ` · ${team_badges.length} insignia(s) ganadas`}
-          </p>
+          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+            <span className="text-[10px] text-slate-500">{members.length} integrantes</span>
+            {myRoleMeta && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                    style={{ background: `${myRoleMeta.color}18`, color: myRoleMeta.color, border: `1px solid ${myRoleMeta.color}33` }}>
+                Tu rol: {myRoleMeta.short} {myRoleMeta.label}
+              </span>
+            )}
+            {team_badges.length > 0 && (
+              <span className="text-[9px] text-yellow-600">★ {team_badges.length} insignia(s) ganadas</span>
+            )}
+          </div>
         </div>
         <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform shrink-0"
              style={{ color: team.color, transform: open ? 'rotate(180deg)' : undefined }}
@@ -460,118 +622,355 @@ function TeamChallengeCard({ teamInfo }: { teamInfo: TeamInfo }) {
       </button>
 
       {open && (
-        <div className="px-5 pb-5 pt-3 space-y-4">
+        <div className="px-5 pb-5 pt-4 space-y-5">
 
-          {/* Team members */}
-          <div className="flex flex-wrap gap-2">
-            {members.map(m => {
-              const rm = ROLE_META[m.role] ?? ROLE_META.analista_datos
-              return (
-                <div key={m.email} className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
-                     style={{ background: `${rm.color}12`, border: `1px solid ${rm.color}33` }}>
-                  <span className="text-[8px] font-black px-1 rounded"
-                        style={{ background: `${rm.color}20`, color: rm.color }}>{rm.short}</span>
-                  <span className="text-[10px] font-medium text-slate-300">{m.name.split(' ')[0]}</span>
-                </div>
-              )
-            })}
+          {/* ── Integrantes del equipo con roles ──────────────────────── */}
+          <div className="rounded-xl p-3 space-y-2"
+               style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">Integrantes y Roles</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {members.map(m => {
+                const rm = ROLE_META[m.role] ?? ROLE_META.analista_datos
+                const isMe = m.email === user?.email
+                return (
+                  <div key={m.email}
+                       className="flex items-center gap-2 rounded-lg px-2.5 py-2"
+                       style={{
+                         background: isMe ? `${rm.color}10` : 'rgba(255,255,255,0.02)',
+                         border: `1px solid ${isMe ? rm.color+'33' : 'rgba(255,255,255,0.05)'}`,
+                       }}>
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black shrink-0"
+                         style={{ background: `${rm.color}20`, color: rm.color }}>
+                      {rm.short}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold truncate" style={{ color: isMe ? rm.color : '#94a3b8' }}>
+                        {m.name.split(' ').slice(0, 2).join(' ')} {isMe && '(yo)'}
+                      </p>
+                      <p className="text-[8px] truncate" style={{ color: rm.color + '99' }}>{rm.label}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
-          {/* Team badges earned */}
+          {/* ── Insignias de equipo ganadas ───────────────────────────── */}
           {team_badges.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {team_badges.map(b => {
                 const tc = TIER_COLOR[b.tier] ?? '#facc15'
                 return (
-                  <span key={b.id} className="text-[9px] px-2 py-1 rounded-full font-bold"
+                  <span key={b.id} className="text-[9px] px-2.5 py-1 rounded-full font-bold"
                         style={{ background: `${tc}15`, color: tc, border: `1px solid ${tc}33` }}>
-                    ★ {b.name} <span className="opacity-60">({b.org})</span>
+                    ★ {b.name} <span className="opacity-60 font-normal">({b.org})</span>
                   </span>
                 )
               })}
             </div>
           )}
 
-          {/* Challenges */}
+          {/* ── Retos del equipo ──────────────────────────────────────── */}
           {challenges.map(c => {
-            const tc = c.badge_tier ? (TIER_COLOR[c.badge_tier] ?? '#facc15') : undefined
-            const dc = DIFF_COLOR[c.difficulty] ?? '#64748b'
+            const tc     = c.badge_tier ? (TIER_COLOR[c.badge_tier] ?? '#facc15') : undefined
+            const dc     = DIFF_COLOR[c.difficulty] ?? '#64748b'
             const earned = Boolean(c.badge_earned)
+            const steps  = parseRoleSteps(c.objective)
+            const criteriaItems = parseCriteria(c.criteria)
+            const hints = parseHints(c.hints_json)
+            const remaining = formatRemaining(c.deadline, now)
+            const ds = datasets[c.id]
+            const dsRows: Record<string, unknown>[] = ds
+              ? (() => { try { return JSON.parse(ds.data_json).slice(0, 25) } catch { return [] } })()
+              : []
+            const dsCols = dsRows[0] ? Object.keys(dsRows[0]) : []
 
             return (
               <div key={c.id} className="rounded-xl overflow-hidden"
-                   style={{ background: 'rgba(15,23,42,0.6)', border: `1px solid ${team.color}22` }}>
+                   style={{ background: 'rgba(10,15,30,0.7)', border: `1px solid ${team.color}28` }}>
 
+                {/* Badge ganada */}
                 {earned && tc && (
-                  <div className="px-4 py-1.5 flex items-center gap-2"
-                       style={{ background: `${tc}15`, borderBottom: `1px solid ${tc}22` }}>
-                    <span style={{ color: tc }}>★</span>
-                    <p className="text-[9px] font-bold" style={{ color: tc }}>
-                      Insignia de equipo ganada: {c.badge_name}
+                  <div className="px-4 py-2 flex items-center gap-2"
+                       style={{ background: `${tc}12`, borderBottom: `1px solid ${tc}20` }}>
+                    <span style={{ color: tc }} className="text-base">★</span>
+                    <p className="text-[10px] font-bold" style={{ color: tc }}>
+                      ¡Insignia de equipo ganada! — {c.badge_name} ({c.badge_org})
                     </p>
                   </div>
                 )}
 
-                <div className="p-4 space-y-3">
+                <div className="p-4 space-y-4">
+
+                  {/* Título + pills */}
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1.5">
                         <h3 className="text-sm font-bold text-slate-100">{c.title}</h3>
                         <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
                               style={{ background: `${dc}12`, color: dc, border: `1px solid ${dc}28` }}>
                           {c.difficulty}
                         </span>
                         <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
-                              style={{ background: `${team.color}15`, color: team.color, border: `1px solid ${team.color}33` }}>
+                              style={{ background: `${team.color}12`, color: team.color, border: `1px solid ${team.color}28` }}>
                           👥 Grupal
                         </span>
+                        {c.dataset_name && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded"
+                                style={{ background: 'rgba(249,115,22,0.08)', color: '#f97316', border: '1px solid rgba(249,115,22,0.2)' }}>
+                            📊 {c.dataset_name}
+                          </span>
+                        )}
+                        {remaining && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                                style={{
+                                  background: remaining.expired ? 'rgba(239,68,68,0.1)' : 'rgba(34,211,238,0.08)',
+                                  color: remaining.expired ? '#ef4444' : '#22d3ee',
+                                  border: `1px solid ${remaining.expired ? 'rgba(239,68,68,0.24)' : 'rgba(34,211,238,0.22)'}`,
+                                }}>
+                            ⏱ {remaining.label}
+                          </span>
+                        )}
                       </div>
                       {c.description && (
                         <p className="text-xs text-slate-500 leading-relaxed">{c.description}</p>
                       )}
+                      {remaining && (
+                        <p className="text-[10px] text-slate-600 mt-1">
+                          Cierre del reto: {remaining.at.toLocaleString('es-CO', {
+                            timeZone: 'America/Bogota',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            day: 'numeric',
+                            month: 'short',
+                          })} hora Colombia
+                        </p>
+                      )}
                     </div>
                   </div>
 
-                  {/* Objective steps */}
-                  {c.objective && (
-                    <div className="rounded-lg p-3"
-                         style={{ background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.1)' }}>
-                      <p className="text-[9px] font-bold text-cyan-700 uppercase mb-2">Hoja de ruta del equipo</p>
-                      <div className="space-y-1">
-                        {c.objective.split(/\d+\)/).filter(Boolean).map((step, i) => (
+                  {/* ── Rol + Integrante + Campo de análisis ──────────── */}
+                  {steps.length > 0 && (
+                    <div className="rounded-xl overflow-hidden"
+                         style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
+                      <div className="px-3 py-2 flex items-center gap-2"
+                           style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" />
+                        </svg>
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                          Rol · Integrante · Campo de análisis
+                        </p>
+                      </div>
+                      <div className="divide-y divide-white/[0.04]">
+                        {steps.map((step, i) => {
+                          const rm       = ROLE_META[step.roleKey] ?? ROLE_META.all
+                          const assigned = step.roleKey === 'all'
+                            ? members
+                            : members.filter(m => m.role === step.roleKey)
+                          const isMyStep = step.roleKey === 'all' || step.roleKey === myRoleKey
+
+                          return (
+                            <div key={i}
+                                 className="flex items-start gap-3 px-3 py-2.5 transition-all"
+                                 style={{
+                                   background: isMyStep ? `${rm.color}07` : 'transparent',
+                                   borderLeft: isMyStep ? `3px solid ${rm.color}50` : '3px solid transparent',
+                                 }}>
+
+                              {/* Rol pill */}
+                              <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
+                                <span className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-black"
+                                      style={{ background: `${rm.color}20`, color: rm.color }}>
+                                  {rm.short}
+                                </span>
+                                {isMyStep && myRoleKey && (
+                                  <span className="text-[7px] font-bold" style={{ color: rm.color }}>Tú</span>
+                                )}
+                              </div>
+
+                              {/* Integrante(s) */}
+                              <div className="shrink-0 w-28 pt-0.5 space-y-0.5">
+                                {assigned.length > 0 ? assigned.map(m => (
+                                  <p key={m.email}
+                                     className="text-[9px] font-medium truncate"
+                                     style={{ color: m.email === user?.email ? rm.color : '#64748b' }}>
+                                    {m.name.split(' ')[0]}
+                                    {m.email === user?.email ? ' ✓' : ''}
+                                  </p>
+                                )) : (
+                                  <p className="text-[9px] text-slate-700">Todo el equipo</p>
+                                )}
+                              </div>
+
+                              {/* Tarea de análisis */}
+                              <p className="flex-1 text-[10px] leading-relaxed"
+                                 style={{ color: isMyStep ? '#cbd5e1' : '#64748b' }}>
+                                {step.task}
+                              </p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Pistas ───────────────────────────────────────── */}
+                  {hints.length > 0 && (
+                    <div className="rounded-xl p-3"
+                         style={{ background: 'rgba(250,204,21,0.04)', border: '1px solid rgba(250,204,21,0.12)' }}>
+                      <p className="text-[9px] font-bold text-yellow-700 uppercase tracking-wider mb-2">Pistas del reto</p>
+                      <div className="grid gap-1.5">
+                        {hints.map((hint, i) => (
                           <div key={i} className="flex items-start gap-2">
                             <span className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 mt-0.5"
-                                  style={{ background: `${team.color}20`, color: team.color }}>{i + 1}</span>
-                            <p className="text-[10px] text-slate-400 leading-relaxed">{step.trim()}</p>
+                                  style={{ background: 'rgba(250,204,21,0.14)', color: '#facc15' }}>
+                              {i + 1}
+                            </span>
+                            <p className="text-[10px] leading-relaxed text-slate-400">{hint}</p>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Badge info */}
-                  {c.badge_name && tc && !earned && (
-                    <div className="flex items-center gap-2 rounded-lg px-3 py-2"
-                         style={{ background: `${tc}06`, border: `1px solid ${tc}18` }}>
-                      <span style={{ color: tc }} className="text-sm">★</span>
-                      <p className="text-[9px]" style={{ color: tc }}>
-                        El equipo gana la insignia <strong>{c.badge_name}</strong> ({c.badge_org}) al completar este reto.
-                      </p>
+                  {/* ── Criterios de evaluación ───────────────────────── */}
+                  {criteriaItems.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">Criterios de evaluación</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {criteriaItems.map((cr, i) => (
+                          <span key={i} className="text-[9px] px-2 py-1 rounded"
+                                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', color: '#94a3b8' }}>
+                            <span className="font-bold text-slate-300">{cr.pct}</span>
+                            {cr.pct && ' '}
+                            {cr.label}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
 
-                  {/* Bottom: dataset + criteria */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {c.dataset_name && (
-                      <span className="text-[9px] px-2 py-0.5 rounded"
-                            style={{ background: 'rgba(249,115,22,0.08)', color: '#f97316', border: '1px solid rgba(249,115,22,0.2)' }}>
-                        📊 {c.dataset_name}
-                      </span>
-                    )}
-                    {c.criteria && (
-                      <span className="text-[9px] text-slate-700 truncate max-w-xs">{c.criteria}</span>
+                  {/* ── Dataset en plataforma ─────────────────────────── */}
+                  {c.dataset_name && (
+                    <div className="rounded-xl overflow-hidden"
+                         style={{ border: '1px solid rgba(249,115,22,0.13)' }}>
+                      <div className="flex items-center justify-between gap-3 px-3 py-2"
+                           style={{ background: 'rgba(249,115,22,0.04)', borderBottom: datasetOpen[c.id] ? '1px solid rgba(249,115,22,0.12)' : 'none' }}>
+                        <div>
+                          <p className="text-[9px] font-bold text-orange-500 uppercase tracking-wider">Explorar dataset</p>
+                          <p className="text-[10px] text-slate-600">{c.dataset_name}</p>
+                        </div>
+                        <button onClick={() => loadDataset(c.id)}
+                                className="px-2.5 py-1 rounded text-[10px] font-bold"
+                                style={{ background: 'rgba(249,115,22,0.1)', color: '#f97316', border: '1px solid rgba(249,115,22,0.25)' }}>
+                          {datasetOpen[c.id] ? 'Ocultar' : 'Abrir'}
+                        </button>
+                      </div>
+                      {datasetOpen[c.id] && (
+                        <div className="p-3 space-y-3">
+                          {ds === undefined && <p className="text-xs text-slate-700 animate-pulse">Cargando dataset...</p>}
+                          {ds === null && <p className="text-xs text-red-400">No se pudo cargar el dataset.</p>}
+                          {ds && (
+                            <>
+                              <div className="flex flex-wrap gap-1.5">
+                                {Object.entries(JSON.parse(ds.schema_json || '{}')).map(([col, type]) => (
+                                  <span key={col} className="text-[8px] font-mono px-1.5 py-0.5 rounded"
+                                        style={{ background: 'rgba(34,211,238,0.08)', color: '#67e8f9' }}>
+                                    {col}: <span className="text-slate-500">{String(type)}</span>
+                                  </span>
+                                ))}
+                              </div>
+                              <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+                                <table className="w-full text-[9px]">
+                                  <thead>
+                                    <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                                      {dsCols.map(col => <th key={col} className="px-2 py-1.5 text-left text-slate-500 font-mono">{col}</th>)}
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-white/[0.03]">
+                                    {dsRows.map((row, i) => (
+                                      <tr key={i} className="hover:bg-white/[0.02]">
+                                        {dsCols.map(col => (
+                                          <td key={col} className="px-2 py-1.5 text-slate-400 font-mono truncate max-w-32">
+                                            {String(row[col] ?? '')}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                              <p className="text-[9px] text-slate-700">Mostrando hasta 25 filas para exploración rápida.</p>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Entrega grupal ───────────────────────────────── */}
+                  <div className="rounded-xl p-3 space-y-3"
+                       style={{ background: 'rgba(74,222,128,0.035)', border: '1px solid rgba(74,222,128,0.12)' }}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[9px] font-bold text-green-600 uppercase tracking-wider">Caja de entrega</p>
+                        {c.submitted ? (
+                          <p className="text-[9px] text-green-500">Ya registraste una entrega{c.my_score != null ? ` · ${c.my_score}/100` : ''}</p>
+                        ) : (
+                          <p className="text-[9px] text-slate-600">Texto del informe y evidencias visuales del análisis.</p>
+                        )}
+                      </div>
+                      <button onClick={() => exportReport(c, steps)}
+                              className="px-2.5 py-1 rounded text-[10px] font-bold"
+                              style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.22)' }}>
+                        Exportar informe
+                      </button>
+                    </div>
+                    <textarea
+                      value={reports[c.id] ?? ''}
+                      onChange={e => setReports(p => ({ ...p, [c.id]: e.target.value }))}
+                      placeholder="Describe hallazgos, metodología, evidencias, visualizaciones, conclusiones y recomendaciones del equipo..."
+                      rows={5}
+                      className="w-full rounded-lg px-3 py-2 text-xs text-slate-100 outline-none resize-none"
+                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }} />
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <label className="px-2.5 py-1.5 rounded text-[10px] font-bold cursor-pointer"
+                             style={{ background: 'rgba(255,255,255,0.04)', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.09)' }}>
+                        Cargar imágenes
+                        <input type="file" accept="image/*" multiple className="hidden"
+                               onChange={e => handleImages(c.id, e.target.files)} />
+                      </label>
+                      <span className="text-[9px] text-slate-700">Solo imágenes · máximo 4 archivos</span>
+                      <button onClick={() => submitTeamWork(c)} disabled={Boolean(submitting[c.id])}
+                              className="ml-auto px-3 py-1.5 rounded text-[10px] font-bold disabled:opacity-40"
+                              style={{ background: 'rgba(74,222,128,0.14)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.35)' }}>
+                        {submitting[c.id] ? 'Enviando...' : 'Enviar entrega'}
+                      </button>
+                    </div>
+                    {(images[c.id] ?? []).length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {(images[c.id] ?? []).map((img, i) => (
+                          <img key={i} src={`data:image/png;base64,${img}`} alt={`evidencia ${i + 1}`}
+                               className="h-20 rounded border shrink-0"
+                               style={{ borderColor: 'rgba(255,255,255,0.08)' }} />
+                        ))}
+                      </div>
                     )}
                   </div>
+
+                  {/* Badge a ganar */}
+                  {c.badge_name && tc && !earned && (
+                    <div className="flex items-center gap-2 rounded-lg px-3 py-2"
+                         style={{ background: `${tc}05`, border: `1px solid ${tc}18` }}>
+                      <span style={{ color: tc }}>★</span>
+                      <p className="text-[9px]" style={{ color: tc }}>
+                        El equipo gana <strong>{c.badge_name}</strong>
+                        <span className="font-normal opacity-70"> ({c.badge_org} · {c.badge_tier})</span>
+                        <span className="font-normal opacity-60"> al completar este reto.</span>
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -588,6 +987,7 @@ export default function ChallengeArena() {
   const { token }                       = useAuth()
   const [challenges, setChallenges]     = useState<Challenge[]>([])
   const [teamInfo,   setTeamInfo]       = useState<TeamInfo | null>(null)
+  const [solved,     setSolved]         = useState<SolvedChallenge[]>([])
   const [loading,    setLoading]        = useState(true)
   const [active,     setActive]         = useState<Challenge | null>(null)
 
@@ -595,8 +995,10 @@ export default function ChallengeArena() {
     Promise.all([
       fetch(`${API}/student/challenges`,    { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch(`${API}/student/team-challenge`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null),
-    ]).then(([chs, team]) => {
+      fetch(`${API}/student/solved-challenges`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => []),
+    ]).then(([chs, team, solvedRows]) => {
       setChallenges(chs)
+      setSolved(solvedRows)
       if (team?.team) setTeamInfo(team)
       if (chs.length === 1) setActive(chs[0])
     }).catch(() => {})
@@ -632,6 +1034,40 @@ export default function ChallengeArena() {
 
       {/* Reto grupal del equipo */}
       {teamInfo && <TeamChallengeCard teamInfo={teamInfo} />}
+
+      {solved.length > 0 && (
+        <div className="rounded-xl p-4 space-y-3" style={glass}>
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold text-green-500 uppercase tracking-wider">Retos solucionados</p>
+            <span className="text-[10px] text-slate-600">{solved.length} entregas registradas</span>
+          </div>
+          <div className="grid gap-2">
+            {solved.slice(0, 6).map(s => {
+              const tc = s.badge_tier ? (TIER_COLOR[s.badge_tier] ?? '#facc15') : '#4ade80'
+              return (
+                <div key={`${s.id}-${s.submitted_at}`} className="flex items-center gap-3 rounded-lg px-3 py-2"
+                     style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black"
+                        style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80' }}>✓</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-slate-300 truncate">{s.title}</p>
+                    <p className="text-[9px] text-slate-700">
+                      {(s.stage ?? 'reto').toUpperCase()} · {new Date(s.submitted_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  {s.score != null && <span className="text-[10px] font-bold text-green-400">{s.score}/100</span>}
+                  {s.badge_name && (
+                    <span className="text-[9px] px-2 py-0.5 rounded font-bold"
+                          style={{ background: `${tc}12`, color: tc, border: `1px solid ${tc}25` }}>
+                      ★ {s.badge_name}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {challenges.length === 0 ? (
         <div className="rounded-xl p-10 text-center" style={{ background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -675,6 +1111,13 @@ export default function ChallengeArena() {
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
                               style={{ background: `${diffColor}15`, color: diffColor, border: `1px solid ${diffColor}33` }}>
                           {c.difficulty}
+                        </span>
+                      )}
+
+                      {c.stage && c.stage !== 'individual' && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                              style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.22)' }}>
+                          {c.stage === 'parejas' ? 'Por parejas' : c.stage}
                         </span>
                       )}
 

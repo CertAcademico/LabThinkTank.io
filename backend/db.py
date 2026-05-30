@@ -59,7 +59,10 @@ def init_db() -> None:
                 objective       TEXT    NOT NULL DEFAULT '',
                 dataset_id      INTEGER REFERENCES datasets(id),
                 criteria        TEXT    NOT NULL DEFAULT '',
+                hints_json      TEXT    NOT NULL DEFAULT '[]',
+                starts_at       TEXT,
                 deadline        TEXT,
+                stage           TEXT    NOT NULL DEFAULT 'individual',
                 status          TEXT    NOT NULL DEFAULT 'active',
                 badge_id        INTEGER REFERENCES badges(id),
                 min_score_badge INTEGER NOT NULL DEFAULT 70,
@@ -230,6 +233,9 @@ def init_db() -> None:
         _seed_demo_challenges(conn)
         _seed_group_datasets(conn)
         _seed_group_challenges(conn)
+        _sync_group_challenge_content(conn)
+        _seed_pair_range_challenges(conn)
+        _assign_pair_range_challenges(conn)
         _seed_ctf_challenges(conn)
         _seed_team_challenge_assignments(conn)
 
@@ -243,6 +249,12 @@ def _migrate(conn) -> None:
         conn.execute("ALTER TABLE challenges ADD COLUMN min_score_badge INTEGER NOT NULL DEFAULT 70")
     if "difficulty" not in cols:
         conn.execute("ALTER TABLE challenges ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'medio'")
+    if "hints_json" not in cols:
+        conn.execute("ALTER TABLE challenges ADD COLUMN hints_json TEXT NOT NULL DEFAULT '[]'")
+    if "starts_at" not in cols:
+        conn.execute("ALTER TABLE challenges ADD COLUMN starts_at TEXT")
+    if "stage" not in cols:
+        conn.execute("ALTER TABLE challenges ADD COLUMN stage TEXT NOT NULL DEFAULT 'individual'")
     tm_cols = {r[1] for r in conn.execute("PRAGMA table_info(team_members)").fetchall()}
     if "role" not in tm_cols:
         conn.execute("ALTER TABLE team_members ADD COLUMN role TEXT NOT NULL DEFAULT 'analista_datos'")
@@ -653,9 +665,15 @@ _GROUP_CHALLENGES = [
     {
         "title": "Grupo Malware — Perfilado Avanzado de Familias",
         "description": "Usando el dataset de muestras de malware (AgentTesla, Emotet, Cobalt Strike), construye un sistema de perfilado automático que clasifique muestras desconocidas por familia basándose en sus comportamientos y metadatos.\n\nFuentes de referencia: MalwareBazaar · Malpedia · VX Underground · VirusShare · TheZoo",
-        "objective": "1) Carga y limpia el dataset de malware. 2) Crea features basados en TTPs (capabilities, evasion, persistence). 3) Entrena un clasificador para identificar la familia. 4) Extrae reglas YARA conceptuales basadas en strings/hashes. 5) Visualiza similitudes entre familias con clustering. 6) Entrega: dataset original + script de ingestión + mapa de TTPs + visualización.",
+        "objective": "[AD] Carga, perfila y limpia el dataset de malware. Preguntas: ¿qué familia tiene más muestras válidas y qué campos tienen más nulos? ¿qué columnas son obligatorias para sostener el análisis?\n[CS] Mapea técnicas ATT&CK y comportamientos por familia. Preguntas: ¿qué TTPs diferencian AgentTesla, Emotet y Cobalt Strike? ¿qué capacidad representa mayor riesgo operativo?\n[ML] Entrena y compara un clasificador RandomForest/SVM. Preguntas: ¿qué features explican mejor la predicción? ¿qué clase genera más falsos positivos o falsos negativos?\n[CD] Visualiza similitudes entre familias con clustering/PCA. Preguntas: ¿qué familias quedan más cercanas y por qué? ¿qué variables explican los grupos visuales?\n[ALL] Entrega grupal: dataset limpio + mapa de TTPs + modelo entrenado + reglas YARA + reporte técnico.",
         "criteria": "Clasificador funcional (30%) + Feature engineering de TTPs (25%) + Visualizaciones (20%) + Reporte técnico 2-3 páginas (25%)",
+        "hints": [
+            "Empiecen con value_counts() por family, type y capability para entender la distribución.",
+            "Usen columnas de TTPs/capabilities como features categóricas; conviértanlas con get_dummies().",
+            "Para YARA conceptual, busquen strings o dominios C2 repetidos por familia y expliquen el criterio.",
+        ],
         "difficulty": "avanzado",
+        "deadline": "2026-05-30T14:05:00-05:00",
         "badge_name": "ML Practitioner",
         "min_score_badge": 75,
         "dataset_name": "Análisis Malware — AgentTesla & Emotet",
@@ -663,9 +681,15 @@ _GROUP_CHALLENGES = [
     {
         "title": "Grupo IOC — Inteligencia y Enriquecimiento de Feeds",
         "description": "Integra y enriquece datos de 3 fuentes IOC distintas: ThreatFox (IOCs activos), FeodoTracker (C2 botnets) y URLhaus (URLs maliciosas). Construye un pipeline de enriquecimiento con deduplicación, scoring y correlación cruzada.\n\nFuentes: OTX · ThreatFox · URLhaus · AbuseIPDB · OpenPhish · PhishTank · FeodoTracker · MISP · IBM X-Force · Pulsedive",
-        "objective": "1) Carga datos del feed IOC enriquecido del CTI-Lab. 2) Normaliza tipos de IOC (IP/domain/hash/URL). 3) Crea score de riesgo combinando severity + confidence + sources. 4) Detecta IOCs compartidos entre múltiples threat actors. 5) Visualiza red de correlaciones IOC↔Threat Actor. 6) Genera reporte ejecutivo priorizando los 10 IOCs más críticos.",
-        "criteria": "Pipeline de normalización (20%) + Score de riesgo (25%) + Correlación cruzada (20%) + Red de relaciones (20%) + Reporte ejecutivo (15%)",
+        "objective": "[AD] Carga, deduplica y normaliza el feed IOC. Preguntas: ¿qué tipo de IOC domina el dataset? ¿qué registros deben bloquearse por calidad insuficiente o duplicidad?\n[CD] Diseña score de riesgo y visualiza correlaciones IOC↔actor. Preguntas: ¿qué distribución tiene el score final? ¿qué actores aparecen más conectados en la red?\n[CS] Correlaciona IOCs con threat actors y MITRE. Preguntas: ¿qué IOCs son compartidos por más de un actor? ¿qué TTPs justifican una prioridad de bloqueo inmediato?\n[ALL] Entrega grupal: top 10 IOCs críticos + red de correlación + explicación del score + reporte ejecutivo.",
+        "criteria": "Pipeline normalización (20%) + Score riesgo (25%) + Correlación cruzada (20%) + Red de relaciones (20%) + Reporte (15%)",
+        "hints": [
+            "Normalicen severity a número antes de crear el score; documenten la escala usada.",
+            "Un IOC compartido aparece más de una vez asociado a actores distintos o fuentes distintas.",
+            "La red IOC ↔ actor puede construirse con nodos de dos tipos y edges por aparición en el feed.",
+        ],
         "difficulty": "intermedio",
+        "deadline": "2026-05-30T14:05:00-05:00",
         "badge_name": "Threat Hunter",
         "min_score_badge": 70,
         "dataset_name": "Feed IOC Enriquecido — CTI-Lab",
@@ -673,9 +697,15 @@ _GROUP_CHALLENGES = [
     {
         "title": "Grupo IoA — Mapeo de TTPs y Detección de Comportamiento",
         "description": "Analiza el dataset de TTPs de grupos APT (MITRE ATT&CK v14). Identifica patrones de comportamiento, construye mapas de calor de tácticas y propone reglas de detección en formato Sigma.\n\nFuentes: MITRE ATT&CK · ATTACKCTI · D3FEND · Atomic Red Team · SigmaHQ",
-        "objective": "1) Carga el dataset ATT&CK y agrupa por táctica y técnica. 2) Identifica los grupos APT con más overlap de TTPs. 3) Crea heatmap de técnicas por táctica ATT&CK. 4) Propone 3 reglas de detección conceptuales en formato Sigma. 5) Mapea las TTPs del dataset a contramedidas D3FEND. 6) Identifica qué grupo APT es más difícil de detectar y por qué.",
-        "criteria": "Agrupación y análisis (25%) + Heatmap de TTPs (25%) + Reglas Sigma (25%) + Análisis de detectabilidad (25%)",
+        "objective": "[AD] Carga ATT&CK, agrupa por táctica/técnica y calcula frecuencias. Preguntas: ¿qué táctica concentra más técnicas? ¿qué APT tiene mayor diversidad de comportamiento?\n[CS] Analiza overlap APT, reglas Sigma y D3FEND. Preguntas: ¿qué técnicas compartidas elevan el riesgo de confusión entre actores? ¿qué regla Sigma detectaría mejor una técnica prioritaria?\n[CD] Construye heatmap y visualizaciones de TTPs. Preguntas: ¿qué patrón visual separa mejor a los grupos APT? ¿qué técnicas aparecen como outliers o altamente repetidas?\n[ALL] Entrega grupal: heatmap + 3 reglas Sigma + mapeo defensivo + conclusión de detectabilidad.",
+        "criteria": "Agrupación y análisis (25%) + Heatmap TTPs (25%) + Reglas Sigma (25%) + Análisis detectabilidad (25%)",
+        "hints": [
+            "Construyan una tabla pivote con tactic como filas y technique como columnas para el heatmap.",
+            "El overlap entre APTs se puede calcular con intersección de sets de técnicas.",
+            "Las reglas Sigma deben incluir title, logsource, detection y condition aunque sean conceptuales.",
+        ],
         "difficulty": "avanzado",
+        "deadline": "2026-05-30T14:05:00-05:00",
         "badge_name": "SOC Analyst",
         "min_score_badge": 80,
         "dataset_name": "MITRE ATT&CK — TTPs por Grupo APT",
@@ -683,9 +713,15 @@ _GROUP_CHALLENGES = [
     {
         "title": "Grupo Botnet — Clasificación de Tráfico de Red",
         "description": "Usando los flujos de red del dataset CTU-13 (Stratosphere IPS), construye un clasificador para distinguir tráfico benigno de botnet. Identifica las botnets presentes (Neris, Rbot, Virut) por sus patrones de comunicación.\n\nFuentes: CTU-13 Dataset · Bot-IoT · Feodo Tracker · Stratosphere IPS",
-        "objective": "1) Explora la distribución benigno vs botnet en el dataset. 2) Crea features de red: bytes/pkt ratio, duración, puertos destino, protocolos. 3) Entrena un clasificador (Random Forest o Decision Tree). 4) Evalúa con métricas: precision, recall, F1 por clase. 5) Visualiza patrones de comportamiento por botnet. 6) Identifica las características más discriminantes entre Neris, Rbot y Virut.",
-        "criteria": "Feature engineering de red (25%) + Clasificador con F1 ≥ 0.80 (30%) + Análisis por familia (25%) + Visualizaciones (20%)",
+        "objective": "[AD] Explora distribución benigno vs botnet y familias CTU-13. Preguntas: ¿qué clase/familia está más representada? ¿qué columnas muestran valores atípicos relevantes?\n[CD] Crea features de red y visualiza patrones. Preguntas: ¿qué puertos/protocolos separan mejor tráfico botnet? ¿qué ratio o duración muestra mayor diferencia entre clases?\n[ML] Entrena Random Forest y Decision Tree con F1 ≥ 0.80. Preguntas: ¿qué modelo generaliza mejor y por qué? ¿qué clase se confunde más en la matriz de confusión?\n[ALL] Entrega grupal: análisis exploratorio + features + comparación de modelos + visualizaciones por familia.",
+        "criteria": "Feature engineering (25%) + Clasificador F1 ≥ 0.80 (30%) + Análisis por familia (25%) + Visualizaciones (20%)",
+        "hints": [
+            "Protejan divisiones como bytes/packets cuando packets sea 0 o nulo.",
+            "Comparen modelos con train_test_split estratificado para no sesgar clases pequeñas.",
+            "La matriz de confusión por familia ayuda a explicar qué botnets se parecen más entre sí.",
+        ],
         "difficulty": "avanzado",
+        "deadline": "2026-05-30T14:05:00-05:00",
         "badge_name": "Analista de Amenazas",
         "min_score_badge": 80,
         "dataset_name": "Botnet Traffic — CTU-13 Network Flows",
@@ -693,9 +729,10 @@ _GROUP_CHALLENGES = [
     {
         "title": "Grupo Ransomware — Inteligencia de Amenazas y Análisis de Campañas",
         "description": "Analiza el dataset de víctimas de ransomware (Ransomware.live) para identificar tendencias, grupos más activos y sectores más afectados. Combina con IOCs de LockBit del dataset de campaña.\n\nFuentes: Ransomware.live · MalwareBazaar · Malpedia · ThreatFox · VX Underground · ID Ransomware · NoMoreRansom · VirusTotal · Ransomware Tracker · YARAify",
-        "objective": "1) Analiza distribución de víctimas por grupo, sector y país. 2) Identifica el grupo más activo y sus sectores favoritos. 3) Correlaciona grupos de ransomware con TTPs de la campaña LockBit 3.0. 4) Estima el impacto económico total del dataset. 5) Crea gráfica de línea temporal de ataques. 6) Recomienda los 3 controles de seguridad más efectivos basado en los TTPs identificados.",
+        "objective": "[AD] Analiza víctimas por grupo, sector y país. Preguntas: ¿qué sector aparece más afectado? ¿qué país concentra mayor número de víctimas?\n[CS] Correlaciona ransomware con TTPs e IOCs. Preguntas: ¿qué TTPs explican mayor impacto? ¿qué controles reducen mejor el riesgo observado?\n[CD] Construye línea temporal y visualizaciones de tendencia. Preguntas: ¿hay picos de actividad por fecha o grupo? ¿qué visualización comunica mejor la evolución de la campaña?\n[ALL] Entrega grupal: tendencias + actor prioritario + TTPs + recomendaciones defensivas.",
         "criteria": "Análisis estadístico (25%) + Correlación con TTPs (25%) + Visualizaciones (25%) + Recomendaciones de mitigación (25%)",
         "difficulty": "intermedio",
+        "deadline": "2026-05-30T14:05:00-05:00",
         "badge_name": "SOC Analyst",
         "min_score_badge": 75,
         "dataset_name": "Ransomware.live — Víctimas y Grupos Activos",
@@ -713,15 +750,139 @@ def _seed_group_challenges(conn) -> None:
         badge_id = badge_row[0] if badge_row else None
         conn.execute(
             """INSERT INTO challenges
-               (title, description, objective, dataset_id, criteria, status, badge_id, min_score_badge, difficulty, created_by)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+               (title, description, objective, dataset_id, criteria, hints_json, deadline, status, badge_id, min_score_badge, difficulty, created_by)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 ch["title"], ch["description"], ch["objective"],
-                dataset_id, ch["criteria"], "active",
+                dataset_id, ch["criteria"], json.dumps(ch.get("hints", []), ensure_ascii=False),
+                ch.get("deadline"), "active",
                 badge_id, ch["min_score_badge"], ch["difficulty"],
                 "system@cti-lab-groups",
             ),
         )
+
+
+def _sync_group_challenge_content(conn) -> None:
+    """Keep seeded group challenges aligned in existing local databases."""
+    for ch in _GROUP_CHALLENGES:
+        conn.execute(
+            """UPDATE challenges
+               SET description = ?, objective = ?, criteria = ?, hints_json = ?, difficulty = ?, min_score_badge = ?,
+                   starts_at = ?, deadline = ?, stage = 'equipo'
+               WHERE title = ? AND created_by = 'system@cti-lab-groups'""",
+            (
+                ch["description"], ch["objective"], ch["criteria"],
+                json.dumps(ch.get("hints", []), ensure_ascii=False),
+                ch["difficulty"], ch["min_score_badge"],
+                "2026-05-30T14:05:00-05:00", "2026-05-30T15:05:00-05:00", ch["title"],
+            ),
+        )
+
+
+_PAIR_RANGE_CHALLENGES = [
+    {
+        "title": "Parejas CTI Range — Correlación IOC + MITRE",
+        "description": "Reto por parejas posterior al trabajo grupal. La pareja debe conectar IOCs, actores y técnicas MITRE usando vistas de la plataforma: IOC/IOA Board, Intel Feeds, ATT&CK Matrix y Timeline.",
+        "objective": "[P1] Lidera la correlación de IOCs. Preguntas: ¿qué IOC conecta más actores o fuentes? ¿qué evidencia permite priorizarlo?\n[P2] Lidera el mapeo MITRE/IOA. Preguntas: ¿qué técnica explica mejor el patrón observado? ¿qué señal defensiva debería monitorearse?\n[PAIR] Entrega: hipótesis, evidencia de plataforma, técnica MITRE, IOC prioritario y recomendación defensiva.",
+        "criteria": "Correlación IOC/actor (25%) + Uso de MITRE/IOA (25%) + Evidencia de plataforma (25%) + Recomendación accionable (25%)",
+        "hints": [
+            "Cruza al menos dos módulos: IOC/IOA Board + ATT&CK Matrix o Timeline.",
+            "Una buena respuesta explica por qué un IOC es prioritario, no solo lo lista.",
+            "Si dos actores comparten técnica, compara contexto, severidad y fuente antes de concluir.",
+            "Usa capturas o notas breves para dejar trazabilidad de la evidencia consultada.",
+        ],
+        "difficulty": "intermedio",
+        "badge_name": "Threat Hunter",
+        "dataset_name": "Feed IOC Enriquecido — CTI-Lab",
+    },
+    {
+        "title": "Parejas CTI Range — Timeline de Intrusión",
+        "description": "Reto por parejas basado en la línea de tiempo de eventos de la plataforma. La pareja reconstruye una mini kill chain y propone contención.",
+        "objective": "[P1] Reconstruye secuencia temporal. Preguntas: ¿cuál es el primer evento confiable? ¿qué evento marca escalamiento o movimiento lateral?\n[P2] Analiza impacto y contención. Preguntas: ¿qué activo debe aislarse primero? ¿qué control reduce más rápido el riesgo?\n[PAIR] Entrega: timeline de 4 hitos + hipótesis de intrusión + acción inmediata.",
+        "criteria": "Secuencia temporal (30%) + Hipótesis de intrusión (25%) + Priorización de activos (20%) + Contención (25%)",
+        "hints": [
+            "Ordena eventos por timestamp y separa ruido de señales con severidad o MITRE.",
+            "Busca el cambio de fase: acceso inicial, ejecución, movimiento lateral o exfiltración.",
+            "La mejor contención protege el activo crítico y conserva evidencia para análisis.",
+            "Incluye un supuesto explícito si falta información para cerrar la hipótesis.",
+        ],
+        "difficulty": "intermedio",
+        "badge_name": "SOC Analyst",
+        "dataset_name": "Logs de Red — APT28 Fancy Bear",
+    },
+    {
+        "title": "Todos contra Todos CTI Range — Prioridad Ejecutiva",
+        "description": "Cierre competitivo del CTI Range. Cada estudiante debe integrar señales de la plataforma y entregar una priorización ejecutiva de amenaza con evidencia mínima pero contundente.",
+        "objective": "[SOLO] Integra IOC, actor, técnica MITRE y recomendación. Preguntas: ¿cuál amenaza debe atenderse primero y por qué? ¿qué evidencia de la plataforma sostiene esa prioridad?\n[SOLO] Propón una acción defensiva inmediata. Preguntas: ¿qué control reduce más riesgo en menos tiempo? ¿qué dato adicional pedirías para confirmar la hipótesis?\n[ALL] Entrega: amenaza prioritaria + evidencia + MITRE + control defensivo + justificación ejecutiva.",
+        "criteria": "Priorización ejecutiva (30%) + Evidencia CTI (25%) + Mapeo MITRE (20%) + Recomendación defensiva (25%)",
+        "hints": [
+            "No intentes cubrir todo: elige una amenaza y defiéndela con evidencia fuerte.",
+            "Combina al menos tres piezas: IOC, actor/campaña, técnica MITRE o timeline.",
+            "Una recomendación profesional incluye acción, responsable sugerido y razón de prioridad.",
+            "Si hay empate entre amenazas, decide por impacto, explotabilidad o criticidad del activo.",
+        ],
+        "difficulty": "avanzado",
+        "badge_name": "Analista de Amenazas",
+        "dataset_name": "Feed IOC Enriquecido — CTI-Lab",
+    },
+]
+
+
+def _seed_pair_range_challenges(conn) -> None:
+    for ch in _PAIR_RANGE_CHALLENGES:
+        if conn.execute("SELECT 1 FROM challenges WHERE title = ?", (ch["title"],)).fetchone():
+            continue
+        ds_row = conn.execute("SELECT id FROM datasets WHERE name = ?", (ch["dataset_name"],)).fetchone()
+        badge_row = conn.execute("SELECT id FROM badges WHERE name = ?", (ch["badge_name"],)).fetchone()
+        starts_at = "2026-05-30T15:45:00-05:00" if ch["title"].startswith("Todos contra Todos") else "2026-05-30T15:10:00-05:00"
+        deadline = "2026-05-30T16:05:00-05:00" if ch["title"].startswith("Todos contra Todos") else "2026-05-30T15:45:00-05:00"
+        stage = "todos-contra-todos" if ch["title"].startswith("Todos contra Todos") else "parejas"
+        conn.execute(
+            """INSERT INTO challenges
+               (title, description, objective, dataset_id, criteria, hints_json, starts_at, deadline,
+                status, badge_id, min_score_badge, difficulty, stage, created_by)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                ch["title"], ch["description"], ch["objective"],
+                ds_row["id"] if ds_row else None, ch["criteria"],
+                json.dumps(ch["hints"], ensure_ascii=False),
+                starts_at, deadline,
+                "active", badge_row["id"] if badge_row else None, 70,
+                ch["difficulty"], stage, "system@cti-lab-pairs",
+            ),
+        )
+
+
+def _assign_pair_range_challenges(conn) -> None:
+    pair_challenges = conn.execute(
+        "SELECT id, stage FROM challenges WHERE created_by = 'system@cti-lab-pairs' AND stage = 'parejas' ORDER BY id"
+    ).fetchall()
+    if not pair_challenges:
+        return
+    members = conn.execute("""
+        SELECT tm.team_id, tm.user_email
+        FROM team_members tm JOIN users u ON u.email = tm.user_email
+        WHERE u.role = 'student'
+        ORDER BY tm.team_id, tm.id
+    """).fetchall()
+    pair_index = 0
+    for i in range(0, len(members), 2):
+        ch_id = pair_challenges[pair_index % len(pair_challenges)]["id"]
+        for member in members[i:i + 2]:
+            conn.execute(
+                "INSERT OR IGNORE INTO challenge_assignments (challenge_id, user_email) VALUES (?,?)",
+                (ch_id, member["user_email"]),
+            )
+        pair_index += 1
+    final_rows = conn.execute(
+        "SELECT id FROM challenges WHERE created_by = 'system@cti-lab-pairs' AND stage = 'todos-contra-todos'"
+    ).fetchall()
+    for final in final_rows:
+        for member in members:
+            conn.execute(
+                "INSERT OR IGNORE INTO challenge_assignments (challenge_id, user_email) VALUES (?,?)",
+                (final["id"], member["user_email"]),
+            )
 
 
 # ── CTF Challenges Día 1 & Día 2 ──────────────────────────────────────────────

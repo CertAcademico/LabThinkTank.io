@@ -10,6 +10,9 @@ export interface Badge {
   awarded_at?: string
   awarded_by?: string
   badge_id?:   number
+  owner_name?: string
+  challenge_title?: string
+  team_name?: string
 }
 
 // ── Tier palette ──────────────────────────────────────────────────────────────
@@ -28,6 +31,18 @@ const ORG: Record<string, { bg: string; border: string; accent: string; abbr: st
   CertAcademico: { bg: 'rgba(59,130,246,0.08)',  border: 'rgba(59,130,246,0.3)',  accent: '#60a5fa', abbr: 'CA' },
   redciber:      { bg: 'rgba(239,68,68,0.08)',   border: 'rgba(239,68,68,0.3)',   accent: '#f87171', abbr: 'RC' },
   LabThinkTank:  { bg: 'rgba(34,211,238,0.08)',  border: 'rgba(34,211,238,0.3)',  accent: '#22d3ee', abbr: 'LT' },
+}
+
+const ORG_LABEL: Record<string, string> = {
+  CertAcademico: 'CertAcadémico Credentialing Institute',
+  redciber: 'RedCiber Cyber Range',
+  LabThinkTank: 'LabThinkTank Applied Labs',
+}
+
+const ISSUER_LINE: Record<string, string> = {
+  CertAcademico: 'Emitida por CertAcadémico Credentialing Institute',
+  redciber: 'Emitida por RedCiber Cyber Range',
+  LabThinkTank: 'Emitida por LabThinkTank Applied Labs',
 }
 
 // ── Icon SVG paths ────────────────────────────────────────────────────────────
@@ -51,6 +66,103 @@ const ICONS: Record<string, string> = {
   trophy:  'M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0V2z',
 }
 
+function hexPoints(size: number) {
+  const cx = size / 2
+  const r = size * 0.42
+  return Array.from({ length: 6 }, (_, i) => {
+    const angle = (Math.PI / 180) * (60 * i - 30)
+    return `${cx + r * Math.cos(angle)},${cx + r * Math.sin(angle)}`
+  }).join(' ')
+}
+
+function badgeSvgMarkup(badge: Badge) {
+  const t = TIER[badge.tier] ?? TIER.bronze
+  const o = ORG[badge.org] ?? ORG.CertAcademico
+  const W = 1400
+  const H = 820
+  const emblem = 250
+  const cx = 215
+  const tierLevel = Math.max(0, Object.keys(TIER).indexOf(badge.tier))
+  const dots = Array.from({ length: tierLevel + 1 }, (_, i) => (
+    `<circle cx="${cx - (tierLevel * 16) + i * 32}" cy="372" r="9" fill="${t.color}" opacity="0.95" />`
+  )).join('')
+  const owner = badge.owner_name || 'Estudiante CTI-Lab'
+  const challenge = badge.challenge_title || badge.description || 'Reto CTI-Lab'
+  const date = badge.awarded_at
+    ? new Date(badge.awarded_at).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })
+    : new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })
+  const code = `RC-CA-${badge.id}-${String(badge.awarded_at || Date.now()).replace(/\D/g, '').slice(0, 10)}`
+  const issuer = ISSUER_LINE[badge.org] ?? `Emitida por ${ORG_LABEL[badge.org] ?? badge.org}`
+  const certifiesA = 'certifica que la persona titular completó satisfactoriamente'
+  const certifiesB = 'las evidencias, actividades y criterios del reto indicado.'
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>
+    <filter id="glow"><feGaussianBlur stdDeviation="14" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#020617"/>
+      <stop offset="58%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${t.color}" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="${o.accent}" stop-opacity="0.18"/>
+    </linearGradient>
+    <style>
+      .small{font-family:Inter,Arial,sans-serif;font-size:28px;letter-spacing:3px;font-weight:800}
+      .body{font-family:Inter,Arial,sans-serif;font-size:31px}
+      .title{font-family:Inter,Arial,sans-serif;font-size:46px;font-weight:900}
+      .name{font-family:Georgia,serif;font-size:58px;font-weight:700}
+      .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:24px}
+    </style>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#bg)"/>
+  <rect x="38" y="38" width="${W - 76}" height="${H - 76}" rx="34" fill="none" stroke="${t.color}" stroke-opacity="0.55" stroke-width="3"/>
+  <path d="M70 150 C250 40, 390 48, 520 120 S770 235, 980 120 S1260 32, 1340 110" fill="none" stroke="${o.accent}" stroke-opacity="0.18" stroke-width="5"/>
+  <text x="88" y="105" class="small" fill="${o.accent}">CTI-LAB DIGITAL CREDENTIAL</text>
+  <text x="1310" y="105" class="small" fill="${t.color}" text-anchor="end">${TIER[badge.tier]?.label.toUpperCase() ?? badge.tier.toUpperCase()}</text>
+
+  <g transform="translate(90,186)">
+    <polygon points="${hexPoints(emblem)}" fill="url(#grad)" stroke="${t.color}" stroke-width="8" filter="url(#glow)"/>
+    <text x="${emblem / 2}" y="${emblem * 0.28}" text-anchor="middle" fill="${o.accent}" font-size="${emblem * 0.10}" font-weight="900" font-family="monospace">${ORG[badge.org]?.abbr ?? badge.org.slice(0, 2).toUpperCase()}</text>
+    <g transform="translate(${emblem * 0.32}, ${emblem * 0.36}) scale(${emblem / 96})">
+      <svg viewBox="0 0 24 24" width="${emblem * 0.36}" height="${emblem * 0.36}" fill="none" stroke="${t.color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="${ICONS[badge.icon] ?? ICONS.star}"/>
+      </svg>
+    </g>
+    ${dots}
+  </g>
+
+  <text x="410" y="202" class="body" fill="#94a3b8">Credencial otorgada a</text>
+  <text x="410" y="284" class="name" fill="#f8fafc">${escapeSvg(owner)}</text>
+  <line x1="410" y1="324" x2="1280" y2="324" stroke="${t.color}" stroke-opacity="0.45" stroke-width="2"/>
+  <text x="410" y="385" class="title" fill="${t.color}">${escapeSvg(badge.name)}</text>
+  <text x="410" y="438" class="body" fill="#cbd5e1">La presente credencial ${escapeSvg(certifiesA)}</text>
+  <text x="410" y="481" class="body" fill="#cbd5e1">${escapeSvg(certifiesB)}</text>
+  <text x="410" y="540" class="body" fill="#cbd5e1">Reto: ${escapeSvg(challenge)}</text>
+  ${badge.team_name ? `<text x="410" y="590" class="body" fill="#94a3b8">Equipo: ${escapeSvg(badge.team_name)}</text>` : ''}
+  <text x="410" y="638" class="body" fill="#94a3b8">${escapeSvg(issuer)}</text>
+  <text x="410" y="682" class="body" fill="#94a3b8">Fecha de emisión: ${escapeSvg(date)}</text>
+  <rect x="410" y="710" width="430" height="54" rx="12" fill="${t.color}" fill-opacity="0.10" stroke="${t.color}" stroke-opacity="0.28"/>
+  <text x="432" y="745" class="mono" fill="${t.color}">${escapeSvg(code)}</text>
+  <text x="1260" y="745" class="mono" fill="#64748b" text-anchor="end">CTI-Lab Challenge Platform</text>
+</svg>`
+}
+
+function escapeSvg(value: string) {
+  return value.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[ch]!))
+}
+
+export function downloadBadgeSvg(badge: Badge) {
+  const blob = new Blob([badgeSvgMarkup(badge)], { type: 'image/svg+xml;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${badge.org}_${badge.name}`.replace(/[^\w.-]+/g, '_').slice(0, 80) + '.svg'
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 // ── Badge SVG renderer ────────────────────────────────────────────────────────
 
 function BadgeShape({ tier, org, icon, size = 64 }: {
@@ -59,13 +171,7 @@ function BadgeShape({ tier, org, icon, size = 64 }: {
   const t  = TIER[tier]  ?? TIER.bronze
   const o  = ORG[org]    ?? ORG.CertAcademico
   const cx = size / 2
-  const r  = size * 0.42
-
-  // Hexagon points
-  const hex = Array.from({ length: 6 }, (_, i) => {
-    const angle = (Math.PI / 180) * (60 * i - 30)
-    return `${cx + r * Math.cos(angle)},${cx + r * Math.sin(angle)}`
-  }).join(' ')
+  const hex = hexPoints(size)
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -149,15 +255,18 @@ export function BadgeCard({ badge, size = 'md', showOrg = true }: {
 
 // ── Badge Row (compact for sidebar) ──────────────────────────────────────────
 
-export function BadgeRow({ badges }: { badges: Badge[] }) {
+export function BadgeRow({ badges, downloadable = false }: { badges: Badge[]; downloadable?: boolean }) {
   if (!badges.length) return null
   return (
     <div className="flex flex-wrap gap-1.5 justify-center">
       {badges.map(b => (
-        <div key={b.id} title={`${b.org} · ${b.name}\n${b.description}`}
-             style={{ filter: `drop-shadow(0 0 4px ${(TIER[b.tier] ?? TIER.bronze).glow})` }}>
+        <button key={b.id}
+                type="button"
+                onClick={downloadable ? () => downloadBadgeSvg(b) : undefined}
+                title={`${b.org} · ${b.name}\n${downloadable ? 'Clic para descargar badge SVG' : b.description}`}
+                style={{ filter: `drop-shadow(0 0 4px ${(TIER[b.tier] ?? TIER.bronze).glow})` }}>
           <BadgeShape tier={b.tier} org={b.org} icon={b.icon} size={32} />
-        </div>
+        </button>
       ))}
     </div>
   )

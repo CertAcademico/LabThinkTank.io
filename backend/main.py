@@ -3,6 +3,8 @@ import io
 import json
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 import anthropic
@@ -21,6 +23,32 @@ from services.upload_service import parse_upload
 from services.enrichment_service import enrich_ioc
 from intelligence.ioa_engine import get_ioas
 from intelligence.feeds_engine import FETCH_REGISTRY
+
+BOGOTA_TZ = ZoneInfo("America/Bogota")
+
+
+def _parse_dt(value: str | None):
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value)
+        return dt if dt.tzinfo else dt.replace(tzinfo=BOGOTA_TZ)
+    except Exception:
+        return None
+
+
+def _now_bogota():
+    return datetime.now(BOGOTA_TZ)
+
+
+def _is_started(value: str | None) -> bool:
+    dt = _parse_dt(value)
+    return not dt or _now_bogota() >= dt
+
+
+def _is_due(value: str | None) -> bool:
+    dt = _parse_dt(value)
+    return bool(dt and _now_bogota() >= dt)
 
 
 @asynccontextmanager
@@ -406,7 +434,7 @@ def admin_challenges(authorization: str = Header(None)):
     _require_admin(authorization)
     with get_conn() as conn:
         rows = conn.execute("""
-            SELECT c.id, c.title, c.description, c.objective, c.criteria,
+            SELECT c.id, c.title, c.description, c.objective, c.criteria, c.hints_json,
                    c.deadline, c.status, c.created_at,
                    c.badge_id, c.min_score_badge, c.difficulty,
                    d.name AS dataset_name,
@@ -447,7 +475,7 @@ def admin_create_challenge(payload: dict = Body(...), authorization: str = Heade
 @app.patch("/admin/challenges/{challenge_id}")
 def admin_update_challenge(challenge_id: int, payload: dict = Body(...), authorization: str = Header(None)):
     _require_admin(authorization)
-    updatable = ["status", "title", "description", "objective", "criteria", "deadline", "difficulty"]
+    updatable = ["status", "title", "description", "objective", "criteria", "hints_json", "deadline", "difficulty"]
     with get_conn() as conn:
         for field in updatable:
             if field in payload:
@@ -679,8 +707,8 @@ def student_challenges(authorization: str = Header(None)):
     user = _require_user(authorization)
     with get_conn() as conn:
         rows = conn.execute("""
-            SELECT c.id, c.title, c.description, c.objective, c.criteria,
-                   c.deadline, c.status, c.difficulty,
+            SELECT c.id, c.title, c.description, c.objective, c.criteria, c.hints_json,
+                   c.starts_at, c.deadline, c.stage, c.status, c.difficulty,
                    c.badge_id, c.min_score_badge,
                    b.name AS badge_name, b.org AS badge_org, b.tier AS badge_tier, b.icon AS badge_icon,
                    d.name AS dataset_name, d.schema_json,
@@ -698,6 +726,22 @@ def student_challenges(authorization: str = Header(None)):
             WHERE ca.user_email = ?
             ORDER BY c.created_at DESC
         """, (user["email"], user["email"], user["email"], user["email"])).fetchall()
+    return [dict(r) for r in rows if _is_started(r["starts_at"])]
+
+
+@app.get("/student/solved-challenges")
+def student_solved_challenges(authorization: str = Header(None)):
+    user = _require_user(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT c.id, c.title, c.stage, c.difficulty, s.score, s.feedback, s.submitted_at,
+                   b.name AS badge_name, b.tier AS badge_tier
+            FROM submissions s
+            JOIN challenges c ON c.id = s.challenge_id
+            LEFT JOIN badges b ON b.id = c.badge_id
+            WHERE s.user_email = ?
+            ORDER BY s.submitted_at DESC
+        """, (user["email"],)).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -705,10 +749,7 @@ def student_challenges(authorization: str = Header(None)):
 def student_challenge_dataset(challenge_id: int, authorization: str = Header(None)):
     user = _require_user(authorization)
     with get_conn() as conn:
-        ok = conn.execute(
-            "SELECT 1 FROM challenge_assignments WHERE challenge_id = ? AND user_email = ?",
-            (challenge_id, user["email"]),
-        ).fetchone()
+        ok = _has_challenge_access(conn, challenge_id, user["email"])
         if not ok:
             raise HTTPException(status_code=403, detail="No tienes acceso a este reto")
         row = conn.execute("""
@@ -725,10 +766,7 @@ def student_challenge_dataset(challenge_id: int, authorization: str = Header(Non
 def student_submit(challenge_id: int, payload: dict = Body(...), authorization: str = Header(None)):
     user = _require_user(authorization)
     with get_conn() as conn:
-        ok = conn.execute(
-            "SELECT 1 FROM challenge_assignments WHERE challenge_id = ? AND user_email = ?",
-            (challenge_id, user["email"]),
-        ).fetchone()
+        ok = _has_challenge_access(conn, challenge_id, user["email"])
         if not ok:
             raise HTTPException(status_code=403)
         existing = conn.execute(
@@ -748,6 +786,47 @@ def student_submit(challenge_id: int, payload: dict = Body(...), authorization: 
              payload.get("code",""), payload.get("output",""), plots, payload.get("notes","")),
         )
     return {"id": cur.lastrowid, "created": True}
+
+
+def _has_challenge_access(conn, challenge_id: int, user_email: str):
+    direct = conn.execute(
+        "SELECT 1 FROM challenge_assignments WHERE challenge_id = ? AND user_email = ?",
+        (challenge_id, user_email),
+    ).fetchone()
+    if direct:
+        return direct
+    return conn.execute("""
+        SELECT 1
+        FROM team_challenge_assignments tca
+        JOIN team_members tm ON tm.team_id = tca.team_id
+        WHERE tca.challenge_id = ? AND tm.user_email = ?
+        LIMIT 1
+    """, (challenge_id, user_email)).fetchone()
+
+
+def _auto_award_due_team_badges(conn) -> None:
+    rows = conn.execute("""
+        SELECT tca.team_id, c.id AS challenge_id, c.badge_id, c.deadline
+        FROM team_challenge_assignments tca
+        JOIN challenges c ON c.id = tca.challenge_id
+        WHERE c.badge_id IS NOT NULL
+    """).fetchall()
+    for row in rows:
+        if not _is_due(row["deadline"]):
+            continue
+        submitted = conn.execute("""
+            SELECT 1
+            FROM submissions s
+            JOIN team_members tm ON tm.user_email = s.user_email
+            WHERE tm.team_id = ? AND s.challenge_id = ?
+            LIMIT 1
+        """, (row["team_id"], row["challenge_id"])).fetchone()
+        if not submitted:
+            continue
+        conn.execute(
+            "INSERT OR IGNORE INTO team_badges (team_id, badge_id, awarded_by) VALUES (?,?,?)",
+            (row["team_id"], row["badge_id"], "auto@cti-range"),
+        )
 
 
 # ── Admin: User roles ─────────────────────────────────────────────────────────
@@ -896,10 +975,55 @@ def student_badges(authorization: str = Header(None)):
     with get_conn() as conn:
         rows = conn.execute("""
             SELECT b.id, b.org, b.name, b.description, b.tier, b.icon,
-                   ub.awarded_at, ub.awarded_by
-            FROM user_badges ub JOIN badges b ON ub.badge_id = b.id
+                   ub.awarded_at, ub.awarded_by,
+                   u.name AS owner_name,
+                   COALESCE(
+                     (SELECT c.title
+                      FROM submissions s
+                      JOIN challenges c ON c.id = s.challenge_id
+                      WHERE s.user_email = ub.user_email AND c.badge_id = b.id
+                      ORDER BY s.submitted_at DESC LIMIT 1),
+                     (SELECT c.title
+                      FROM submissions s
+                      JOIN challenges c ON c.id = s.challenge_id
+                      WHERE s.user_email = ub.user_email
+                      ORDER BY s.submitted_at ASC LIMIT 1),
+                     'CTI-Lab'
+                   ) AS challenge_title
+            FROM user_badges ub
+            JOIN badges b ON ub.badge_id = b.id
+            JOIN users u ON u.email = ub.user_email
             WHERE ub.user_email = ?
             ORDER BY ub.awarded_at DESC
+        """, (user["email"],)).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/student/team-badges")
+def student_team_badges(authorization: str = Header(None)):
+    user = _require_user(authorization)
+    with get_conn() as conn:
+        _auto_award_due_team_badges(conn)
+        rows = conn.execute("""
+            SELECT b.id, b.org, b.name, b.description, b.tier, b.icon,
+                   tb.awarded_at, tb.awarded_by,
+                   t.id AS team_id, t.name AS team_name, t.color AS team_color,
+                   u.name AS owner_name,
+                   COALESCE(
+                     (SELECT c.title
+                      FROM team_challenge_assignments tca
+                      JOIN challenges c ON c.id = tca.challenge_id
+                      WHERE tca.team_id = t.id AND c.badge_id = b.id
+                      LIMIT 1),
+                     'Reto grupal CTI-Lab'
+                   ) AS challenge_title
+            FROM team_members tm
+            JOIN teams t ON t.id = tm.team_id
+            JOIN team_badges tb ON tb.team_id = t.id
+            JOIN badges b ON b.id = tb.badge_id
+            JOIN users u ON u.email = tm.user_email
+            WHERE tm.user_email = ?
+            ORDER BY tb.awarded_at DESC
         """, (user["email"],)).fetchall()
     return [dict(r) for r in rows]
 
@@ -926,6 +1050,7 @@ def student_team(authorization: str = Header(None)):
 def student_team_challenge(authorization: str = Header(None)):
     user = _require_user(authorization)
     with get_conn() as conn:
+        _auto_award_due_team_badges(conn)
         team = conn.execute("""
             SELECT t.id, t.name, t.color
             FROM team_members tm JOIN teams t ON tm.team_id = t.id
@@ -934,11 +1059,16 @@ def student_team_challenge(authorization: str = Header(None)):
         if not team:
             return None
         challenges = conn.execute("""
-            SELECT c.id, c.title, c.description, c.objective, c.criteria,
-                   c.difficulty, c.deadline, c.status,
+            SELECT c.id, c.title, c.description, c.objective, c.criteria, c.hints_json,
+                   c.difficulty, c.starts_at, c.deadline, c.stage, c.status,
                    c.badge_id, c.min_score_badge,
                    b.name AS badge_name, b.org AS badge_org, b.tier AS badge_tier,
                    d.name AS dataset_name, tca.assigned_at,
+                   (SELECT COUNT(*) FROM submissions s
+                    WHERE s.challenge_id = c.id AND s.user_email = ?) AS submitted,
+                   (SELECT score FROM submissions s
+                    WHERE s.challenge_id = c.id AND s.user_email = ?
+                    LIMIT 1) AS my_score,
                    (SELECT 1 FROM team_badges tb WHERE tb.team_id=? AND tb.badge_id=c.badge_id) AS badge_earned
             FROM team_challenge_assignments tca
             JOIN challenges c ON tca.challenge_id = c.id
@@ -946,7 +1076,7 @@ def student_team_challenge(authorization: str = Header(None)):
             LEFT JOIN datasets d ON c.dataset_id = d.id
             WHERE tca.team_id = ?
             ORDER BY tca.assigned_at DESC
-        """, (team["id"], team["id"])).fetchall()
+        """, (user["email"], user["email"], team["id"], team["id"])).fetchall()
         members = conn.execute("""
             SELECT u.name, u.email, tm.role
             FROM team_members tm JOIN users u ON tm.user_email = u.email

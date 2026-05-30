@@ -20,6 +20,7 @@ from services.findings_service import get_findings, add_finding
 from services.upload_service import parse_upload
 from services.enrichment_service import enrich_ioc
 from intelligence.ioa_engine import get_ioas
+from intelligence.feeds_engine import FETCH_REGISTRY
 
 
 @asynccontextmanager
@@ -407,11 +408,14 @@ def admin_challenges(authorization: str = Header(None)):
         rows = conn.execute("""
             SELECT c.id, c.title, c.description, c.objective, c.criteria,
                    c.deadline, c.status, c.created_at,
+                   c.badge_id, c.min_score_badge, c.difficulty,
                    d.name AS dataset_name,
+                   b.name AS badge_name, b.org AS badge_org, b.tier AS badge_tier, b.icon AS badge_icon,
                    (SELECT COUNT(*) FROM challenge_assignments ca WHERE ca.challenge_id = c.id) AS assigned_count,
                    (SELECT COUNT(*) FROM submissions s WHERE s.challenge_id = c.id) AS submission_count
             FROM challenges c
             LEFT JOIN datasets d ON c.dataset_id = d.id
+            LEFT JOIN badges b ON c.badge_id = b.id
             ORDER BY c.created_at DESC
         """).fetchall()
     return [dict(r) for r in rows]
@@ -425,10 +429,17 @@ def admin_create_challenge(payload: dict = Body(...), authorization: str = Heade
         raise HTTPException(status_code=400, detail="Título requerido")
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO challenges (title, description, objective, dataset_id, criteria, deadline, created_by) VALUES (?,?,?,?,?,?,?)",
+            """INSERT INTO challenges
+               (title, description, objective, dataset_id, criteria, deadline,
+                badge_id, min_score_badge, difficulty, created_by)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
             (title, payload.get("description", ""), payload.get("objective", ""),
-             payload.get("dataset_id"), payload.get("criteria", ""),
-             payload.get("deadline"), admin["email"]),
+             payload.get("dataset_id") or None, payload.get("criteria", ""),
+             payload.get("deadline") or None,
+             payload.get("badge_id") or None,
+             int(payload.get("min_score_badge") or 70),
+             payload.get("difficulty", "medio"),
+             admin["email"]),
         )
     return {"id": cur.lastrowid, "title": title}
 
@@ -436,11 +447,15 @@ def admin_create_challenge(payload: dict = Body(...), authorization: str = Heade
 @app.patch("/admin/challenges/{challenge_id}")
 def admin_update_challenge(challenge_id: int, payload: dict = Body(...), authorization: str = Header(None)):
     _require_admin(authorization)
+    updatable = ["status", "title", "description", "objective", "criteria", "deadline", "difficulty"]
     with get_conn() as conn:
-        if "status" in payload:
-            conn.execute("UPDATE challenges SET status = ? WHERE id = ?", (payload["status"], challenge_id))
-        if "title" in payload:
-            conn.execute("UPDATE challenges SET title = ? WHERE id = ?", (payload["title"], challenge_id))
+        for field in updatable:
+            if field in payload:
+                conn.execute(f"UPDATE challenges SET {field} = ? WHERE id = ?", (payload[field], challenge_id))
+        if "badge_id" in payload:
+            conn.execute("UPDATE challenges SET badge_id = ? WHERE id = ?", (payload["badge_id"] or None, challenge_id))
+        if "min_score_badge" in payload:
+            conn.execute("UPDATE challenges SET min_score_badge = ? WHERE id = ?", (int(payload["min_score_badge"] or 70), challenge_id))
     return {"ok": True}
 
 
@@ -521,13 +536,112 @@ def admin_submissions(challenge_id: int = None, authorization: str = Header(None
 
 @app.put("/admin/submissions/{submission_id}/score")
 def admin_score(submission_id: int, payload: dict = Body(...), authorization: str = Header(None)):
-    _require_admin(authorization)
+    admin = _require_admin(authorization)
+    score = payload.get("score")
+    feedback = payload.get("feedback", "")
+    badge_awarded = None
     with get_conn() as conn:
         conn.execute(
             "UPDATE submissions SET score = ?, feedback = ? WHERE id = ?",
-            (payload.get("score"), payload.get("feedback", ""), submission_id),
+            (score, feedback, submission_id),
         )
-    return {"ok": True}
+        if score is not None:
+            sub = conn.execute(
+                "SELECT user_email, challenge_id FROM submissions WHERE id = ?", (submission_id,)
+            ).fetchone()
+            if sub:
+                ch = conn.execute(
+                    "SELECT badge_id, min_score_badge FROM challenges WHERE id = ?", (sub["challenge_id"],)
+                ).fetchone()
+                if ch and ch["badge_id"] and int(score) >= (ch["min_score_badge"] or 70):
+                    already = conn.execute(
+                        "SELECT 1 FROM user_badges WHERE user_email = ? AND badge_id = ?",
+                        (sub["user_email"], ch["badge_id"]),
+                    ).fetchone()
+                    if not already:
+                        conn.execute(
+                            "INSERT INTO user_badges (user_email, badge_id, awarded_by) VALUES (?,?,?)",
+                            (sub["user_email"], ch["badge_id"], admin["email"]),
+                        )
+                        b = conn.execute("SELECT name, org, tier FROM badges WHERE id = ?", (ch["badge_id"],)).fetchone()
+                        badge_awarded = dict(b) if b else None
+    return {"ok": True, "badge_awarded": badge_awarded}
+
+
+# ── Admin: Seed demo data ─────────────────────────────────────────────────────
+
+@app.post("/admin/seed-demo")
+def admin_seed_demo(authorization: str = Header(None)):
+    from db import _seed_demo_datasets, _seed_demo_challenges
+    _require_admin(authorization)
+    with get_conn() as conn:
+        ds_before = conn.execute("SELECT COUNT(*) FROM datasets WHERE source LIKE 'CTI-Lab%'").fetchone()[0]
+        ch_before = conn.execute("SELECT COUNT(*) FROM challenges WHERE created_by = 'system@cti-lab'").fetchone()[0]
+        _seed_demo_datasets(conn)
+        _seed_demo_challenges(conn)
+        ds_after = conn.execute("SELECT COUNT(*) FROM datasets WHERE source LIKE 'CTI-Lab%'").fetchone()[0]
+        ch_after = conn.execute("SELECT COUNT(*) FROM challenges WHERE created_by = 'system@cti-lab'").fetchone()[0]
+    return {
+        "datasets_added": ds_after - ds_before,
+        "challenges_added": ch_after - ch_before,
+        "total_datasets": ds_after,
+        "total_challenges": ch_after,
+    }
+
+
+# ── Admin: Feed Sources ───────────────────────────────────────────────────────
+
+@app.get("/admin/sources")
+def admin_sources(category: str = None, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        if category:
+            rows = conn.execute(
+                "SELECT * FROM feed_sources WHERE category = ? ORDER BY group_label, name",
+                (category,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM feed_sources ORDER BY category, group_label, name"
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/admin/sources/{source_id}/fetch")
+def admin_fetch_source(source_id: int, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        src = conn.execute("SELECT * FROM feed_sources WHERE id = ?", (source_id,)).fetchone()
+    if not src:
+        raise HTTPException(status_code=404, detail="Fuente no encontrada")
+    src = dict(src)
+    fn = FETCH_REGISTRY.get(src["name"])
+    if not fn:
+        raise HTTPException(status_code=400, detail=f"Fetch no implementado para '{src['name']}'. Solo fuentes públicas (ThreatFox, FeodoTracker, OpenPhish, Ransomware.live).")
+    data = fn(limit=50)
+    if data and "error" in data[0]:
+        raise HTTPException(status_code=502, detail=data[0]["error"])
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE feed_sources SET last_fetched = datetime('now'), last_count = ?, status = 'active' WHERE id = ?",
+            (len(data), source_id),
+        )
+    return {"source": src["name"], "count": len(data), "sample": data[:5], "data": data}
+
+
+@app.get("/admin/sources/summary")
+def admin_sources_summary(authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT category,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active,
+                   SUM(CASE WHEN status = 'needs_key' THEN 1 ELSE 0 END) AS needs_key,
+                   SUM(CASE WHEN status = 'manual' THEN 1 ELSE 0 END) AS manual
+            FROM feed_sources GROUP BY category ORDER BY category
+        """).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ── Admin: Stats ──────────────────────────────────────────────────────────────
@@ -566,18 +680,24 @@ def student_challenges(authorization: str = Header(None)):
     with get_conn() as conn:
         rows = conn.execute("""
             SELECT c.id, c.title, c.description, c.objective, c.criteria,
-                   c.deadline, c.status, d.name AS dataset_name, d.schema_json,
+                   c.deadline, c.status, c.difficulty,
+                   c.badge_id, c.min_score_badge,
+                   b.name AS badge_name, b.org AS badge_org, b.tier AS badge_tier, b.icon AS badge_icon,
+                   d.name AS dataset_name, d.schema_json,
                    (SELECT COUNT(*) FROM submissions s
                     WHERE s.challenge_id = c.id AND s.user_email = ?) AS submitted,
                    (SELECT score FROM submissions s
                     WHERE s.challenge_id = c.id AND s.user_email = ?
-                    LIMIT 1) AS my_score
+                    LIMIT 1) AS my_score,
+                   (SELECT 1 FROM user_badges ub
+                    WHERE ub.user_email = ? AND ub.badge_id = c.badge_id) AS badge_earned
             FROM challenges c
             JOIN challenge_assignments ca ON c.id = ca.challenge_id
             LEFT JOIN datasets d ON c.dataset_id = d.id
+            LEFT JOIN badges b ON c.badge_id = b.id
             WHERE ca.user_email = ?
             ORDER BY c.created_at DESC
-        """, (user["email"], user["email"], user["email"])).fetchall()
+        """, (user["email"], user["email"], user["email"], user["email"])).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -657,7 +777,7 @@ def admin_teams(authorization: str = Header(None)):
         result = []
         for t in teams:
             members = conn.execute("""
-                SELECT u.name, u.email, u.role
+                SELECT u.name, u.email, tm.role, tm.joined_at
                 FROM team_members tm JOIN users u ON tm.user_email = u.email
                 WHERE tm.team_id = ?
             """, (t["id"],)).fetchall()
@@ -861,4 +981,307 @@ def student_ctf_phases(authorization: str = Header(None)):
         rows = conn.execute(
             "SELECT id, order_idx, name, category, reto_count, group_label, emoji, status, solves FROM ctf_phases ORDER BY order_idx"
         ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── Admin: CTF Challenges ─────────────────────────────────────────────────────
+
+@app.get("/admin/ctf-challenges")
+def admin_ctf_challenges(phase_id: int = None, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        if phase_id:
+            rows = conn.execute("""
+                SELECT c.*, d.name AS dataset_name,
+                       (SELECT COUNT(*) FROM ctf_solves s WHERE s.challenge_id = c.id AND s.is_correct = 1) AS solve_count
+                FROM ctf_challenges c
+                LEFT JOIN datasets d ON c.dataset_id = d.id
+                WHERE c.phase_id = ?
+                ORDER BY c.order_idx
+            """, (phase_id,)).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT c.*, d.name AS dataset_name, p.name AS phase_name,
+                       (SELECT COUNT(*) FROM ctf_solves s WHERE s.challenge_id = c.id AND s.is_correct = 1) AS solve_count
+                FROM ctf_challenges c
+                LEFT JOIN datasets d ON c.dataset_id = d.id
+                LEFT JOIN ctf_phases p ON c.phase_id = p.id
+                ORDER BY p.order_idx, c.order_idx
+            """).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/admin/ctf-challenges")
+def admin_create_ctf_challenge(payload: dict = Body(...), authorization: str = Header(None)):
+    admin = _require_admin(authorization)
+    if not payload.get("title"):
+        raise HTTPException(status_code=400, detail="Título requerido")
+    import json as _json
+    with get_conn() as conn:
+        cur = conn.execute(
+            """INSERT INTO ctf_challenges
+               (phase_id, order_idx, title, description, flag, flag_format,
+                hints_json, category, difficulty, points, docker_image, docker_port,
+                tools_json, roles_json, dataset_id, is_team, created_by)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                payload.get("phase_id"),
+                payload.get("order_idx", 0),
+                payload["title"],
+                payload.get("description", ""),
+                payload.get("flag", ""),
+                payload.get("flag_format", "CTI{...}"),
+                _json.dumps(payload.get("hints", [])),
+                payload.get("category", "CTI"),
+                payload.get("difficulty", "fácil"),
+                int(payload.get("points", 100)),
+                payload.get("docker_image", ""),
+                payload.get("docker_port", "8080"),
+                _json.dumps(payload.get("tools", [])),
+                _json.dumps(payload.get("roles", [])),
+                payload.get("dataset_id") or None,
+                1 if payload.get("is_team") else 0,
+                admin["email"],
+            ),
+        )
+    return {"id": cur.lastrowid}
+
+
+@app.patch("/admin/ctf-challenges/{challenge_id}")
+def admin_update_ctf_challenge(challenge_id: int, payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    updatable = ["title", "description", "flag", "flag_format", "category", "difficulty",
+                 "points", "docker_image", "docker_port", "status", "order_idx"]
+    with get_conn() as conn:
+        for field in updatable:
+            if field in payload:
+                conn.execute(f"UPDATE ctf_challenges SET {field} = ? WHERE id = ?", (payload[field], challenge_id))
+        if "phase_id" in payload:
+            conn.execute("UPDATE ctf_challenges SET phase_id = ? WHERE id = ?", (payload["phase_id"], challenge_id))
+        if "dataset_id" in payload:
+            conn.execute("UPDATE ctf_challenges SET dataset_id = ? WHERE id = ?", (payload.get("dataset_id") or None, challenge_id))
+    return {"ok": True}
+
+
+@app.delete("/admin/ctf-challenges/{challenge_id}")
+def admin_delete_ctf_challenge(challenge_id: int, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute("DELETE FROM ctf_solves WHERE challenge_id = ?", (challenge_id,))
+        conn.execute("DELETE FROM ctf_challenges WHERE id = ?", (challenge_id,))
+    return {"ok": True}
+
+
+@app.get("/admin/ctf-leaderboard")
+def admin_ctf_leaderboard(authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT u.name, u.email, u.role,
+                   COUNT(s.id) AS solves,
+                   COALESCE(SUM(s.points_earned), 0) AS total_points,
+                   MAX(s.solved_at) AS last_solve
+            FROM users u
+            LEFT JOIN ctf_solves s ON u.email = s.user_email AND s.is_correct = 1
+            GROUP BY u.email
+            ORDER BY total_points DESC, solves DESC
+        """).fetchall()
+        badges_map = {}
+        for r in conn.execute("SELECT user_email, COUNT(*) c FROM user_badges GROUP BY user_email").fetchall():
+            badges_map[r["user_email"]] = r["c"]
+    result = []
+    for i, r in enumerate(rows):
+        d = dict(r)
+        d["rank"] = i + 1
+        d["badges"] = badges_map.get(r["email"], 0)
+        result.append(d)
+    return result
+
+
+# ── Admin: CTF Challenge flag submit (admin test) ─────────────────────────────
+
+@app.post("/admin/ctf-challenges/{challenge_id}/test-flag")
+def admin_test_flag(challenge_id: int, payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        ch = conn.execute("SELECT flag FROM ctf_challenges WHERE id = ?", (challenge_id,)).fetchone()
+    if not ch:
+        raise HTTPException(status_code=404, detail="Reto no encontrado")
+    return {"correct": payload.get("flag", "").strip() == ch["flag"].strip()}
+
+
+# ── Student: CTF Challenges ───────────────────────────────────────────────────
+
+@app.get("/student/ctf-challenges")
+def student_ctf_challenges(authorization: str = Header(None)):
+    user = _require_user(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT c.id, c.phase_id, c.order_idx, c.title, c.description,
+                   c.flag_format, c.hints_json, c.category, c.difficulty,
+                   c.points, c.docker_image, c.docker_port,
+                   c.tools_json, c.roles_json, c.is_team, c.status,
+                   d.name AS dataset_name,
+                   p.name AS phase_name, p.status AS phase_status,
+                   (SELECT is_correct FROM ctf_solves s
+                    WHERE s.challenge_id = c.id AND s.user_email = ? LIMIT 1) AS solved,
+                   (SELECT COUNT(*) FROM ctf_solves s
+                    WHERE s.challenge_id = c.id AND s.is_correct = 1) AS total_solves
+            FROM ctf_challenges c
+            LEFT JOIN datasets d ON c.dataset_id = d.id
+            LEFT JOIN ctf_phases p ON c.phase_id = p.id
+            WHERE c.status = 'active'
+            ORDER BY p.order_idx, c.order_idx
+        """, (user["email"],)).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/student/ctf-challenges/{challenge_id}/submit")
+def student_ctf_submit(challenge_id: int, payload: dict = Body(...), authorization: str = Header(None)):
+    user = _require_user(authorization)
+    submitted = payload.get("flag", "").strip()
+    with get_conn() as conn:
+        ch = conn.execute("SELECT flag, points, phase_id FROM ctf_challenges WHERE id = ? AND status = 'active'", (challenge_id,)).fetchone()
+        if not ch:
+            raise HTTPException(status_code=404, detail="Reto no encontrado o inactivo")
+        already = conn.execute(
+            "SELECT is_correct FROM ctf_solves WHERE challenge_id = ? AND user_email = ?",
+            (challenge_id, user["email"]),
+        ).fetchone()
+        if already and already["is_correct"]:
+            return {"correct": True, "message": "Ya resolviste este reto anteriormente", "already_solved": True}
+        is_correct = submitted == ch["flag"].strip()
+        points_earned = ch["points"] if is_correct else 0
+        if already:
+            conn.execute(
+                "UPDATE ctf_solves SET submitted_flag=?, is_correct=?, points_earned=?, solved_at=datetime('now') WHERE challenge_id=? AND user_email=?",
+                (submitted, is_correct, points_earned, challenge_id, user["email"]),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO ctf_solves (challenge_id, user_email, submitted_flag, is_correct, points_earned) VALUES (?,?,?,?,?)",
+                (challenge_id, user["email"], submitted, is_correct, points_earned),
+            )
+        if is_correct:
+            conn.execute(
+                "UPDATE ctf_phases SET solves = solves + 1 WHERE id = ?", (ch["phase_id"],)
+            )
+    return {"correct": is_correct, "points": points_earned if is_correct else 0}
+
+
+# ── Admin: Multi-dataset for challenges ──────────────────────────────────────
+
+@app.get("/admin/challenges/{challenge_id}/datasets")
+def admin_challenge_datasets(challenge_id: int, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT d.id, d.name, d.description, d.source
+            FROM challenge_datasets cd JOIN datasets d ON cd.dataset_id = d.id
+            WHERE cd.challenge_id = ?
+        """, (challenge_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/admin/challenges/{challenge_id}/datasets")
+def admin_add_challenge_dataset(challenge_id: int, payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    dataset_id = payload.get("dataset_id")
+    if not dataset_id:
+        raise HTTPException(status_code=400, detail="dataset_id requerido")
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO challenge_datasets (challenge_id, dataset_id) VALUES (?,?)",
+            (challenge_id, dataset_id),
+        )
+    return {"ok": True}
+
+
+@app.delete("/admin/challenges/{challenge_id}/datasets/{dataset_id}")
+def admin_remove_challenge_dataset(challenge_id: int, dataset_id: int, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM challenge_datasets WHERE challenge_id = ? AND dataset_id = ?",
+            (challenge_id, dataset_id),
+        )
+    return {"ok": True}
+
+
+# ── Admin: Badge Progress ─────────────────────────────────────────────────────
+
+@app.get("/admin/badge-progress")
+def admin_badge_progress(authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        users = conn.execute(
+            "SELECT id, name, email, role FROM users ORDER BY name"
+        ).fetchall()
+        badges = conn.execute(
+            "SELECT id, name, org, tier FROM badges ORDER BY org, tier"
+        ).fetchall()
+        earned = conn.execute(
+            "SELECT user_email, badge_id, awarded_at FROM user_badges"
+        ).fetchall()
+        ctf_scores = conn.execute("""
+            SELECT user_email, COUNT(*) AS solves, COALESCE(SUM(points_earned),0) AS points
+            FROM ctf_solves WHERE is_correct = 1 GROUP BY user_email
+        """).fetchall()
+        sub_scores = conn.execute("""
+            SELECT user_email, COUNT(*) AS submissions, AVG(score) AS avg_score
+            FROM submissions WHERE score IS NOT NULL GROUP BY user_email
+        """).fetchall()
+    earned_map: dict[str, set] = {}
+    earned_dates: dict[tuple, str] = {}
+    for e in earned:
+        earned_map.setdefault(e["user_email"], set()).add(e["badge_id"])
+        earned_dates[(e["user_email"], e["badge_id"])] = e["awarded_at"]
+    ctf_map = {r["user_email"]: dict(r) for r in ctf_scores}
+    sub_map = {r["user_email"]: dict(r) for r in sub_scores}
+    result = []
+    for u in users:
+        earned_ids = earned_map.get(u["email"], set())
+        result.append({
+            "name":        u["name"],
+            "email":       u["email"],
+            "role":        u["role"],
+            "badges":      [{"id": b["id"], "name": b["name"], "org": b["org"], "tier": b["tier"],
+                             "earned": b["id"] in earned_ids,
+                             "earned_at": earned_dates.get((u["email"], b["id"]), None)}
+                            for b in badges],
+            "badge_count": len(earned_ids),
+            "ctf_solves":  ctf_map.get(u["email"], {}).get("solves", 0),
+            "ctf_points":  ctf_map.get(u["email"], {}).get("points", 0),
+            "avg_score":   round(sub_map.get(u["email"], {}).get("avg_score", 0) or 0, 1),
+            "submissions": sub_map.get(u["email"], {}).get("submissions", 0),
+        })
+    return result
+
+
+# ── Admin: Team member role ───────────────────────────────────────────────────
+
+@app.patch("/admin/teams/{team_id}/members/{email}/role")
+def admin_set_member_role(team_id: int, email: str, payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    role = payload.get("role", "analista_datos")
+    valid = {"analista_datos", "ciberseguridad", "ciencia_datos", "machine_learning"}
+    if role not in valid:
+        raise HTTPException(status_code=400, detail=f"Rol inválido. Válidos: {valid}")
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE team_members SET role = ? WHERE team_id = ? AND user_email = ?",
+            (role, team_id, email),
+        )
+    return {"ok": True}
+
+
+@app.get("/admin/teams/{team_id}/members")
+def admin_team_members(team_id: int, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT tm.user_email, tm.role, tm.joined_at, u.name
+            FROM team_members tm JOIN users u ON tm.user_email = u.email
+            WHERE tm.team_id = ?
+        """, (team_id,)).fetchall()
     return [dict(r) for r in rows]

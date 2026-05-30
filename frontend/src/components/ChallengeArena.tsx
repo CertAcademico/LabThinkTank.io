@@ -393,8 +393,15 @@ print(challenge_df.describe(include='all'))
         )}
       </div>
 
-      {/* HelpBot */}
-      <HelpBot currentCode={code} lessonTitle="Sandbox Lab" challengeTitle={challenge.title} />
+      {/* HelpBot con contexto completo del reto */}
+      <HelpBot
+        currentCode={code}
+        lessonTitle="Sandbox CTI-Lab"
+        challengeTitle={challenge.title}
+        challengeDesc={challenge.description}
+        challengeObj={challenge.objective}
+        challengeCrit={challenge.criteria}
+      />
     </div>
   )
 }

@@ -17,20 +17,20 @@ interface Message {
 }
 
 const SUGGESTED = [
-  'Analyze IOCs from the last 24h and identify patterns',
-  'What TTPs is APT29 using in current campaigns?',
-  'Summarize critical alerts and suggest containment',
-  'Map observed behavior to MITRE ATT&CK techniques',
-  'Correlate threat actors with active campaigns',
-  'Identify lateral movement indicators in recent IOAs',
+  'Analiza los IOCs de las últimas 24h e identifica patrones',
+  '¿Qué TTPs está usando APT29 en campañas actuales?',
+  'Resume las alertas críticas y sugiere contención',
+  'Mapea el comportamiento observado a técnicas MITRE ATT&CK',
+  'Correlaciona actores de amenaza con campañas activas',
+  'Identifica indicadores de movimiento lateral en IoAs recientes',
 ]
 
 function ConfidenceBar({ score }: { score: number }) {
   const color = score >= 80 ? '#4ade80' : score >= 60 ? '#facc15' : '#f87171'
-  const label = score >= 80 ? 'High' : score >= 60 ? 'Medium' : 'Low'
+  const label = score >= 80 ? 'Alta' : score >= 60 ? 'Media' : 'Baja'
   return (
     <div className="flex items-center gap-2 mt-2">
-      <span className="text-[10px] font-mono text-slate-600">CONFIDENCE</span>
+      <span className="text-[10px] font-mono text-slate-600">CONFIANZA</span>
       <div className="flex-1 h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
         <div className="h-1 rounded-full transition-all duration-700" style={{ width: `${score}%`, background: color }} />
       </div>
@@ -85,7 +85,7 @@ export default function AICopilot() {
       const confidence = Math.floor(Math.random() * 25) + 72
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: data.response ?? 'No response received.',
+        content: data.response ?? 'Sin respuesta del servicio de AI.',
         confidence,
         ts: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
       }])
@@ -124,7 +124,7 @@ export default function AICopilot() {
           <div className="ml-auto flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg"
                style={{ background: 'rgba(74,222,128,0.08)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.2)' }}>
             <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-            Online
+            En línea
           </div>
         </div>
 

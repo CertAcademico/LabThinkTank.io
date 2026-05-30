@@ -176,6 +176,14 @@ function UsersTab({ users, challenges, allBadges, token, onRefresh }: {
     } catch (e) { alert(e) }
   }
 
+  const expelUser = async (email: string, name: string) => {
+    if (!confirm(`¿Expulsar a ${name} (${email})? Esta acción eliminará al usuario y todos sus datos.`)) return
+    try {
+      await apiFetch(`/admin/users/${encodeURIComponent(email)}`, token, { method: 'DELETE' })
+      onRefresh()
+    } catch (e) { alert(e) }
+  }
+
   const awardBadge = async (email: string) => {
     const badge_id = badgeSel[email]
     if (!badge_id) return
@@ -300,6 +308,18 @@ function UsersTab({ users, challenges, allBadges, token, onRefresh }: {
                         Otorgar 🏅
                       </button>
                     </div>
+
+                    {/* Expel user */}
+                    {u.role !== 'admin' && (
+                      <div className="flex items-center gap-3 pt-1 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+                        <p className="text-[10px] text-slate-600 font-bold uppercase tracking-wider shrink-0">Zona peligrosa:</p>
+                        <button onClick={() => expelUser(u.email, u.name)}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold"
+                                style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', color: '#ef4444' }}>
+                          Expulsar usuario
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

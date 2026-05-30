@@ -21,8 +21,9 @@ from ai.ai_engine import analyze_ioc
 from services.findings_service import get_findings, add_finding
 from services.upload_service import parse_upload
 from services.enrichment_service import enrich_ioc
-from intelligence.ioa_engine import get_ioas
+from intelligence.ioa_engine import get_ioas, TTP_IOA_MAP
 from intelligence.feeds_engine import FETCH_REGISTRY
+from intelligence.defend_engine import compute_depuration
 
 BOGOTA_TZ = ZoneInfo("America/Bogota")
 
@@ -223,6 +224,31 @@ def create_finding(payload: dict = Body(...)):
 @app.get("/ioas")
 def ioas():
     return get_ioas()
+
+
+# ── CTI Toolkit ───────────────────────────────────────────────────────────────
+
+@app.get("/cti/sources")
+def cti_sources(category: str = None, authorization: str = Header(None)):
+    _require_user(authorization)
+    with get_conn() as conn:
+        if category:
+            rows = conn.execute(
+                """SELECT id, name, category, url, feed_type, requires_auth, description,
+                          formats, group_label, status, last_fetched, last_count
+                   FROM feed_sources
+                   WHERE category = ?
+                   ORDER BY group_label, name""",
+                (category,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT id, name, category, url, feed_type, requires_auth, description,
+                          formats, group_label, status, last_fetched, last_count
+                   FROM feed_sources
+                   ORDER BY category, group_label, name"""
+            ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ── MISP ──────────────────────────────────────────────────────────────────────
@@ -842,6 +868,24 @@ def admin_set_role(email: str, payload: dict = Body(...), authorization: str = H
     with get_conn() as conn:
         conn.execute("UPDATE users SET role = ? WHERE email = ?", (role, email))
     return {"ok": True, "email": email, "role": role}
+
+
+@app.delete("/admin/users/{email}")
+def admin_delete_user(email: str, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        user = conn.execute("SELECT role FROM users WHERE email = ?", (email,)).fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        if user["role"] == "admin":
+            raise HTTPException(status_code=403, detail="No se puede eliminar un administrador")
+        conn.execute("DELETE FROM submissions WHERE user_email = ?", (email,))
+        conn.execute("DELETE FROM challenge_assignments WHERE user_email = ?", (email,))
+        conn.execute("DELETE FROM user_badges WHERE user_email = ?", (email,))
+        conn.execute("DELETE FROM team_members WHERE user_email = ?", (email,))
+        conn.execute("DELETE FROM ctf_solves WHERE user_email = ?", (email,))
+        conn.execute("DELETE FROM users WHERE email = ?", (email,))
+    return {"ok": True, "email": email}
 
 
 # ── Admin: Teams ──────────────────────────────────────────────────────────────
@@ -1547,3 +1591,67 @@ def admin_team_members(team_id: int, authorization: str = Header(None)):
             WHERE tm.team_id = ?
         """, (team_id,)).fetchall()
     return [dict(r) for r in rows]
+
+
+# ── Rule Depuration Pipeline ───────────────────────────────────────────────────
+
+@app.post("/rules/depurate")
+def rules_depurate(payload: dict = Body(...)):
+    """
+    Validates an IOA/IOC through the CTI depuration pipeline before rule deployment.
+    Checks: CTI context → IoC lifecycle → IoA lifecycle → MITRE D3FEND mapping.
+    """
+    ttp          = payload.get("ttp", "").upper()
+    ioc_value    = payload.get("ioc_value", "")
+    ioc_type     = payload.get("ioc_type", "ip")
+    severity     = payload.get("severity", "medium")
+    ioa_priority = payload.get("ioa_priority", "medium")
+
+    # Fetch detection rule and IoA context from TTP map
+    ttp_meta = TTP_IOA_MAP.get(ttp, {})
+    detection_rule = ttp_meta.get("detection_rule", "")
+    ioa_description = ttp_meta.get("ioa", "")
+    tactic = ttp_meta.get("tactic", "")
+
+    # Try to find IoC creation date from DB
+    ioc_created_at = None
+    if ioc_value:
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT created_at FROM iocs WHERE ioc = ?", (ioc_value,)
+            ).fetchone()
+            if row:
+                ioc_created_at = row["created_at"]
+
+    result = compute_depuration(
+        ttp=ttp,
+        ioc_type=ioc_type,
+        severity=severity,
+        ioc_created_at=ioc_created_at,
+        ioa_priority=ioa_priority,
+    )
+
+    return {
+        **result,
+        "ttp":             ttp,
+        "tactic":          tactic,
+        "ioa_description": ioa_description,
+        "detection_rule":  detection_rule,
+        "ioc_value":       ioc_value,
+    }
+
+
+@app.get("/rules/ioa-catalog")
+def rules_ioa_catalog():
+    """Returns all available TTPs with their IoA metadata for the depuration selector."""
+    return [
+        {
+            "ttp":            ttp,
+            "name":           meta["name"],
+            "tactic":         meta["tactic"],
+            "ioa":            meta["ioa"],
+            "detection_rule": meta["detection_rule"],
+            "priority":       meta["priority"],
+        }
+        for ttp, meta in TTP_IOA_MAP.items()
+    ]

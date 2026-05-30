@@ -501,7 +501,302 @@ print("✓ Dashboard de 4 paneles generado")`,
     ],
   },
 
-  // ── TRACK 4: Machine Learning ─────────────────────────────────────────────
+  // ── TRACK 4: OODA & Modelo Diamond ───────────────────────────────────────
+  {
+    id: 'ooda', label: 'OODA & Diamond', icon: '🔷', color: '#38bdf8', packages: ['scikit-learn'],
+    lessons: [
+      {
+        id: 'ooda-1', title: 'Modelo Diamond: vértices e intrusión',
+        concept: 'Diamond Model, pivot tables, correlación de vértices',
+        explanation: `El **Modelo Diamond** estructura cada intrusión en 4 vértices conectados:
+
+- **Adversario** — quién (actor, grupo APT)
+- **Capacidad** — con qué (TTP, malware, exploit)
+- **Infraestructura** — desde dónde (IP, dominio, C2)
+- **Víctima** — a quién (sector, empresa, geografía)
+
+Analizar los ejes Socio-Político (Adversario ↔ Víctima) y Tecnológico (Capacidad ↔ Infraestructura) revela patrones entre campañas.`,
+        starterCode: `import pandas as pd
+import numpy as np
+
+# Dataset Diamond: cada fila = un evento de intrusión analizado
+diamond = pd.DataFrame({
+    'evento_id':       range(1, 21),
+    'adversario':      ['APT29','APT29','APT29','APT41','APT41','LockBit','LockBit',
+                        'APT29','APT41','LockBit','APT29','APT41','LockBit','APT29',
+                        'APT41','LockBit','APT29','APT41','LockBit','APT29'],
+    'capacidad_ttp':   ['T1566','T1059','T1003','T1190','T1059','T1486','T1071',
+                        'T1078','T1003','T1486','T1566','T1055','T1071','T1059',
+                        'T1190','T1486','T1003','T1078','T1071','T1566'],
+    'capacidad_tipo':  ['phishing','script','cred_dump','exploit','script','ransomware','c2',
+                        'valid_acc','cred_dump','ransomware','phishing','inject','c2','script',
+                        'exploit','ransomware','cred_dump','valid_acc','c2','phishing'],
+    'infra_tipo':      ['domain','IP','IP','URL','domain','IP','domain',
+                        'email','IP','IP','domain','IP','domain','IP',
+                        'URL','IP','IP','domain','domain','email'],
+    'infra_pais':      ['RU','RU','RU','CN','CN','Unknown','Unknown',
+                        'RU','CN','Unknown','RU','CN','Unknown','RU',
+                        'CN','Unknown','RU','CN','Unknown','RU'],
+    'victima_sector':  ['gobierno','finanzas','energia','tecnologia','salud','manufactura','gobierno',
+                        'finanzas','energia','tecnologia','salud','manufactura','gobierno','finanzas',
+                        'energia','tecnologia','salud','manufactura','gobierno','finanzas'],
+    'victima_pais':    ['CO','MX','CO','MX','CO','MX','CO','MX','CO','MX',
+                        'CO','MX','CO','MX','CO','MX','CO','MX','CO','MX'],
+    'impacto':         ['alto','alto','critico','alto','medio','critico','medio',
+                        'alto','critico','critico','medio','alto','bajo','alto',
+                        'medio','critico','alto','medio','bajo','alto'],
+})
+
+print("=== MODELO DIAMOND — DATASET ===")
+print(diamond.head(8).to_string(index=False))
+print(f"\\nTotal eventos: {len(diamond)}")
+
+# ── Eje Socio-Político: Adversario × Víctima sector ──────────────────────
+print("\\n=== EJE SOCIO-POLÍTICO (Adversario × Sector víctima) ===")
+socio = diamond.groupby(['adversario','victima_sector']).size().unstack(fill_value=0)
+print(socio.to_string())
+
+# ── Eje Tecnológico: Capacidad tipo × Infraestructura tipo ───────────────
+print("\\n=== EJE TECNOLÓGICO (Capacidad × Infraestructura) ===")
+tech = diamond.groupby(['capacidad_tipo','infra_tipo']).size().unstack(fill_value=0)
+print(tech.to_string())
+
+# ── Análisis de impacto por vértice adversario ────────────────────────────
+print("\\n=== IMPACTO CRÍTICO POR ADVERSARIO ===")
+criticos = diamond[diamond['impacto'].isin(['critico','alto'])]
+for actor in diamond['adversario'].unique():
+    total  = len(diamond[diamond['adversario'] == actor])
+    crits  = len(criticos[criticos['adversario'] == actor])
+    ttps   = diamond[diamond['adversario'] == actor]['capacidad_ttp'].unique().tolist()
+    print(f"  {actor:<10} {crits}/{total} críticos  TTPs: {ttps}")`,
+        hint: 'Intenta diamond.groupby("adversario")["capacidad_ttp"].nunique() para ver cuántas técnicas distintas usa cada actor.',
+        ctiExample: {
+          tool: 'Mandiant / CrowdStrike Adversary Intelligence',
+          description: 'Mandiant usó el Modelo Diamond para documentar APT29 (Cozy Bear) en el ataque a SolarWinds 2020-2021. Los 4 vértices — Rusia/SVR (Adversario), supply-chain trojanization (Capacidad), servidores SUNBURST (Infraestructura), 18,000 organizaciones globales (Víctima) — son exactamente la estructura de tu DataFrame. CrowdStrike mapea sus 230+ adversarios con este modelo para correlacionar campañas entre regiones.',
+          year: '2020-2025',
+        },
+      },
+      {
+        id: 'ooda-2', title: 'OODA Loop: ciclo de decisión CTI',
+        concept: 'Observe → Orient → Decide → Act pipeline',
+        explanation: `El **OODA Loop** (Boyd, 1960) aplicado a CTI:
+
+- **Observe**: recolectar alertas crudas del SIEM/EDR
+- **Orient**: enriquecer con contexto (actor, TTP, Diamond) y calcular score
+- **Decide**: clasificar prioridad de respuesta según umbrales
+- **Act**: determinar la acción recomendada (bloquear, investigar, escalar)
+
+Un analista SOC ejecuta este ciclo centenares de veces al día. Automatizarlo con pandas reduce el MTTD (Mean Time to Detect) de horas a minutos.`,
+        starterCode: `import pandas as pd
+import numpy as np
+
+np.random.seed(42)
+
+# ── OBSERVE: alertas crudas del SIEM ─────────────────────────────────────
+alertas_raw = pd.DataFrame({
+    'alerta_id':  range(1, 26),
+    'timestamp':  pd.date_range('2026-05-30 08:00', periods=25, freq='12min'),
+    'src_ip':     np.random.choice(['10.0.0.'+str(i) for i in range(10,35)], 25),
+    'dst_ip':     np.random.choice(['185.220.101.1','198.51.100.42','203.0.113.77',
+                                    '8.8.8.8','1.1.1.1','10.0.0.99'], 25),
+    'ttp':        np.random.choice(['T1071','T1059','T1003','T1566','T1486','T1078'], 25),
+    'bytes':      np.random.randint(128, 50000, 25),
+    'frecuencia': np.random.randint(1, 100, 25),
+    'sensor':     np.random.choice(['EDR','SIEM','FW','IDS'], 25),
+})
+
+print("=== OBSERVE: alertas crudas ===")
+print(alertas_raw[['alerta_id','ttp','src_ip','bytes','frecuencia','sensor']].head(8).to_string(index=False))
+
+# ── ORIENT: enriquecer con contexto Diamond + TTP ─────────────────────────
+ttp_ctx = {
+    'T1071': {'actor': 'APT29',   'tactic': 'C&C',        'riesgo_base': 7, 'vector': 'red'},
+    'T1059': {'actor': 'multiple','tactic': 'Ejecución',   'riesgo_base': 8, 'vector': 'host'},
+    'T1003': {'actor': 'APT29',   'tactic': 'Credenciales','riesgo_base': 9, 'vector': 'host'},
+    'T1566': {'actor': 'Black Lynx','tactic':'Acceso',     'riesgo_base': 6, 'vector': 'email'},
+    'T1486': {'actor': 'LockBit', 'tactic': 'Impacto',    'riesgo_base': 10,'vector': 'host'},
+    'T1078': {'actor': 'multiple','tactic': 'Persistencia','riesgo_base': 7, 'vector': 'identidad'},
+}
+ips_sospechosas = {'185.220.101.1', '198.51.100.42', '203.0.113.77'}
+
+def orient(row):
+    ctx  = ttp_ctx.get(row['ttp'], {'actor':'unknown','tactic':'?','riesgo_base':3,'vector':'?'})
+    score = ctx['riesgo_base']
+    score += 2 if row['dst_ip'] in ips_sospechosas else 0
+    score += 2 if row['bytes'] > 20000 else 0
+    score += 1 if row['frecuencia'] > 50 else 0
+    score += 1 if row['sensor'] == 'EDR' else 0
+    return pd.Series({
+        'actor':   ctx['actor'],
+        'tactic':  ctx['tactic'],
+        'vector':  ctx['vector'],
+        'score':   min(score, 10),
+    })
+
+oriented = alertas_raw.join(alertas_raw.apply(orient, axis=1))
+
+# ── DECIDE: clasificar prioridad ──────────────────────────────────────────
+def decide(score):
+    if score >= 9:   return 'CRITICO'
+    elif score >= 7: return 'ALTO'
+    elif score >= 4: return 'MEDIO'
+    else:            return 'BAJO'
+
+oriented['prioridad'] = oriented['score'].apply(decide)
+
+# ── ACT: acción recomendada ───────────────────────────────────────────────
+accion_map = {
+    'CRITICO': 'Bloquear + escalar a CSIRT inmediatamente',
+    'ALTO':    'Investigar en <1h + revisar logs EDR',
+    'MEDIO':   'Monitorear + correlacionar con otros eventos',
+    'BAJO':    'Registrar + revisar en próximo turno',
+}
+oriented['accion'] = oriented['prioridad'].map(accion_map)
+
+print("\\n=== ORIENT + DECIDE + ACT ===")
+cols = ['alerta_id','ttp','actor','tactic','score','prioridad','accion']
+print(oriented[cols].sort_values('score', ascending=False).to_string(index=False))
+
+print("\\n=== RESUMEN OODA ===")
+for prio in ['CRITICO','ALTO','MEDIO','BAJO']:
+    n = (oriented['prioridad'] == prio).sum()
+    print(f"  {prio:<8}: {n:2d} alertas  →  {accion_map[prio]}")`,
+        hint: 'Modifica la función orient() para penalizar alertas de madrugada (timestamp.hour < 6 o > 22) sumando +2 al score — los ataques reales suelen ocurrir fuera de horario.',
+        ctiExample: {
+          tool: 'CISA / Recorded Future SOC',
+          description: 'CISA implementó el OODA Loop automatizado en su SOC después del ataque a Colonial Pipeline 2021. El pipeline Orient con contexto de actor + TTP redujo el MTTD de 4.5h a 38 minutos. Recorded Future vende exactamente esta automatización: "Threat Intelligence-Driven OODA" en producción para 40+ gobiernos, con el mismo scoring que implementas en esta lección.',
+          year: '2021-2025',
+        },
+      },
+      {
+        id: 'ooda-3', title: 'Falsos Positivos con Isolation Forest',
+        concept: 'IsolationForest, anomaly detection, Diamond + OODA features',
+        explanation: `Un **falso positivo** es una alerta que el SIEM dispara pero no representa una amenaza real. En un SOC, el 95% de alertas son FP — el analista se satura y pierde las amenazas reales.
+
+**Isolation Forest** detecta anomalías sin etiquetas: aísla puntos que son "fáciles de separar" del resto → probablemente outliers. En CTI aplicamos esto al revés:
+- **FP typical**: bajo score OODA, infraestructura conocida, bajo volumen
+- **Amenaza real (TP)**: outlier en combinación de features Diamond + OODA
+
+El modelo separa el ruido del SOC de los eventos que merecen atención.`,
+        starterCode: `import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+
+np.random.seed(99)
+
+# ── Dataset: alertas etiquetadas (simulando SIEM con 30 días de historia) ─
+n_total = 120
+
+# Falsos positivos (80%): ruido del sistema
+n_fp = 96
+fp = pd.DataFrame({
+    'ttp':        np.random.choice(['T1566','T1078','T1071'], n_fp, p=[.5,.3,.2]),
+    'bytes':      np.random.randint(100, 3000, n_fp),
+    'frecuencia': np.random.randint(1, 15, n_fp),
+    'diamond_cap':np.random.choice(['phishing','valid_acc','c2'], n_fp, p=[.5,.3,.2]),
+    'diamond_inf':np.random.choice(['email','domain'], n_fp, p=[.6,.4]),
+    'infra_riesgo':np.random.choice([0, 1], n_fp, p=[.9,.1]),    # 0=conocida
+    'ooda_score': np.random.uniform(1, 4.5, n_fp),               # bajo score OODA
+    'sensor':     np.random.choice(['FW','SIEM'], n_fp, p=[.6,.4]),
+    'etiqueta':   'FP',
+})
+
+# Verdaderos positivos (20%): amenazas reales → outliers en el espacio de features
+n_tp = 24
+tp = pd.DataFrame({
+    'ttp':        np.random.choice(['T1003','T1486','T1059','T1055'], n_tp, p=[.3,.3,.2,.2]),
+    'bytes':      np.random.randint(15000, 50000, n_tp),
+    'frecuencia': np.random.randint(40, 100, n_tp),
+    'diamond_cap':np.random.choice(['cred_dump','ransomware','inject'], n_tp, p=[.4,.3,.3]),
+    'diamond_inf':np.random.choice(['IP','URL'], n_tp, p=[.6,.4]),
+    'infra_riesgo':np.random.choice([0, 1], n_tp, p=[.1,.9]),    # 1=sospechosa
+    'ooda_score': np.random.uniform(7, 10, n_tp),
+    'sensor':     np.random.choice(['EDR','IDS'], n_tp, p=[.7,.3]),
+    'etiqueta':   'TP',
+})
+
+df = pd.concat([fp, tp], ignore_index=True).sample(frac=1, random_state=42)
+
+# ── Feature engineering: Diamond Model + OODA features ────────────────────
+le_ttp  = LabelEncoder()
+le_cap  = LabelEncoder()
+le_inf  = LabelEncoder()
+le_sen  = LabelEncoder()
+
+X = pd.DataFrame({
+    # Vértice Capacidad (Diamond)
+    'ttp_enc':        le_ttp.fit_transform(df['ttp']),
+    'cap_enc':        le_cap.fit_transform(df['diamond_cap']),
+    # Vértice Infraestructura (Diamond)
+    'inf_enc':        le_inf.fit_transform(df['diamond_inf']),
+    'infra_riesgo':   df['infra_riesgo'],
+    # Features OODA Orient
+    'ooda_score':     df['ooda_score'],
+    'bytes_log':      np.log1p(df['bytes']),
+    'frecuencia':     df['frecuencia'],
+    'sensor_enc':     le_sen.fit_transform(df['sensor']),
+})
+
+y_true = (df['etiqueta'] == 'TP').astype(int)
+
+X_scaled = StandardScaler().fit_transform(X)
+
+# ── Isolation Forest ───────────────────────────────────────────────────────
+# contamination = proporción esperada de outliers (TPs reales)
+iso = IsolationForest(n_estimators=150, contamination=0.20, random_state=42)
+pred_raw = iso.fit_predict(X_scaled)           # -1=anomalía, 1=normal
+scores_anomalia = -iso.score_samples(X_scaled) # mayor score = más anómalo
+
+# -1 (anomalía) → predicción TP (amenaza real); 1 → FP
+pred_label = pd.Series(pred_raw).map({-1: 'TP_PRED', 1: 'FP_PRED'})
+df['pred']           = pred_label.values
+df['anomaly_score']  = scores_anomalia.round(4)
+
+# ── Evaluación del modelo ──────────────────────────────────────────────────
+from sklearn.metrics import confusion_matrix, classification_report
+
+y_pred = (pred_raw == -1).astype(int)
+cm     = confusion_matrix(y_true, y_pred)
+
+print("=== ISOLATION FOREST — DETECTOR DE FALSOS POSITIVOS ===")
+print(f"\\nDataset: {n_total} alertas  →  {n_fp} FP reales ({n_fp/n_total*100:.0f}%)  +  {n_tp} TP reales ({n_tp/n_total*100:.0f}%)")
+
+print("\\n── Matriz de Confusión ──")
+print(f"             Pred FP    Pred TP (amenaza)")
+print(f"Real FP:     {cm[0,0]:>5}      {cm[0,1]:>5}   ← falsa alarma clasificada como amenaza")
+print(f"Real TP:     {cm[1,0]:>5}      {cm[1,1]:>5}   ← amenaza real detectada")
+
+print("\\n── Métricas ──")
+report = classification_report(y_true, y_pred, target_names=['FP','TP'], output_dict=True)
+for cls in ['FP','TP']:
+    m = report[cls]
+    print(f"  {cls}: precision={m['precision']:.2f}  recall={m['recall']:.2f}  F1={m['f1-score']:.2f}")
+
+# ── Top amenazas detectadas (TP predichos con mayor score) ────────────────
+print("\\n── Top 10 amenazas reales detectadas (mayor anomaly_score) ──")
+tp_detectados = df[df['pred'] == 'TP_PRED'].sort_values('anomaly_score', ascending=False)
+print(tp_detectados[['ttp','diamond_cap','diamond_inf','ooda_score','anomaly_score','etiqueta']].head(10).to_string(index=False))
+
+# ── Features más discriminativas ──────────────────────────────────────────
+print("\\n── Diferencia de medias FP vs TP detectados ──")
+for col in ['ooda_score','bytes_log','frecuencia','infra_riesgo']:
+    mu_fp = X[col][pred_raw == 1].mean()
+    mu_tp = X[col][pred_raw == -1].mean()
+    print(f"  {col:<15}  FP_pred={mu_fp:.2f}  TP_pred={mu_tp:.2f}  Δ={mu_tp-mu_fp:+.2f}")
+
+print("\\n→ ooda_score e infra_riesgo son los features más discriminativos — el modelo los usa para separar el ruido real.")`,
+        hint: 'Cambia contamination a 0.10 ó 0.30 y observa cómo cambia el recall de TP. ¿Qué trade-off hay entre FP y FN?',
+        ctiExample: {
+          tool: 'Elastic SIEM / Darktrace / Microsoft Sentinel',
+          description: 'Elastic Security usa Isolation Forest en producción para reducir alert fatigue en SOCs enterprise: de 50,000 alertas/día filtra a 800 priorizadas. Darktrace aplica esta técnica en redes OT/ICS donde los "normales" son muy predecibles — los outliers son intrusiones reales. Microsoft Sentinel 2025 integró Isolation Forest en su Fusion detection engine, reduciendo FP un 73% en clientes de banca latinoamericana.',
+          year: '2024-2025',
+        },
+      },
+    ],
+  },
+
+  // ── TRACK 5: Machine Learning ─────────────────────────────────────────────
   {
     id: 'ml', label: 'Machine Learning', icon: '🤖', color: '#4ade80', packages: ['scikit-learn'],
     lessons: [

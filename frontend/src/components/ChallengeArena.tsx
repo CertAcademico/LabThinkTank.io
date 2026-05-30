@@ -9,9 +9,21 @@ const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
 interface Challenge {
   id: number; title: string; description: string; objective: string
-  criteria: string; deadline?: string; status: string
+  criteria: string; deadline?: string; status: string; difficulty?: string
   dataset_name?: string; schema_json?: string
+  badge_id?: number; badge_name?: string; badge_org?: string
+  badge_tier?: string; badge_icon?: string; min_score_badge?: number
+  badge_earned?: number
   submitted: number; my_score?: number
+}
+
+const TIER_COLOR: Record<string, string> = {
+  bronze: '#cd7f32', silver: '#c0c0c0', gold: '#ffd700',
+  platinum: '#e5e4e2', diamond: '#b9f2ff',
+}
+
+const DIFF_COLOR: Record<string, string> = {
+  básico: '#4ade80', intermedio: '#facc15', avanzado: '#f97316', experto: '#ef4444',
 }
 
 interface OutputPart { type: 'text' | 'plot'; content: string }
@@ -436,50 +448,123 @@ export default function ChallengeArena() {
           <p className="text-slate-700 text-xs mt-1">Tu instructor te asignará datasets y desafíos próximamente.</p>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {challenges.map(c => (
-            <div key={c.id} className="rounded-xl p-5 cursor-pointer hover:bg-white/[0.02] transition-colors"
-                 style={{ background: 'rgba(15,23,42,0.55)', border: `1px solid rgba(255,255,255,${c.submitted ? '0.1' : '0.06'})` }}
-                 onClick={() => setActive(c)}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-sm font-semibold text-slate-100">{c.title}</h3>
-                    {c.submitted > 0
-                      ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>
+        <div className="grid gap-3">
+          {challenges.map(c => {
+            const tierColor  = c.badge_tier ? (TIER_COLOR[c.badge_tier] ?? '#facc15') : undefined
+            const diffColor  = c.difficulty ? (DIFF_COLOR[c.difficulty] ?? '#64748b') : undefined
+            const earned     = Boolean(c.badge_earned)
+            const scoreOk    = c.my_score != null && c.min_score_badge != null && c.my_score >= c.min_score_badge
+            const borderColor = c.submitted > 0 ? 'rgba(74,222,128,0.18)' : 'rgba(255,255,255,0.07)'
+
+            return (
+              <div key={c.id}
+                   className="rounded-xl overflow-hidden cursor-pointer group transition-all hover:bg-white/[0.02]"
+                   style={{ background: 'rgba(15,23,42,0.55)', border: `1px solid ${borderColor}` }}
+                   onClick={() => setActive(c)}>
+
+                {/* Badge earned top bar */}
+                {earned && tierColor && (
+                  <div className="px-5 py-1.5 flex items-center gap-2"
+                       style={{ background: `${tierColor}12`, borderBottom: `1px solid ${tierColor}22` }}>
+                    <span style={{ color: tierColor }}>★</span>
+                    <p className="text-[9px] font-bold" style={{ color: tierColor }}>
+                      Insignia ganada: {c.badge_name}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-start gap-4 p-5">
+                  {/* Left: info */}
+                  <div className="flex-1 min-w-0">
+                    {/* Title + pills */}
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <h3 className="text-sm font-semibold text-slate-100">{c.title}</h3>
+
+                      {diffColor && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                              style={{ background: `${diffColor}15`, color: diffColor, border: `1px solid ${diffColor}33` }}>
+                          {c.difficulty}
+                        </span>
+                      )}
+
+                      {c.submitted > 0 ? (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                              style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.2)' }}>
                           ✓ Entregado{c.my_score != null ? ` · ${c.my_score}/100` : ''}
                         </span>
-                      : <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(250,204,21,0.08)', color: '#facc15' }}>
+                      ) : (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                              style={{ background: 'rgba(250,204,21,0.08)', color: '#facc15', border: '1px solid rgba(250,204,21,0.15)' }}>
                           Pendiente
                         </span>
-                    }
-                    {c.status === 'closed' && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: '#475569' }}>Cerrado</span>
+                      )}
+
+                      {c.status === 'closed' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded text-slate-600 border border-white/5">Cerrado</span>
+                      )}
+                    </div>
+
+                    {c.description && (
+                      <p className="text-xs text-slate-500 mb-2 leading-relaxed line-clamp-2">{c.description}</p>
                     )}
+                    {c.objective && (
+                      <p className="text-[10px] text-slate-600 line-clamp-1">
+                        <span className="text-slate-700">Objetivo: </span>{c.objective}
+                      </p>
+                    )}
+
+                    {/* Bottom row: dataset + badge reward */}
+                    <div className="flex items-center gap-3 mt-2 flex-wrap">
+                      {c.dataset_name && (
+                        <span className="text-[9px] px-2 py-0.5 rounded"
+                              style={{ background: 'rgba(249,115,22,0.08)', color: '#f97316', border: '1px solid rgba(249,115,22,0.2)' }}>
+                          📊 {c.dataset_name}
+                        </span>
+                      )}
+
+                      {c.badge_name && tierColor && !earned && (
+                        <span className="text-[9px] px-2 py-0.5 rounded flex items-center gap-1"
+                              style={{ background: `${tierColor}08`, color: tierColor, border: `1px solid ${tierColor}22` }}>
+                          ★ {c.badge_name}
+                          {c.min_score_badge && (
+                            <span className="text-slate-700 ml-0.5">≥{c.min_score_badge}pts</span>
+                          )}
+                        </span>
+                      )}
+
+                      {/* Score progress bar */}
+                      {c.submitted > 0 && c.my_score != null && c.min_score_badge != null && (
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-16 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                            <div className="h-full rounded-full transition-all"
+                                 style={{ width: `${Math.min(100, (c.my_score / c.min_score_badge) * 100)}%`, background: scoreOk ? '#4ade80' : '#facc15' }} />
+                          </div>
+                          <span className="text-[8px]" style={{ color: scoreOk ? '#4ade80' : '#facc15' }}>
+                            {c.my_score}/{c.min_score_badge}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {c.description && <p className="text-xs text-slate-500 mb-2 leading-relaxed">{c.description}</p>}
-                  {c.objective && (
-                    <p className="text-[10px] text-slate-600">
-                      <span className="text-slate-700">Objetivo: </span>{c.objective}
-                    </p>
-                  )}
-                  {c.dataset_name && (
-                    <p className="text-[10px] mt-1" style={{ color: '#f97316' }}>
-                      Dataset: {c.dataset_name}
-                    </p>
-                  )}
-                </div>
-                <div className="text-right shrink-0">
-                  {c.deadline && (
-                    <p className="text-[10px] text-slate-600">
-                      Límite: {new Date(c.deadline).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
-                    </p>
-                  )}
-                  <p className="text-[10px] text-cyan-700 mt-1">Abrir arena →</p>
+
+                  {/* Right: deadline + CTA */}
+                  <div className="text-right shrink-0 flex flex-col items-end gap-2">
+                    {c.deadline && (
+                      <p className="text-[10px] text-slate-600">
+                        {new Date(c.deadline) < new Date()
+                          ? <span className="text-red-500">Vencido</span>
+                          : <>Límite: {new Date(c.deadline).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</>
+                        }
+                      </p>
+                    )}
+                    <span className="text-[10px] text-cyan-700 group-hover:text-cyan-400 transition-colors">
+                      Abrir arena →
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

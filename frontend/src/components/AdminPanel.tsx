@@ -73,8 +73,29 @@ function apiFetch(path: string, token: string, opts?: RequestInit) {
 
 function DashboardTab({ stats }: { stats: Stats | null }) {
   if (!stats) return <div className="text-slate-600 text-sm">Cargando estadísticas...</div>
+  const isTunnel = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+  const publicUrl = window.location.origin
+
   return (
     <div className="space-y-6">
+      {/* Access URL banner */}
+      <div className="rounded-xl px-4 py-3 flex items-center gap-3"
+           style={{ background: isTunnel ? 'rgba(74,222,128,0.06)' : 'rgba(34,211,238,0.06)', border: `1px solid ${isTunnel ? 'rgba(74,222,128,0.2)' : 'rgba(34,211,238,0.15)'}` }}>
+        <div className="w-2 h-2 rounded-full shrink-0 animate-pulse"
+             style={{ background: isTunnel ? '#4ade80' : CYAN }} />
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] font-bold" style={{ color: isTunnel ? '#4ade80' : CYAN }}>
+            {isTunnel ? '🌐 Acceso público activo (Cloudflare Tunnel)' : '🖥 Acceso local'}
+          </p>
+          <p className="text-xs font-mono text-slate-300 truncate">{publicUrl}</p>
+        </div>
+        <button onClick={() => navigator.clipboard?.writeText(publicUrl)}
+                className="text-[9px] px-2 py-1 rounded shrink-0 transition-all hover:opacity-80"
+                style={{ background: 'rgba(255,255,255,0.06)', color: '#64748b', border: '1px solid rgba(255,255,255,0.08)' }}>
+          Copiar URL
+        </button>
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Estudiantes"       value={stats.students}           color={CYAN}      />
         <StatCard label="Retos activos"     value={stats.active_challenges}  color="#a78bfa"   />
@@ -1242,6 +1263,32 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
     finally { setSeeding(false) }
   }
 
+  const assignAllToAll = async () => {
+    const active  = challenges.filter(c => c.status === 'active')
+    if (!active.length || !students.length) return
+    let count = 0
+    for (const c of active) {
+      await apiFetch(`/admin/challenges/${c.id}/assign`, token, {
+        method: 'POST',
+        body: JSON.stringify({ emails: students.map(s => s.email) }),
+      }).catch(() => {})
+      count++
+    }
+    setSeedMsg(`✓ ${active.length} retos asignados a ${students.length} estudiante(s)`)
+    onRefresh()
+  }
+
+  const assignAllToOne = async (email: string) => {
+    const active = challenges.filter(c => c.status === 'active')
+    for (const c of active) {
+      await apiFetch(`/admin/challenges/${c.id}/assign`, token, {
+        method: 'POST', body: JSON.stringify({ emails: [email] }),
+      }).catch(() => {})
+    }
+    setSeedMsg(`✓ ${active.length} retos asignados a ${email}`)
+    onRefresh()
+  }
+
   const toggleStatus = async (c: Challenge) => {
     const next = c.status === 'active' ? 'closed' : 'active'
     await apiFetch(`/admin/challenges/${c.id}`, token, { method: 'PATCH', body: JSON.stringify({ status: next }) })
@@ -1271,8 +1318,55 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
 
   const students = users.filter(u => u.role === 'student')
 
+  const activeCount  = challenges.filter(c => c.status === 'active').length
+
   return (
     <div className="space-y-4">
+
+      {/* ── Asignación Masiva ───────────────────────────────────────────────── */}
+      <div className="rounded-xl p-4 space-y-3"
+           style={{ background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.12)' }}>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-bold text-slate-200">Asignación masiva</p>
+            <p className="text-[10px] text-slate-600">
+              {activeCount} retos activos · {students.length} estudiante(s)
+            </p>
+          </div>
+          <button
+            onClick={assignAllToAll}
+            disabled={!activeCount || !students.length}
+            className="px-4 py-2 rounded-lg text-xs font-bold disabled:opacity-30 transition-all"
+            style={{ background: `${CYAN}15`, border: `1px solid ${CYAN}44`, color: CYAN }}>
+            Asignar TODOS los retos → TODOS los estudiantes
+          </button>
+        </div>
+
+        {/* Per-student assignment row */}
+        {students.length > 0 && (
+          <div className="space-y-1.5 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <p className="text-[9px] text-slate-600 uppercase tracking-wider font-bold">O asignar por estudiante</p>
+            {students.map(s => {
+              return (
+                <div key={s.email} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2"
+                     style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div>
+                    <p className="text-xs text-slate-200">{s.name}</p>
+                    <p className="text-[9px] text-slate-700 truncate max-w-48">{s.email}</p>
+                  </div>
+                  <button
+                    onClick={() => assignAllToOne(s.email)}
+                    className="text-[9px] px-2.5 py-1 rounded font-bold shrink-0 transition-all"
+                    style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
+                    Asignar {activeCount} retos →
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-xs text-slate-500">{challenges.length} retos creados</p>

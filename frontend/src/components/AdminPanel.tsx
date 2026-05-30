@@ -1216,6 +1216,11 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
   const [expanded,    setExpanded]    = useState<number | null>(null)
   const [assignments, setAssignments] = useState<Record<number, Assignment[]>>({})
   const [selUsers,    setSelUsers]    = useState<Record<number, string[]>>({})
+  // Asignación masiva selectiva
+  const [bulkOpen,    setBulkOpen]    = useState(false)
+  const [bulkRetos,   setBulkRetos]   = useState<number[]>([])
+  const [bulkStudents,setBulkStudents]= useState<string[]>([])
+  const [bulkLoading, setBulkLoading] = useState(false)
 
   const loadAssignments = useCallback(async (cid: number) => {
     const data = await apiFetch(`/admin/challenges/${cid}/assignments`, token).catch(() => [])
@@ -1264,30 +1269,34 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
   }
 
   const assignAllToAll = async () => {
-    const active  = challenges.filter(c => c.status === 'active')
+    const active = challenges.filter(c => c.status === 'active')
     if (!active.length || !students.length) return
-    let count = 0
     for (const c of active) {
       await apiFetch(`/admin/challenges/${c.id}/assign`, token, {
-        method: 'POST',
-        body: JSON.stringify({ emails: students.map(s => s.email) }),
+        method: 'POST', body: JSON.stringify({ emails: students.map(s => s.email) }),
       }).catch(() => {})
-      count++
     }
     setSeedMsg(`✓ ${active.length} retos asignados a ${students.length} estudiante(s)`)
     onRefresh()
   }
 
-  const assignAllToOne = async (email: string) => {
-    const active = challenges.filter(c => c.status === 'active')
-    for (const c of active) {
-      await apiFetch(`/admin/challenges/${c.id}/assign`, token, {
-        method: 'POST', body: JSON.stringify({ emails: [email] }),
+  const assignBulkSelected = async () => {
+    if (!bulkRetos.length || !bulkStudents.length) return
+    setBulkLoading(true)
+    for (const cid of bulkRetos) {
+      await apiFetch(`/admin/challenges/${cid}/assign`, token, {
+        method: 'POST', body: JSON.stringify({ emails: bulkStudents }),
       }).catch(() => {})
     }
-    setSeedMsg(`✓ ${active.length} retos asignados a ${email}`)
+    setSeedMsg(`✓ ${bulkRetos.length} retos asignados a ${bulkStudents.length} estudiante(s)`)
+    setBulkOpen(false)
+    setBulkRetos([]); setBulkStudents([])
     onRefresh()
+    setBulkLoading(false)
   }
+
+  const toggleBulkReto    = (id: number)  => setBulkRetos(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
+  const toggleBulkStudent = (e: string)   => setBulkStudents(p => p.includes(e) ? p.filter(x => x !== e) : [...p, e])
 
   const toggleStatus = async (c: Challenge) => {
     const next = c.status === 'active' ? 'closed' : 'active'
@@ -1323,46 +1332,118 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
   return (
     <div className="space-y-4">
 
-      {/* ── Asignación Masiva ───────────────────────────────────────────────── */}
-      <div className="rounded-xl p-4 space-y-3"
-           style={{ background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.12)' }}>
-        <div className="flex items-center justify-between gap-2">
+      {/* ── Asignación masiva selectiva ─────────────────────────────────────── */}
+      <div className="rounded-xl overflow-hidden"
+           style={{ background: 'rgba(34,211,238,0.03)', border: '1px solid rgba(34,211,238,0.12)' }}>
+
+        {/* Header del panel */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
           <div>
-            <p className="text-xs font-bold text-slate-200">Asignación masiva</p>
-            <p className="text-[10px] text-slate-600">
-              {activeCount} retos activos · {students.length} estudiante(s)
-            </p>
+            <p className="text-xs font-bold text-slate-200">Asignación de retos</p>
+            <p className="text-[10px] text-slate-600">{activeCount} retos activos · {students.length} estudiante(s)</p>
           </div>
-          <button
-            onClick={assignAllToAll}
-            disabled={!activeCount || !students.length}
-            className="px-4 py-2 rounded-lg text-xs font-bold disabled:opacity-30 transition-all"
-            style={{ background: `${CYAN}15`, border: `1px solid ${CYAN}44`, color: CYAN }}>
-            Asignar TODOS los retos → TODOS los estudiantes
-          </button>
+          <div className="flex gap-2">
+            <button onClick={assignAllToAll} disabled={!activeCount || !students.length}
+                    className="text-[10px] px-3 py-1.5 rounded-lg font-bold disabled:opacity-30 transition-all"
+                    style={{ background: `${CYAN}12`, border: `1px solid ${CYAN}33`, color: CYAN }}>
+              Todos → Todos
+            </button>
+            <button onClick={() => { setBulkOpen(o => !o); setBulkRetos(challenges.filter(c => c.status === 'active').map(c => c.id)); setBulkStudents([]) }}
+                    className="text-[10px] px-3 py-1.5 rounded-lg font-bold transition-all"
+                    style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
+              {bulkOpen ? 'Cerrar selector' : '+ Asignación selectiva'}
+            </button>
+          </div>
         </div>
 
-        {/* Per-student assignment row */}
-        {students.length > 0 && (
-          <div className="space-y-1.5 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-            <p className="text-[9px] text-slate-600 uppercase tracking-wider font-bold">O asignar por estudiante</p>
-            {students.map(s => {
-              return (
-                <div key={s.email} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2"
-                     style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div>
-                    <p className="text-xs text-slate-200">{s.name}</p>
-                    <p className="text-[9px] text-slate-700 truncate max-w-48">{s.email}</p>
+        {/* Panel selectivo expandible */}
+        {bulkOpen && (
+          <div className="border-t px-4 pb-4 space-y-4" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+
+            <div className="grid grid-cols-2 gap-4 pt-3">
+              {/* Selector de retos */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                    Retos ({bulkRetos.length}/{challenges.length} sel.)
+                  </p>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => setBulkRetos(challenges.map(c => c.id))}
+                            className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: CYAN, border: `1px solid ${CYAN}33` }}>
+                      Todos
+                    </button>
+                    <button onClick={() => setBulkRetos([])}
+                            className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: '#475569', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      Ninguno
+                    </button>
                   </div>
-                  <button
-                    onClick={() => assignAllToOne(s.email)}
-                    className="text-[9px] px-2.5 py-1 rounded font-bold shrink-0 transition-all"
-                    style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
-                    Asignar {activeCount} retos →
-                  </button>
                 </div>
-              )
-            })}
+                <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
+                  {challenges.map(c => {
+                    const sel = bulkRetos.includes(c.id)
+                    const diffColor = DIFF_COLOR[c.difficulty] ?? '#64748b'
+                    return (
+                      <label key={c.id} className="flex items-start gap-2 cursor-pointer rounded-lg px-2 py-1.5 transition-all"
+                             style={{ background: sel ? 'rgba(34,211,238,0.06)' : 'rgba(255,255,255,0.02)', border: `1px solid ${sel ? 'rgba(34,211,238,0.2)' : 'rgba(255,255,255,0.05)'}` }}>
+                        <input type="checkbox" checked={sel} onChange={() => toggleBulkReto(c.id)} className="accent-cyan-400 mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-[10px] text-slate-200 leading-tight truncate">{c.title}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[8px] px-1 py-0.5 rounded" style={{ background: `${diffColor}12`, color: diffColor }}>{c.difficulty}</span>
+                            {c.badge_name && <span className="text-[8px] text-yellow-700">★ {c.badge_name}</span>}
+                          </div>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Selector de estudiantes */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                    Estudiantes ({bulkStudents.length}/{students.length} sel.)
+                  </p>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => setBulkStudents(students.map(s => s.email))}
+                            className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)' }}>
+                      Todos
+                    </button>
+                    <button onClick={() => setBulkStudents([])}
+                            className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: '#475569', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      Ninguno
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
+                  {students.map(s => {
+                    const sel = bulkStudents.includes(s.email)
+                    return (
+                      <label key={s.email} className="flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1.5 transition-all"
+                             style={{ background: sel ? 'rgba(167,139,250,0.07)' : 'rgba(255,255,255,0.02)', border: `1px solid ${sel ? 'rgba(167,139,250,0.25)' : 'rgba(255,255,255,0.05)'}` }}>
+                        <input type="checkbox" checked={sel} onChange={() => toggleBulkStudent(s.email)} className="accent-violet-400 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-[10px] text-slate-200 truncate">{s.name}</p>
+                          <p className="text-[8px] text-slate-700 truncate">{s.email}</p>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Botón asignar */}
+            <button
+              onClick={assignBulkSelected}
+              disabled={bulkLoading || !bulkRetos.length || !bulkStudents.length}
+              className="w-full py-2.5 rounded-lg text-xs font-bold disabled:opacity-30 transition-all"
+              style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.35)', color: CYAN }}>
+              {bulkLoading
+                ? 'Asignando...'
+                : `Asignar ${bulkRetos.length} reto(s) → ${bulkStudents.length} estudiante(s) seleccionados`}
+            </button>
           </div>
         )}
       </div>

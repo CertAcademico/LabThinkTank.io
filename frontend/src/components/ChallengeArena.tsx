@@ -406,19 +406,200 @@ print(challenge_df.describe(include='all'))
   )
 }
 
+// ── Team Challenge Card ───────────────────────────────────────────────────────
+
+interface TeamChallenge {
+  id: number; title: string; description: string; objective: string; criteria: string
+  difficulty: string; badge_name?: string; badge_org?: string; badge_tier?: string
+  min_score_badge?: number; dataset_name?: string; badge_earned?: number
+}
+interface TeamInfo {
+  team: { id: number; name: string; color: string }
+  challenges: TeamChallenge[]
+  members: { name: string; email: string; role: string }[]
+  team_badges: { id: number; name: string; org: string; tier: string; icon: string; awarded_at: string }[]
+}
+
+const ROLE_META: Record<string, { label: string; color: string; short: string }> = {
+  analista_datos:   { label: 'Analista de Datos',  color: '#22d3ee', short: 'AD' },
+  ciberseguridad:   { label: 'Ciberseguridad',      color: '#f97316', short: 'CS' },
+  ciencia_datos:    { label: 'Ciencia de Datos',    color: '#a78bfa', short: 'CD' },
+  machine_learning: { label: 'Machine Learning',    color: '#4ade80', short: 'ML' },
+}
+
+function TeamChallengeCard({ teamInfo }: { teamInfo: TeamInfo }) {
+  const { team, challenges, members, team_badges } = teamInfo
+  const [open, setOpen] = useState(true)
+
+  if (!challenges.length) return null
+
+  return (
+    <div className="rounded-2xl overflow-hidden"
+         style={{ background: `${team.color}08`, border: `2px solid ${team.color}44`, boxShadow: `0 0 32px ${team.color}18` }}>
+
+      {/* Header */}
+      <button onClick={() => setOpen(o => !o)}
+              className="w-full flex items-center gap-3 px-5 py-4 text-left"
+              style={{ background: `${team.color}10` }}>
+        <div className="w-3 h-3 rounded-full shrink-0 animate-pulse"
+             style={{ background: team.color, boxShadow: `0 0 8px ${team.color}` }} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold" style={{ color: team.color }}>
+            🏆 Equipo {team.name} — Reto Grupal
+          </p>
+          <p className="text-[10px] text-slate-500">
+            {challenges.length} reto(s) asignados · {members.length} miembros
+            {team_badges.length > 0 && ` · ${team_badges.length} insignia(s) ganadas`}
+          </p>
+        </div>
+        <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform shrink-0"
+             style={{ color: team.color, transform: open ? 'rotate(180deg)' : undefined }}
+             fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-5 pb-5 pt-3 space-y-4">
+
+          {/* Team members */}
+          <div className="flex flex-wrap gap-2">
+            {members.map(m => {
+              const rm = ROLE_META[m.role] ?? ROLE_META.analista_datos
+              return (
+                <div key={m.email} className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
+                     style={{ background: `${rm.color}12`, border: `1px solid ${rm.color}33` }}>
+                  <span className="text-[8px] font-black px-1 rounded"
+                        style={{ background: `${rm.color}20`, color: rm.color }}>{rm.short}</span>
+                  <span className="text-[10px] font-medium text-slate-300">{m.name.split(' ')[0]}</span>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Team badges earned */}
+          {team_badges.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {team_badges.map(b => {
+                const tc = TIER_COLOR[b.tier] ?? '#facc15'
+                return (
+                  <span key={b.id} className="text-[9px] px-2 py-1 rounded-full font-bold"
+                        style={{ background: `${tc}15`, color: tc, border: `1px solid ${tc}33` }}>
+                    ★ {b.name} <span className="opacity-60">({b.org})</span>
+                  </span>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Challenges */}
+          {challenges.map(c => {
+            const tc = c.badge_tier ? (TIER_COLOR[c.badge_tier] ?? '#facc15') : undefined
+            const dc = DIFF_COLOR[c.difficulty] ?? '#64748b'
+            const earned = Boolean(c.badge_earned)
+
+            return (
+              <div key={c.id} className="rounded-xl overflow-hidden"
+                   style={{ background: 'rgba(15,23,42,0.6)', border: `1px solid ${team.color}22` }}>
+
+                {earned && tc && (
+                  <div className="px-4 py-1.5 flex items-center gap-2"
+                       style={{ background: `${tc}15`, borderBottom: `1px solid ${tc}22` }}>
+                    <span style={{ color: tc }}>★</span>
+                    <p className="text-[9px] font-bold" style={{ color: tc }}>
+                      Insignia de equipo ganada: {c.badge_name}
+                    </p>
+                  </div>
+                )}
+
+                <div className="p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <h3 className="text-sm font-bold text-slate-100">{c.title}</h3>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                              style={{ background: `${dc}12`, color: dc, border: `1px solid ${dc}28` }}>
+                          {c.difficulty}
+                        </span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                              style={{ background: `${team.color}15`, color: team.color, border: `1px solid ${team.color}33` }}>
+                          👥 Grupal
+                        </span>
+                      </div>
+                      {c.description && (
+                        <p className="text-xs text-slate-500 leading-relaxed">{c.description}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Objective steps */}
+                  {c.objective && (
+                    <div className="rounded-lg p-3"
+                         style={{ background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.1)' }}>
+                      <p className="text-[9px] font-bold text-cyan-700 uppercase mb-2">Hoja de ruta del equipo</p>
+                      <div className="space-y-1">
+                        {c.objective.split(/\d+\)/).filter(Boolean).map((step, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <span className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 mt-0.5"
+                                  style={{ background: `${team.color}20`, color: team.color }}>{i + 1}</span>
+                            <p className="text-[10px] text-slate-400 leading-relaxed">{step.trim()}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Badge info */}
+                  {c.badge_name && tc && !earned && (
+                    <div className="flex items-center gap-2 rounded-lg px-3 py-2"
+                         style={{ background: `${tc}06`, border: `1px solid ${tc}18` }}>
+                      <span style={{ color: tc }} className="text-sm">★</span>
+                      <p className="text-[9px]" style={{ color: tc }}>
+                        El equipo gana la insignia <strong>{c.badge_name}</strong> ({c.badge_org}) al completar este reto.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Bottom: dataset + criteria */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {c.dataset_name && (
+                      <span className="text-[9px] px-2 py-0.5 rounded"
+                            style={{ background: 'rgba(249,115,22,0.08)', color: '#f97316', border: '1px solid rgba(249,115,22,0.2)' }}>
+                        📊 {c.dataset_name}
+                      </span>
+                    )}
+                    {c.criteria && (
+                      <span className="text-[9px] text-slate-700 truncate max-w-xs">{c.criteria}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Challenge List ────────────────────────────────────────────────────────────
 
 export default function ChallengeArena() {
   const { token }                       = useAuth()
   const [challenges, setChallenges]     = useState<Challenge[]>([])
+  const [teamInfo,   setTeamInfo]       = useState<TeamInfo | null>(null)
   const [loading,    setLoading]        = useState(true)
   const [active,     setActive]         = useState<Challenge | null>(null)
 
   useEffect(() => {
-    fetch(`${API}/student/challenges`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(d => { setChallenges(d); if (d.length === 1) setActive(d[0]) })
-      .catch(() => {})
+    Promise.all([
+      fetch(`${API}/student/challenges`,    { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch(`${API}/student/team-challenge`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null),
+    ]).then(([chs, team]) => {
+      setChallenges(chs)
+      if (team?.team) setTeamInfo(team)
+      if (chs.length === 1) setActive(chs[0])
+    }).catch(() => {})
       .finally(() => setLoading(false))
   }, [token])
 
@@ -446,8 +627,11 @@ export default function ChallengeArena() {
     <div className="space-y-4">
       <div>
         <h2 className="text-base font-semibold text-slate-100">Mis Retos</h2>
-        <p className="text-xs text-slate-500 mt-0.5">{challenges.length} retos asignados</p>
+        <p className="text-xs text-slate-500 mt-0.5">{challenges.length} retos individuales asignados</p>
       </div>
+
+      {/* Reto grupal del equipo */}
+      {teamInfo && <TeamChallengeCard teamInfo={teamInfo} />}
 
       {challenges.length === 0 ? (
         <div className="rounded-xl p-10 text-center" style={{ background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>

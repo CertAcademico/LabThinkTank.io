@@ -197,6 +197,23 @@ def init_db() -> None:
                 UNIQUE(challenge_id, dataset_id)
             );
 
+            CREATE TABLE IF NOT EXISTS team_challenge_assignments (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                team_id      INTEGER NOT NULL REFERENCES teams(id),
+                challenge_id INTEGER NOT NULL REFERENCES challenges(id),
+                assigned_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(team_id, challenge_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS team_badges (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                team_id    INTEGER NOT NULL REFERENCES teams(id),
+                badge_id   INTEGER NOT NULL REFERENCES badges(id),
+                awarded_by TEXT    NOT NULL,
+                awarded_at TEXT    NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(team_id, badge_id)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_iocs_ioc ON iocs(ioc);
             CREATE INDEX IF NOT EXISTS idx_iocs_source ON iocs(source);
             CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -214,6 +231,7 @@ def init_db() -> None:
         _seed_group_datasets(conn)
         _seed_group_challenges(conn)
         _seed_ctf_challenges(conn)
+        _seed_team_challenge_assignments(conn)
 
 
 def _migrate(conn) -> None:
@@ -1024,6 +1042,34 @@ def _seed_ctf_challenges(conn) -> None:
             (phase_id, order_idx, title, description, flag, flag_format,
              hints_json, category, difficulty, points, docker_image, docker_port,
              tools_json, roles_json, ds_id, is_team, "system@ctf"),
+        )
+
+
+# ── Seed: assign group challenges to teams ────────────────────────────────────
+# Maps team name → group challenge title (by pattern)
+_TEAM_CHALLENGE_MAP = {
+    "Alpha":  "Grupo Malware",
+    "Omega":  "Grupo IOC",
+    "Lambda": "Grupo IoA",
+    "Zeta":   "Grupo Botnet",
+}
+
+
+def _seed_team_challenge_assignments(conn) -> None:
+    if conn.execute("SELECT COUNT(*) FROM team_challenge_assignments").fetchone()[0]:
+        return
+    for team_name, ch_prefix in _TEAM_CHALLENGE_MAP.items():
+        team = conn.execute("SELECT id FROM teams WHERE name = ?", (team_name,)).fetchone()
+        if not team:
+            continue
+        ch = conn.execute(
+            "SELECT id FROM challenges WHERE title LIKE ? LIMIT 1", (f"{ch_prefix}%",)
+        ).fetchone()
+        if not ch:
+            continue
+        conn.execute(
+            "INSERT OR IGNORE INTO team_challenge_assignments (team_id, challenge_id) VALUES (?,?)",
+            (team["id"], ch["id"]),
         )
 
 

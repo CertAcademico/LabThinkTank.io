@@ -920,6 +920,138 @@ def student_team(authorization: str = Header(None)):
     return dict(row) if row else None
 
 
+# ── Student: Team challenge notification ─────────────────────────────────────
+
+@app.get("/student/team-challenge")
+def student_team_challenge(authorization: str = Header(None)):
+    user = _require_user(authorization)
+    with get_conn() as conn:
+        team = conn.execute("""
+            SELECT t.id, t.name, t.color
+            FROM team_members tm JOIN teams t ON tm.team_id = t.id
+            WHERE tm.user_email = ? LIMIT 1
+        """, (user["email"],)).fetchone()
+        if not team:
+            return None
+        challenges = conn.execute("""
+            SELECT c.id, c.title, c.description, c.objective, c.criteria,
+                   c.difficulty, c.deadline, c.status,
+                   c.badge_id, c.min_score_badge,
+                   b.name AS badge_name, b.org AS badge_org, b.tier AS badge_tier,
+                   d.name AS dataset_name, tca.assigned_at,
+                   (SELECT 1 FROM team_badges tb WHERE tb.team_id=? AND tb.badge_id=c.badge_id) AS badge_earned
+            FROM team_challenge_assignments tca
+            JOIN challenges c ON tca.challenge_id = c.id
+            LEFT JOIN badges b ON c.badge_id = b.id
+            LEFT JOIN datasets d ON c.dataset_id = d.id
+            WHERE tca.team_id = ?
+            ORDER BY tca.assigned_at DESC
+        """, (team["id"], team["id"])).fetchall()
+        members = conn.execute("""
+            SELECT u.name, u.email, tm.role
+            FROM team_members tm JOIN users u ON tm.user_email = u.email
+            WHERE tm.team_id = ?
+        """, (team["id"],)).fetchall()
+        team_badge_rows = conn.execute("""
+            SELECT b.id, b.name, b.org, b.tier, b.icon, tb.awarded_at
+            FROM team_badges tb JOIN badges b ON tb.badge_id = b.id
+            WHERE tb.team_id = ?
+        """, (team["id"],)).fetchall()
+    return {
+        "team": dict(team),
+        "challenges": [dict(r) for r in challenges],
+        "members": [dict(r) for r in members],
+        "team_badges": [dict(r) for r in team_badge_rows],
+    }
+
+
+# ── Admin: Team group challenges ─────────────────────────────────────────────
+
+@app.get("/admin/teams/{team_id}/group-challenges")
+def admin_team_group_challenges(team_id: int, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT c.id, c.title, c.difficulty, c.status, c.badge_id,
+                   b.name AS badge_name, tca.assigned_at,
+                   (SELECT 1 FROM team_badges tb WHERE tb.team_id=? AND tb.badge_id=c.badge_id) AS badge_earned
+            FROM team_challenge_assignments tca
+            JOIN challenges c ON tca.challenge_id = c.id
+            LEFT JOIN badges b ON c.badge_id = b.id
+            WHERE tca.team_id = ?
+        """, (team_id, team_id)).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/admin/teams/{team_id}/group-challenges")
+def admin_assign_team_challenge(team_id: int, payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    cid = payload.get("challenge_id")
+    if not cid:
+        raise HTTPException(status_code=400, detail="challenge_id requerido")
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO team_challenge_assignments (team_id, challenge_id) VALUES (?,?)",
+            (team_id, cid),
+        )
+    return {"ok": True}
+
+
+@app.delete("/admin/teams/{team_id}/group-challenges/{challenge_id}")
+def admin_remove_team_challenge(team_id: int, challenge_id: int, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM team_challenge_assignments WHERE team_id=? AND challenge_id=?",
+            (team_id, challenge_id),
+        )
+    return {"ok": True}
+
+
+# ── Admin: Team badges (separate from individual badges) ─────────────────────
+
+@app.get("/admin/team-badges/awarded")
+def admin_team_badges_awarded(authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT t.id AS team_id, t.name AS team_name, t.color AS team_color,
+                   b.id AS badge_id, b.name AS badge_name, b.org, b.tier, b.icon,
+                   tb.awarded_by, tb.awarded_at
+            FROM team_badges tb
+            JOIN teams t ON tb.team_id = t.id
+            JOIN badges b ON tb.badge_id = b.id
+            ORDER BY tb.awarded_at DESC
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/admin/team-badges/award")
+def admin_award_team_badge(payload: dict = Body(...), authorization: str = Header(None)):
+    admin = _require_admin(authorization)
+    team_id  = payload.get("team_id")
+    badge_id = payload.get("badge_id")
+    if not team_id or not badge_id:
+        raise HTTPException(status_code=400, detail="team_id y badge_id requeridos")
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO team_badges (team_id, badge_id, awarded_by) VALUES (?,?,?)",
+            (team_id, badge_id, admin["email"]),
+        )
+    return {"ok": True}
+
+
+@app.delete("/admin/team-badges/revoke")
+def admin_revoke_team_badge(payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM team_badges WHERE team_id=? AND badge_id=?",
+            (payload.get("team_id"), payload.get("badge_id")),
+        )
+    return {"ok": True}
+
+
 # ── CTF Phases (Admin) ────────────────────────────────────────────────────────
 
 @app.get("/admin/ctf-phases")

@@ -323,14 +323,21 @@ const TEAM_ROLES: Record<string, { label: string; color: string; short: string }
   machine_learning: { label: 'Machine Learning',    color: '#4ade80', short: 'ML' },
 }
 
-function EquiposTab({ teams, users, challenges, token, onRefresh }: {
-  teams: Team[]; users: User[]; challenges: Challenge[]; token: string; onRefresh: () => void
+function EquiposTab({ teams, users, challenges, allBadges, token, onRefresh }: {
+  teams: Team[]; users: User[]; challenges: Challenge[]; allBadges: Badge[]; token: string; onRefresh: () => void
 }) {
-  const [showForm, setShowForm] = useState(false)
-  const [form,     setForm]     = useState({ name: '', color: '#22d3ee' })
-  const [selUsers, setSelUsers] = useState<Record<number, string[]>>({})
-  const [selChal,  setSelChal]  = useState<Record<number, number | ''>>({})
-  const [loading,  setLoading]  = useState(false)
+  const [showForm,   setShowForm]   = useState(false)
+  const [form,       setForm]       = useState({ name: '', color: '#22d3ee' })
+  const [selUsers,   setSelUsers]   = useState<Record<number, string[]>>({})
+  const [selChal,    setSelChal]    = useState<Record<number, number | ''>>({})
+  const [loading,    setLoading]    = useState(false)
+  // Retos grupales por equipo
+  const [groupChallenges, setGroupChallenges] = useState<Record<number, {id:number;title:string;badge_name?:string;badge_tier?:string;badge_earned?:number}[]>>({})
+  const [selGroupChal, setSelGroupChal] = useState<Record<number, number | ''>>({})
+  // Insignias de equipo
+  const [teamBadgesAwarded, setTeamBadgesAwarded] = useState<Record<number,{id:number;name:string;org:string;tier:string}[]>>({})
+  const [selTeamBadge, setSelTeamBadge] = useState<Record<number, number | ''>>({})
+  const [expandedTeam, setExpandedTeam] = useState<number | null>(null)
 
   const create = async () => {
     if (!form.name) return
@@ -364,6 +371,56 @@ function EquiposTab({ teams, users, challenges, token, onRefresh }: {
       method: 'POST', body: JSON.stringify({ emails: memberEmails }),
     }).catch(alert)
     setSelChal(p => ({ ...p, [teamId]: '' })); onRefresh()
+  }
+
+  const loadGroupChallenges = async (teamId: number) => {
+    const data = await apiFetch(`/admin/teams/${teamId}/group-challenges`, token).catch(() => [])
+    setGroupChallenges(p => ({ ...p, [teamId]: data }))
+    const badges = await apiFetch('/admin/team-badges/awarded', token).catch(() => [])
+    const byTeam: Record<number, {id:number;name:string;org:string;tier:string}[]> = {}
+    for (const b of badges) {
+      if (!byTeam[b.team_id]) byTeam[b.team_id] = []
+      byTeam[b.team_id].push({ id: b.badge_id, name: b.badge_name, org: b.org, tier: b.tier })
+    }
+    setTeamBadgesAwarded(byTeam)
+  }
+
+  const assignGroupChallenge = async (teamId: number) => {
+    const cid = selGroupChal[teamId]
+    if (!cid) return
+    await apiFetch(`/admin/teams/${teamId}/group-challenges`, token, {
+      method: 'POST', body: JSON.stringify({ challenge_id: cid }),
+    }).catch(alert)
+    setSelGroupChal(p => ({ ...p, [teamId]: '' }))
+    loadGroupChallenges(teamId)
+  }
+
+  const removeGroupChallenge = async (teamId: number, cid: number) => {
+    await apiFetch(`/admin/teams/${teamId}/group-challenges/${cid}`, token, { method: 'DELETE' }).catch(alert)
+    loadGroupChallenges(teamId)
+  }
+
+  const awardTeamBadge = async (teamId: number) => {
+    const bid = selTeamBadge[teamId]
+    if (!bid) return
+    await apiFetch('/admin/team-badges/award', token, {
+      method: 'POST', body: JSON.stringify({ team_id: teamId, badge_id: bid }),
+    }).catch(alert)
+    setSelTeamBadge(p => ({ ...p, [teamId]: '' }))
+    loadGroupChallenges(teamId)
+  }
+
+  const revokeTeamBadge = async (teamId: number, badgeId: number) => {
+    await apiFetch('/admin/team-badges/revoke', token, {
+      method: 'DELETE', body: JSON.stringify({ team_id: teamId, badge_id: badgeId }),
+    }).catch(alert)
+    loadGroupChallenges(teamId)
+  }
+
+  const toggleTeam = (id: number) => {
+    const next = expandedTeam === id ? null : id
+    setExpandedTeam(next)
+    if (next !== null) loadGroupChallenges(next)
   }
 
   const deleteTeam = async (id: number) => {
@@ -513,9 +570,9 @@ function EquiposTab({ teams, users, challenges, token, onRefresh }: {
                     </button>
                   </div>
 
-                  {/* Assign team to challenge */}
+                  {/* Assign team to individual challenge */}
                   <div className="space-y-2">
-                    <p className="text-[9px] text-slate-600 uppercase tracking-wider font-bold">Asignar equipo a reto</p>
+                    <p className="text-[9px] text-slate-600 uppercase tracking-wider font-bold">Reto individual → todos los miembros</p>
                     <select value={selChal[t.id] ?? ''}
                             onChange={e => setSelChal(p => ({ ...p, [t.id]: Number(e.target.value) || '' }))}
                             className="w-full rounded-lg px-3 py-2 text-xs text-slate-100 outline-none"
@@ -527,10 +584,125 @@ function EquiposTab({ teams, users, challenges, token, onRefresh }: {
                     <button onClick={() => assignTeamToChallenge(t.id)} disabled={!selChal[t.id]}
                             className="w-full py-1.5 rounded text-[10px] font-bold disabled:opacity-30"
                             style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
-                      Asignar todo el equipo →
+                      Asignar a cada miembro →
                     </button>
                   </div>
                 </div>
+
+                {/* ── Reto Grupal (separado de insignias individuales) ──────── */}
+                <div className="rounded-xl p-3 space-y-3 mt-1"
+                     style={{ background: `${t.color}06`, border: `1px solid ${t.color}22` }}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: t.color }}>
+                      🏆 Reto Grupal del Equipo
+                    </p>
+                    <button onClick={() => toggleTeam(t.id)}
+                            className="text-[8px] px-2 py-0.5 rounded transition-all"
+                            style={{ background: `${t.color}15`, color: t.color, border: `1px solid ${t.color}33` }}>
+                      {expandedTeam === t.id ? 'Cerrar ▲' : 'Gestionar ▼'}
+                    </button>
+                  </div>
+
+                  {/* Current group challenges */}
+                  {(groupChallenges[t.id] ?? []).length > 0 ? (
+                    <div className="space-y-1.5">
+                      {(groupChallenges[t.id] ?? []).map(gc => {
+                        const tc = gc.badge_tier ? (TIER[gc.badge_tier]?.color ?? '#facc15') : null
+                        return (
+                          <div key={gc.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2"
+                               style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[10px] font-semibold text-slate-200 truncate">{gc.title}</p>
+                              {gc.badge_name && tc && (
+                                <p className="text-[8px]" style={{ color: gc.badge_earned ? tc : '#475569' }}>
+                                  {gc.badge_earned ? '★ Insignia ganada: ' : '○ Al completar: '}
+                                  {gc.badge_name}
+                                </p>
+                              )}
+                            </div>
+                            <button onClick={() => removeGroupChallenge(t.id, gc.id)}
+                                    className="text-[8px] px-1.5 py-0.5 rounded shrink-0"
+                                    style={{ border: `1px solid ${RED}30`, color: RED }}>✕</button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    expandedTeam === t.id
+                      ? <p className="text-[10px] text-slate-700">Sin reto grupal asignado.</p>
+                      : <p className="text-[10px] text-slate-700">Toca "Gestionar" para ver y asignar.</p>
+                  )}
+
+                  {expandedTeam === t.id && (
+                    <div className="flex gap-2">
+                      <select value={selGroupChal[t.id] ?? ''}
+                              onChange={e => setSelGroupChal(p => ({ ...p, [t.id]: Number(e.target.value) || '' }))}
+                              className="flex-1 rounded-lg px-2 py-1.5 text-[10px] text-slate-100 outline-none"
+                              style={selectStyle}>
+                        <option value="">Seleccionar reto grupal...</option>
+                        {challenges.filter(c => c.status === 'active').map(c =>
+                          <option key={c.id} value={c.id}>{c.title}</option>)}
+                      </select>
+                      <button onClick={() => assignGroupChallenge(t.id)} disabled={!selGroupChal[t.id]}
+                              className="px-3 py-1.5 rounded text-[10px] font-bold disabled:opacity-30 shrink-0"
+                              style={{ background: `${t.color}20`, border: `1px solid ${t.color}44`, color: t.color }}>
+                        Asignar →
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Insignias del Equipo (NO afecta perfiles individuales) ─── */}
+                {expandedTeam === t.id && (
+                  <div className="rounded-xl p-3 space-y-3"
+                       style={{ background: 'rgba(250,204,21,0.04)', border: '1px solid rgba(250,204,21,0.12)' }}>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-yellow-700">
+                      ★ Insignias del Equipo <span className="font-normal text-slate-600 normal-case">(independientes del perfil individual)</span>
+                    </p>
+
+                    {/* Awarded team badges */}
+                    {(teamBadgesAwarded[t.id] ?? []).length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {(teamBadgesAwarded[t.id] ?? []).map(b => {
+                          const tc = TIER[b.tier]?.color ?? '#facc15'
+                          return (
+                            <div key={b.id} className="flex items-center gap-1 rounded-full px-2 py-0.5"
+                                 style={{ background: `${tc}12`, border: `1px solid ${tc}33` }}>
+                              <span className="text-[9px] font-bold" style={{ color: tc }}>★ {b.name}</span>
+                              <span className="text-[8px] text-slate-700">({b.org})</span>
+                              <button onClick={() => revokeTeamBadge(t.id, b.id)}
+                                      className="text-[8px] ml-1 opacity-40 hover:opacity-100"
+                                      style={{ color: RED }}>✕</button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-slate-700">Sin insignias de equipo aún.</p>
+                    )}
+
+                    {/* Award new team badge */}
+                    <div className="flex gap-2">
+                      <select value={selTeamBadge[t.id] ?? ''}
+                              onChange={e => setSelTeamBadge(p => ({ ...p, [t.id]: Number(e.target.value) || '' }))}
+                              className="flex-1 rounded-lg px-2 py-1.5 text-[10px] text-slate-100 outline-none"
+                              style={selectStyle}>
+                        <option value="">Seleccionar insignia...</option>
+                        {Object.entries(allBadges.reduce((acc, b) => { (acc[b.org] = acc[b.org] || []).push(b); return acc }, {} as Record<string, Badge[]>)).map(([org, bs]) => (
+                          <optgroup key={org} label={org}>
+                            {bs.map(b => <option key={b.id} value={b.id}>{b.name} ({b.tier})</option>)}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <button onClick={() => awardTeamBadge(t.id)} disabled={!selTeamBadge[t.id]}
+                              className="px-3 py-1.5 rounded text-[10px] font-bold disabled:opacity-30 shrink-0"
+                              style={{ background: 'rgba(250,204,21,0.15)', border: '1px solid rgba(250,204,21,0.35)', color: '#facc15' }}>
+                        Otorgar ★
+                      </button>
+                    </div>
+                  </div>
+                )}
+
               </div>
             </div>
           )
@@ -2360,7 +2532,7 @@ export default function AdminPanel({ onExitAdmin }: { onExitAdmin: () => void })
         <main className="flex-1 overflow-y-auto p-6">
           {tab === 'dashboard'   && <DashboardTab   stats={stats} />}
           {tab === 'users'       && <UsersTab       users={users} challenges={challenges} allBadges={allBadges} token={tk} onRefresh={fetchAll} />}
-          {tab === 'teams'       && <EquiposTab     teams={teams} users={users} challenges={challenges} token={tk} onRefresh={fetchAll} />}
+          {tab === 'teams'       && <EquiposTab     teams={teams} users={users} challenges={challenges} allBadges={allBadges} token={tk} onRefresh={fetchAll} />}
           {tab === 'badges'      && <InsigniasTab     allBadges={allBadges} awarded={awarded} token={tk} onRefresh={fetchAll} />}
           {tab === 'progreso'    && <BadgeProgressTab token={tk} />}
           {tab === 'fases'       && <FasesCTFTab    phases={phases} datasets={datasets} token={tk} onRefresh={fetchAll} />}

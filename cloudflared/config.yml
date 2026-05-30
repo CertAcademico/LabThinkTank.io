@@ -1,0 +1,27 @@
+# Cloudflare Tunnel — configuración de ingress para CTI-Lab
+#
+# SOLO necesitas este archivo si tu tunnel NO tiene ingress configurado
+# en el Zero Trust Dashboard. Si ya lo configuraste en el dashboard,
+# este archivo es ignorado.
+#
+# Para usarlo con este archivo:
+#   1. Agrega en docker-compose.yml bajo cloudflared:
+#        volumes:
+#          - ./cloudflared:/etc/cloudflared
+#      Y cambia command a:
+#        command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+#
+# Reemplaza TU_TUNNEL_ID con el UUID de tu tunnel
+# (Zero Trust Dashboard → Tunnels → nombre → Overview → Tunnel ID)
+
+tunnel: TU_TUNNEL_ID
+
+ingress:
+  # Ruta principal: todo el tráfico va al nginx (frontend + /api/* proxied al backend)
+  - hostname: "tu-subdominio.tu-dominio.com"
+    service: http://frontend:80
+    originRequest:
+      noTLSVerify: false
+
+  # Catch-all obligatorio — cloudflared requiere esta regla al final
+  - service: http_status:404

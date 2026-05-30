@@ -18,6 +18,8 @@ services:
       # MISP — leave blank to use public botvrij.eu feed (no auth needed)
       - MISP_URL=${MISP_URL:-}
       - MISP_KEY=${MISP_KEY:-}
+      # Con Cloudflare Tunnel no se necesita el dominio del tunnel aquí —
+      # nginx proxea /api/* internamente, el browser nunca habla directo al 8000.
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -34,15 +36,28 @@ services:
     depends_on:
       - backend
 
-  # Cloudflare Quick Tunnel — generates a free random *.trycloudflare.com URL.
-  # Run: docker compose up cloudflared
-  # Then: docker compose logs cloudflared   ← look for the public URL
+  # ── Cloudflare Named Tunnel (usa CLOUDFLARE_TUNNEL_TOKEN del .env) ──────────
+  # Requiere token del Zero Trust Dashboard → Tunnels → tu tunnel → Overview
+  # El token ya incluye qué hostname → qué servicio interno.
+  # Si el dashboard apunta al servicio "http://frontend:80" ya funciona.
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: tunnel --no-autoupdate --url http://frontend:80
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - frontend
+
+  # ── Quick Tunnel (sin cuenta, URL temporal *.trycloudflare.com) ───────────
+  # Para usarlo: comenta el servicio cloudflared de arriba y descomenta este.
+  # Luego: docker compose up cloudflared-quick
+  #        docker compose logs -f cloudflared-quick   ← busca la URL pública
+  # cloudflared-quick:
+  #   image: cloudflare/cloudflared:latest
+  #   command: tunnel --no-autoupdate --url http://frontend:80
+  #   depends_on:
+  #     - frontend
 
 volumes:
   cti_data:

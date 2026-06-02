@@ -11,10 +11,15 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
+    "lucide-react": "^0.511.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "reactflow": "^11.11.4",
-    "tailwindcss": "^4.3.0"
+    "recharts": "^2.15.3",
+    "tailwindcss": "^4.3.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -88,9 +88,12 @@ def init_db() -> None:
                 output       TEXT NOT NULL DEFAULT '',
                 plots_json   TEXT NOT NULL DEFAULT '[]',
                 notes        TEXT NOT NULL DEFAULT '',
-                score        INTEGER,
-                feedback     TEXT NOT NULL DEFAULT '',
-                submitted_at TEXT NOT NULL DEFAULT (datetime('now'))
+                score             INTEGER,
+                feedback          TEXT NOT NULL DEFAULT '',
+                document_path     TEXT NOT NULL DEFAULT '',
+                document_filename TEXT NOT NULL DEFAULT '',
+                document_pages    INTEGER,
+                submitted_at      TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
             CREATE TABLE IF NOT EXISTS teams (
@@ -238,10 +241,15 @@ def init_db() -> None:
         _assign_pair_range_challenges(conn)
         _seed_ctf_challenges(conn)
         _seed_team_challenge_assignments(conn)
+        _seed_ml_training_datasets(conn)
 
 
 def _migrate(conn) -> None:
     """Add columns that may not exist in databases created before this version."""
+    user_cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "password_expires_at" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN password_expires_at TEXT")
+
     cols = {r[1] for r in conn.execute("PRAGMA table_info(challenges)").fetchall()}
     if "badge_id" not in cols:
         conn.execute("ALTER TABLE challenges ADD COLUMN badge_id INTEGER REFERENCES badges(id)")
@@ -1232,6 +1240,42 @@ def _seed_team_challenge_assignments(conn) -> None:
             "INSERT OR IGNORE INTO team_challenge_assignments (team_id, challenge_id) VALUES (?,?)",
             (team["id"], ch["id"]),
         )
+
+
+def _seed_ml_training_datasets(conn) -> None:
+    """Seed three large ML-ready synthetic datasets for clustering practice."""
+    if conn.execute(
+        "SELECT COUNT(*) FROM datasets WHERE source = 'cti-lab/synthetic-generator'"
+    ).fetchone()[0]:
+        return
+    try:
+        from intelligence.dataset_generator import generate_synthetic_dataset
+    except Exception:
+        return
+
+    configs = [
+        {"n": 800,  "focus": "mixed",    "seed": 42,  "desc": "Dataset global con IoCs de todos los actores CISA. Ideal para K-Means (k=5) y Isolation Forest."},
+        {"n": 600,  "focus": "apt",      "seed": 77,  "desc": "IoCs atribuidos a actores APT estatales. Útil para clasificación por patrones de espionaje."},
+        {"n": 400,  "focus": "criminal", "seed": 13,  "desc": "Ransomware y grupos criminales. Ideal para clustering por técnicas de extorsión y vectores."},
+    ]
+    for cfg in configs:
+        try:
+            result = generate_synthetic_dataset(
+                n=cfg["n"], focus=cfg["focus"], seed=cfg["seed"]
+            )
+            conn.execute(
+                "INSERT INTO datasets (name, description, source, data_json, schema_json, created_by) VALUES (?,?,?,?,?,?)",
+                (
+                    result["name"],
+                    cfg["desc"],
+                    result["source"],
+                    json.dumps(result["data"], ensure_ascii=False),
+                    json.dumps(result["schema"], ensure_ascii=False),
+                    "system@cti-lab",
+                ),
+            )
+        except Exception:
+            pass
 
 
 @contextmanager

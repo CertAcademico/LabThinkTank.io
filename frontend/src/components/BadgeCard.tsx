@@ -1,4 +1,5 @@
 // Badge visual component for CertAcademico, redciber and LabThinkTank
+import { useId } from 'react'
 
 export interface Badge {
   id:          number
@@ -88,13 +89,12 @@ function badgeSvgMarkup(badge: Badge) {
   )).join('')
   const owner = badge.owner_name || 'Estudiante CTI-Lab'
   const challenge = badge.challenge_title || badge.description || 'Reto CTI-Lab'
+  const challengeLines = wrapSvgText(`Reto: ${challenge}`, 58, 2)
   const date = badge.awarded_at
     ? new Date(badge.awarded_at).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })
     : new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })
   const code = `RC-CA-${badge.id}-${String(badge.awarded_at || Date.now()).replace(/\D/g, '').slice(0, 10)}`
   const issuer = ISSUER_LINE[badge.org] ?? `Emitida por ${ORG_LABEL[badge.org] ?? badge.org}`
-  const certifiesA = 'certifica que la persona titular completó satisfactoriamente'
-  const certifiesB = 'las evidencias, actividades y criterios del reto indicado.'
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
@@ -110,10 +110,10 @@ function badgeSvgMarkup(badge: Badge) {
     </linearGradient>
     <style>
       .small{font-family:Inter,Arial,sans-serif;font-size:28px;letter-spacing:3px;font-weight:800}
-      .body{font-family:Inter,Arial,sans-serif;font-size:31px}
+      .body{font-family:Inter,Arial,sans-serif;font-size:28px}
       .title{font-family:Inter,Arial,sans-serif;font-size:46px;font-weight:900}
       .name{font-family:Georgia,serif;font-size:58px;font-weight:700}
-      .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:24px}
+      .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px}
     </style>
   </defs>
   <rect width="100%" height="100%" fill="url(#bg)"/>
@@ -137,20 +137,41 @@ function badgeSvgMarkup(badge: Badge) {
   <text x="410" y="284" class="name" fill="#f8fafc">${escapeSvg(owner)}</text>
   <line x1="410" y1="324" x2="1280" y2="324" stroke="${t.color}" stroke-opacity="0.45" stroke-width="2"/>
   <text x="410" y="385" class="title" fill="${t.color}">${escapeSvg(badge.name)}</text>
-  <text x="410" y="438" class="body" fill="#cbd5e1">La presente credencial ${escapeSvg(certifiesA)}</text>
-  <text x="410" y="481" class="body" fill="#cbd5e1">${escapeSvg(certifiesB)}</text>
-  <text x="410" y="540" class="body" fill="#cbd5e1">Reto: ${escapeSvg(challenge)}</text>
-  ${badge.team_name ? `<text x="410" y="590" class="body" fill="#94a3b8">Equipo: ${escapeSvg(badge.team_name)}</text>` : ''}
-  <text x="410" y="638" class="body" fill="#94a3b8">${escapeSvg(issuer)}</text>
-  <text x="410" y="682" class="body" fill="#94a3b8">Fecha de emisión: ${escapeSvg(date)}</text>
-  <rect x="410" y="710" width="430" height="54" rx="12" fill="${t.color}" fill-opacity="0.10" stroke="${t.color}" stroke-opacity="0.28"/>
-  <text x="432" y="745" class="mono" fill="${t.color}">${escapeSvg(code)}</text>
-  <text x="1260" y="745" class="mono" fill="#64748b" text-anchor="end">CTI-Lab Challenge Platform</text>
+  <text x="410" y="438" class="body" fill="#cbd5e1">La presente credencial certifica que la persona titular completó</text>
+  <text x="410" y="478" class="body" fill="#cbd5e1">satisfactoriamente las evidencias y criterios del reto indicado.</text>
+  ${challengeLines.map((line, i) => `<text x="410" y="${538 + i * 38}" class="body" fill="#cbd5e1">${escapeSvg(line)}</text>`).join('')}
+  ${badge.team_name ? `<text x="410" y="624" class="body" fill="#94a3b8">Equipo: ${escapeSvg(badge.team_name)}</text>` : ''}
+  <text x="410" y="668" class="body" fill="#94a3b8">${escapeSvg(issuer)}</text>
+  <text x="410" y="702" class="body" fill="#94a3b8">Fecha de emisión: ${escapeSvg(date)}</text>
+  <rect x="410" y="724" width="430" height="46" rx="12" fill="${t.color}" fill-opacity="0.10" stroke="${t.color}" stroke-opacity="0.28"/>
+  <text x="432" y="754" class="mono" fill="${t.color}">${escapeSvg(code)}</text>
+  <text x="1235" y="754" class="mono" fill="#64748b" text-anchor="end">CTI-Lab Challenge Platform</text>
 </svg>`
 }
 
 function escapeSvg(value: string) {
   return value.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[ch]!))
+}
+
+function wrapSvgText(value: string, maxChars: number, maxLines: number) {
+  const words = value.split(/\s+/).filter(Boolean)
+  const lines: string[] = []
+  let current = ''
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word
+    if (next.length > maxChars && current) {
+      lines.push(current)
+      current = word
+      if (lines.length === maxLines) break
+    } else {
+      current = next
+    }
+  }
+  if (current && lines.length < maxLines) lines.push(current)
+  if (lines.length === maxLines && words.join(' ').length > lines.join(' ').length) {
+    lines[maxLines - 1] = `${lines[maxLines - 1].replace(/\s+\S*$/, '')}...`
+  }
+  return lines
 }
 
 export function downloadBadgeSvg(badge: Badge) {
@@ -168,6 +189,7 @@ export function downloadBadgeSvg(badge: Badge) {
 function BadgeShape({ tier, org, icon, size = 64 }: {
   tier: string; org: string; icon: string; size?: number
 }) {
+  const uid = useId().replace(/:/g, '')
   const t  = TIER[tier]  ?? TIER.bronze
   const o  = ORG[org]    ?? ORG.CertAcademico
   const cx = size / 2
@@ -176,11 +198,11 @@ function BadgeShape({ tier, org, icon, size = 64 }: {
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       <defs>
-        <filter id={`glow-${tier}`}>
+        <filter id={`glow-${uid}`}>
           <feGaussianBlur stdDeviation="2" result="coloredBlur" />
           <feMerge><feMergeNode in="coloredBlur" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
-        <linearGradient id={`grad-${tier}-${org}`} x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id={`grad-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%"   stopColor={t.color} stopOpacity="0.25" />
           <stop offset="100%" stopColor={o.accent} stopOpacity="0.15" />
         </linearGradient>
@@ -188,9 +210,9 @@ function BadgeShape({ tier, org, icon, size = 64 }: {
 
       {/* Hex background */}
       <polygon points={hex}
-               fill={`url(#grad-${tier}-${org})`}
+               fill={`url(#grad-${uid})`}
                stroke={t.color} strokeWidth="1.5"
-               filter={`url(#glow-${tier})`} />
+               filter={`url(#glow-${uid})`} />
 
       {/* Org abbr top-left */}
       <text x={cx} y={size * 0.28} textAnchor="middle" fill={o.accent}

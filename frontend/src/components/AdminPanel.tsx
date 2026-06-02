@@ -15,7 +15,29 @@ interface BadgeProgress { name: string; email: string; role: string; badges: { i
 interface AwardedBadge { user_email: string; user_name: string; org: string; badge_name: string; tier: string; icon: string; awarded_by: string; awarded_at: string; badge_id: number }
 interface Assignment { name: string; email: string; assigned_at: string; submitted: number }
 interface Submission { id: number; challenge_id: number; challenge_title: string; user_name: string; user_email: string; code: string; output: string; plots_json: string; notes: string; score?: number; feedback: string; submitted_at: string }
-interface Stats      { students: number; active_challenges: number; datasets: number; submissions_today: number; pending_scoring: number; recent_submissions: { user_name: string; challenge: string; submitted_at: string; score?: number }[] }
+interface Stats {
+  students: number
+  total_users: number
+  admins: number
+  active_challenges: number
+  datasets: number
+  teams: number
+  team_members: number
+  submissions_today: number
+  total_submissions: number
+  graded_submissions: number
+  pending_scoring: number
+  ctf_solves: number
+  ctf_points: number
+  active_students: number
+  log_datasets: number
+  feed_iocs: number
+  live_events: number
+  live_clients: number
+  top_students: { name: string; email: string; submissions: number; ctf_solves: number; ctf_points: number; avg_score?: number }[]
+  team_progress: { id: number; name: string; color: string; members: number; assigned_challenges: number; badges: number }[]
+  recent_submissions: { user_name: string; challenge: string; submitted_at: string; score?: number }[]
+}
 
 type Tab = 'dashboard' | 'users' | 'teams' | 'badges' | 'progreso' | 'fases' | 'datasets' | 'retos' | 'submissions' | 'fuentes'
 
@@ -102,6 +124,87 @@ function DashboardTab({ stats }: { stats: Stats | null }) {
         <StatCard label="Datasets"          value={stats.datasets}           color="#f97316"   />
         <StatCard label="Entregas hoy"      value={stats.submissions_today}  color="#4ade80"   />
         <StatCard label="Por calificar"     value={stats.pending_scoring}    color="#facc15"   />
+      </div>
+
+      <div className="rounded-xl p-5 space-y-4" style={glass}>
+        <div>
+          <p className="text-xs font-bold text-slate-300">Uso de la aplicación</p>
+          <p className="text-[10px] text-slate-600 mt-0.5">Actividad agregada de estudiantes, equipos, datasets, retos y feeds en vivo.</p>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard label="Estudiantes activos" value={stats.active_students}   color="#22d3ee" />
+          <StatCard label="Equipos"             value={stats.teams}             color="#a78bfa" />
+          <StatCard label="Miembros en equipos" value={stats.team_members}      color="#818cf8" />
+          <StatCard label="Entregas totales"    value={stats.total_submissions} color="#4ade80" />
+          <StatCard label="Entregas calificadas" value={stats.graded_submissions} color="#86efac" />
+          <StatCard label="CTF solves"          value={stats.ctf_solves}        color="#facc15" />
+          <StatCard label="CTF puntos"          value={stats.ctf_points}        color="#f97316" />
+          <StatCard label="Eventos live"        value={stats.live_events}       color="#ef4444" />
+          <StatCard label="Datasets de logs"    value={stats.log_datasets}      color="#14b8a6" />
+          <StatCard label="IOCs de feeds"       value={stats.feed_iocs}         color="#fb7185" />
+          <StatCard label="Usuarios totales"    value={stats.total_users}       color="#94a3b8" />
+          <StatCard label="Clientes SSE"        value={stats.live_clients}      color="#38bdf8" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="rounded-xl overflow-hidden" style={glass}>
+          <div className="px-5 py-3 border-b text-xs font-bold text-slate-500 tracking-widest uppercase"
+               style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            Estudiantes destacados
+          </div>
+          {stats.top_students.length === 0 ? (
+            <p className="px-5 py-6 text-xs text-slate-700">Sin actividad estudiantil aún.</p>
+          ) : (
+            <div className="divide-y divide-white/5">
+              {stats.top_students.map((s, i) => (
+                <div key={s.email} className="flex items-center gap-4 px-5 py-3">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                       style={{ background: 'rgba(34,211,238,0.14)', color: CYAN }}>
+                    {i + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-slate-200 truncate">{s.name}</p>
+                    <p className="text-[10px] text-slate-600 truncate">{s.email}</p>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <Badge label={`${s.ctf_solves} solves`} color="#4ade80" />
+                    <Badge label={`${s.submissions} entregas`} color="#a78bfa" />
+                    <Badge label={`${s.ctf_points} pts`} color="#facc15" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl overflow-hidden" style={glass}>
+          <div className="px-5 py-3 border-b text-xs font-bold text-slate-500 tracking-widest uppercase"
+               style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            Progreso de equipos
+          </div>
+          {stats.team_progress.length === 0 ? (
+            <p className="px-5 py-6 text-xs text-slate-700">Sin equipos creados aún.</p>
+          ) : (
+            <div className="divide-y divide-white/5">
+              {stats.team_progress.slice(0, 6).map(team => (
+                <div key={team.id} className="px-5 py-3 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: team.color || CYAN }} />
+                    <p className="text-xs text-slate-200 flex-1 truncate">{team.name}</p>
+                    <Badge label={`${team.members} miembros`} color="#22d3ee" />
+                    <Badge label={`${team.badges} insignias`} color="#facc15" />
+                  </div>
+                  <div className="h-1.5 rounded-full overflow-hidden bg-white/[0.04]">
+                    <div className="h-full rounded-full"
+                         style={{ width: `${Math.min(100, Math.max(8, team.assigned_challenges * 16 + team.badges * 12))}%`, background: team.color || CYAN }} />
+                  </div>
+                  <p className="text-[9px] text-slate-700">{team.assigned_challenges} retos grupales asignados</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="rounded-xl overflow-hidden" style={glass}>

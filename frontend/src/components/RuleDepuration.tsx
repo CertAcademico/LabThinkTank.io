@@ -50,7 +50,7 @@ const PRIORITY_COLOR: Record<string, string> = {
 const IOC_TYPES = ['ip', 'domain', 'url', 'hash', 'email']
 const SEVERITIES = ['critical', 'high', 'medium', 'low']
 
-function StageChip({ label, color }: { label: string; color: string }) {
+function StageChip({ label }: { label: string }) {
   const s = STAGE_COLORS[label] ?? STAGE_COLORS.envejeciendo
   return (
     <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide"
@@ -287,7 +287,7 @@ export default function RuleDepuration() {
             <PipelineStep step={1} title="Contexto CTI" icon="🧠" pass={step1Pass}>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-slate-400">Estado general</span>
-                <StageChip label={result.cti_stage} color="#22d3ee" />
+                <StageChip label={result.cti_stage} />
               </div>
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-600 uppercase tracking-wide">Confianza CTI</span>
@@ -309,7 +309,7 @@ export default function RuleDepuration() {
             <PipelineStep step={2} title="Ciclo de Vida del IoC" icon="📍" pass={step2Pass}>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-slate-400">Estado</span>
-                <StageChip label={result.ioc_lifecycle.stage} color="#22d3ee" />
+                <StageChip label={result.ioc_lifecycle.stage} />
               </div>
               <div className="grid grid-cols-3 gap-1 text-center">
                 {[

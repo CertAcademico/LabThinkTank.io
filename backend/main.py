@@ -1,15 +1,23 @@
+from __future__ import annotations
+
+import asyncio
 import csv
 import io
 import json
 import os
+import re
+import uuid
+import zipfile
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import requests
 import anthropic
-from fastapi import Body, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, StreamingResponse
 
 from db import init_db, get_conn
 from auth import register, login, verify_token
@@ -22,8 +30,92 @@ from services.findings_service import get_findings, add_finding
 from services.upload_service import parse_upload
 from services.enrichment_service import enrich_ioc
 from intelligence.ioa_engine import get_ioas, TTP_IOA_MAP
-from intelligence.feeds_engine import FETCH_REGISTRY
+from intelligence.feeds_engine import FETCH_REGISTRY, PUBLIC_FEEDS
 from intelligence.defend_engine import compute_depuration
+from intelligence.log_engine import parse_logs, extract_iocs, detect_format
+from services.live_service import live_service
+from ai.gemini_engine import (
+    GeminiNotConfiguredError,
+    generate_threat_data as _gemini_threat_data,
+    generate_quantum_threat_analysis as _gemini_quantum,
+    generate_predictive_analysis as _gemini_predictive,
+    generate_fusion_report as _gemini_fusion_report,
+    generate_mitre_details as _gemini_mitre,
+    generate_welcome_data as _gemini_welcome,
+    query_ioc_context as _gemini_ioc_context,
+    generate_weekly_flash_report as _gemini_weekly,
+    extract_entities_from_text as _gemini_extract,
+    assess_colombian_risk as _gemini_colombia,
+    generate_crisis_map as _gemini_crisis,
+    generate_team_scenarios as _gemini_scenarios,
+    generate_behavioral_analysis as _gemini_behavioral,
+    generate_playbook as _gemini_playbook,
+    generate_ml_proposals as _gemini_ml,
+    generate_geopolitical_analysis as _gemini_geo,
+    generate_threat_graph as _gemini_graph,
+)
+from ai.claude_fusion_engine import (
+    ClaudeNotConfiguredError,
+    generate_threat_data as _claude_threat_data,
+    generate_quantum_threat_analysis as _claude_quantum,
+    generate_predictive_analysis as _claude_predictive,
+    generate_fusion_report as _claude_fusion_report,
+    generate_mitre_details as _claude_mitre,
+    generate_welcome_data as _claude_welcome,
+    query_ioc_context as _claude_ioc_context,
+    generate_weekly_flash_report as _claude_weekly,
+    extract_entities_from_text as _claude_extract,
+    assess_colombian_risk as _claude_colombia,
+    generate_crisis_map as _claude_crisis,
+    generate_team_scenarios as _claude_scenarios,
+    generate_behavioral_analysis as _claude_behavioral,
+    generate_playbook as _claude_playbook,
+    generate_ml_proposals as _claude_ml,
+    generate_geopolitical_analysis as _claude_geo,
+    generate_threat_graph as _claude_graph,
+)
+
+
+def _fusion_engine() -> str:
+    """Returns 'gemini', 'claude', or 'none' depending on which key is set."""
+    if os.getenv("GEMINI_API_KEY"):
+        return "gemini"
+    if os.getenv("ANTHROPIC_API_KEY"):
+        return "claude"
+    return "none"
+
+
+def _fusion_fn(gemini_fn, claude_fn):
+    """Return the correct function based on configured engine."""
+    engine = _fusion_engine()
+    if engine == "gemini":
+        return gemini_fn
+    if engine == "claude":
+        return claude_fn
+    raise HTTPException(
+        status_code=503,
+        detail="Motor de Fusión no configurado. Agrega GEMINI_API_KEY o ANTHROPIC_API_KEY al .env y reinicia el backend.",
+    )
+
+
+# Unified aliases used by all endpoints below
+generate_threat_data           = lambda *a, **kw: _fusion_fn(_gemini_threat_data,    _claude_threat_data)(*a, **kw)
+generate_quantum_threat_analysis = lambda *a, **kw: _fusion_fn(_gemini_quantum,      _claude_quantum)(*a, **kw)
+generate_predictive_analysis   = lambda *a, **kw: _fusion_fn(_gemini_predictive,     _claude_predictive)(*a, **kw)
+generate_fusion_report         = lambda *a, **kw: _fusion_fn(_gemini_fusion_report,  _claude_fusion_report)(*a, **kw)
+generate_mitre_details         = lambda *a, **kw: _fusion_fn(_gemini_mitre,          _claude_mitre)(*a, **kw)
+generate_welcome_data          = lambda *a, **kw: _fusion_fn(_gemini_welcome,        _claude_welcome)(*a, **kw)
+query_ioc_context              = lambda *a, **kw: _fusion_fn(_gemini_ioc_context,    _claude_ioc_context)(*a, **kw)
+generate_weekly_flash_report   = lambda *a, **kw: _fusion_fn(_gemini_weekly,         _claude_weekly)(*a, **kw)
+extract_entities_from_text     = lambda *a, **kw: _fusion_fn(_gemini_extract,        _claude_extract)(*a, **kw)
+assess_colombian_risk          = lambda *a, **kw: _fusion_fn(_gemini_colombia,       _claude_colombia)(*a, **kw)
+generate_crisis_map            = lambda *a, **kw: _fusion_fn(_gemini_crisis,         _claude_crisis)(*a, **kw)
+generate_team_scenarios        = lambda *a, **kw: _fusion_fn(_gemini_scenarios,      _claude_scenarios)(*a, **kw)
+generate_behavioral_analysis   = lambda *a, **kw: _fusion_fn(_gemini_behavioral,     _claude_behavioral)(*a, **kw)
+generate_playbook              = lambda *a, **kw: _fusion_fn(_gemini_playbook,       _claude_playbook)(*a, **kw)
+generate_ml_proposals          = lambda *a, **kw: _fusion_fn(_gemini_ml,             _claude_ml)(*a, **kw)
+generate_geopolitical_analysis = lambda *a, **kw: _fusion_fn(_gemini_geo,            _claude_geo)(*a, **kw)
+generate_threat_graph          = lambda *a, **kw: _fusion_fn(_gemini_graph,           _claude_graph)(*a, **kw)
 
 BOGOTA_TZ = ZoneInfo("America/Bogota")
 
@@ -193,6 +285,117 @@ def missions():
 @app.get("/ioc-feed")
 def ioc_feed():
     return get_threat_feed()
+
+
+def _csv_response(filename: str, rows: list[dict]):
+    if rows:
+        columns = list(dict.fromkeys(key for row in rows for key in row.keys()))
+    else:
+        columns = ["ioc", "type", "threat_actor", "severity", "mitre", "country", "source"]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=columns, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(rows)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+def _stix_pattern(ioc_type: str, value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace("'", "\\'")
+    kind = (ioc_type or "").lower()
+    if "domain" in kind:
+        observable = "domain-name:value"
+    elif "url" in kind:
+        observable = "url:value"
+    elif "hash" in kind or "sha256" in kind:
+        observable = "file:hashes.'SHA-256'"
+    else:
+        observable = "ipv4-addr:value"
+    return f"[{observable} = '{escaped}']"
+
+
+def _stix_bundle(rows: list[dict]) -> dict:
+    now = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    objects = []
+    for idx, row in enumerate(rows):
+        value = str(row.get("ioc") or "").strip()
+        if not value:
+            continue
+        labels = [
+            str(row.get("severity") or "medium").lower(),
+            str(row.get("type") or "ioc").lower(),
+            str(row.get("source") or "cti-lab").lower(),
+        ]
+        indicator = {
+            "type": "indicator",
+            "spec_version": "2.1",
+            "id": f"indicator--{uuid.uuid4()}",
+            "created": now,
+            "modified": now,
+            "name": f"{row.get('type', 'IOC')} - {value}",
+            "description": f"IOC consumido por CTI-Lab desde {row.get('source', 'feed')}.",
+            "pattern": _stix_pattern(str(row.get("type") or ""), value),
+            "pattern_type": "stix",
+            "valid_from": now,
+            "labels": labels,
+        }
+        if row.get("mitre"):
+            indicator["external_references"] = [
+                {"source_name": "mitre-attack", "external_id": row["mitre"]},
+            ]
+        objects.append(indicator)
+    return {
+        "type": "bundle",
+        "id": f"bundle--{uuid.uuid4()}",
+        "objects": objects,
+    }
+
+
+@app.get("/ioc-feed/export")
+def ioc_feed_export(
+    format: str = "csv",
+    source: str | None = None,
+    severity: str | None = None,
+    type: str | None = None,
+    limit: int = 1000,
+):
+    """
+    Export the consumed CTI feed for analysis or handoff.
+    Supports csv, json, and stix. Optional filters: source, severity, type.
+    """
+    fmt = format.lower().strip()
+    if fmt not in {"csv", "json", "stix"}:
+        raise HTTPException(status_code=400, detail="format must be csv, json, or stix")
+
+    rows = get_threat_feed()
+    if source:
+        rows = [r for r in rows if str(r.get("source", "")).lower() == source.lower()]
+    if severity:
+        rows = [r for r in rows if str(r.get("severity", "")).lower() == severity.lower()]
+    if type:
+        rows = [r for r in rows if str(r.get("type", "")).lower() == type.lower()]
+
+    rows = rows[: max(1, min(limit, 5000))]
+    stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    filename = f"cti-feed-consumo-{stamp}.{fmt if fmt != 'stix' else 'json'}"
+
+    if fmt == "csv":
+        return _csv_response(filename, rows)
+
+    payload = _stix_bundle(rows) if fmt == "stix" else {
+        "exported_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        "count": len(rows),
+        "filters": {"source": source, "severity": severity, "type": type, "limit": limit},
+        "data": rows,
+    }
+    return StreamingResponse(
+        iter([json.dumps(payload, ensure_ascii=False, indent=2)]),
+        media_type="application/json; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @app.get("/threat-actors")
@@ -453,6 +656,89 @@ def admin_delete_dataset(dataset_id: int, authorization: str = Header(None)):
     return {"ok": True}
 
 
+@app.post("/datasets/generate-synthetic")
+def datasets_generate_synthetic(payload: dict = Body(...), authorization: str = Header(None)):
+    """
+    Genera un dataset sintético ML-ready basado en perfiles CISA.
+    Si el usuario es admin, persiste en DB. Si no, devuelve los datos sin guardar.
+    """
+    from intelligence.dataset_generator import generate_synthetic_dataset
+
+    n      = int(payload.get("n", 1000))
+    focus  = payload.get("focus", "mixed")
+    actors = payload.get("actors") or None
+    seed   = payload.get("seed")
+    save   = payload.get("save", False)
+
+    result = generate_synthetic_dataset(n=n, actor_filter=actors, focus=focus,
+                                        seed=int(seed) if seed is not None else None)
+
+    dataset_id = None
+    if save:
+        try:
+            user = _require_admin(authorization)
+            created_by = user["email"]
+        except Exception:
+            created_by = "anonymous"
+        with get_conn() as conn:
+            cur = conn.execute(
+                "INSERT INTO datasets (name, description, source, data_json, schema_json, created_by) VALUES (?,?,?,?,?,?)",
+                (result["name"], result["description"], result["source"],
+                 json.dumps(result["data"], ensure_ascii=False),
+                 json.dumps(result["schema"], ensure_ascii=False),
+                 created_by),
+            )
+            dataset_id = cur.lastrowid
+
+    return {
+        "dataset_id": dataset_id,
+        "name":        result["name"],
+        "rows":        len(result["data"]),
+        "stats":       result["stats"],
+        "schema":      result["schema"],
+        "preview":     result["data"][:20],
+        "saved":       dataset_id is not None,
+    }
+
+
+@app.post("/datasets/bulk-import-feeds")
+def datasets_bulk_import_feeds(payload: dict = Body(default={}), authorization: str = Header(None)):
+    """
+    Importa todos los IoCs del feed actual como un dataset ML-ready.
+    Añade columnas feat_* con encoding numérico listo para clustering.
+    """
+    from intelligence.dataset_generator import generate_feed_import_dataset
+
+    try:
+        user = _require_admin(authorization)
+        created_by = user["email"]
+    except Exception:
+        created_by = "anonymous"
+
+    iocs = get_threat_feed()
+    if not iocs:
+        raise HTTPException(status_code=404, detail="No hay IoCs en el feed actual.")
+
+    result = generate_feed_import_dataset(iocs)
+
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO datasets (name, description, source, data_json, schema_json, created_by) VALUES (?,?,?,?,?,?)",
+            (result["name"], result["description"], result["source"],
+             json.dumps(result["data"], ensure_ascii=False),
+             json.dumps(result["schema"], ensure_ascii=False),
+             created_by),
+        )
+        dataset_id = cur.lastrowid
+
+    return {
+        "dataset_id": dataset_id,
+        "name":        result["name"],
+        "rows":        len(result["data"]),
+        "saved":       True,
+    }
+
+
 # ── Admin: Challenges ─────────────────────────────────────────────────────────
 
 @app.get("/admin/challenges")
@@ -705,23 +991,77 @@ def admin_stats(authorization: str = Header(None)):
     _require_admin(authorization)
     with get_conn() as conn:
         users      = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'student'").fetchone()[0]
+        total_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        admins     = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'admin'").fetchone()[0]
         challenges = conn.execute("SELECT COUNT(*) FROM challenges WHERE status = 'active'").fetchone()[0]
         datasets   = conn.execute("SELECT COUNT(*) FROM datasets").fetchone()[0]
+        teams      = conn.execute("SELECT COUNT(*) FROM teams").fetchone()[0]
+        team_members = conn.execute("SELECT COUNT(*) FROM team_members").fetchone()[0]
+        total_submissions = conn.execute("SELECT COUNT(*) FROM submissions").fetchone()[0]
+        graded_submissions = conn.execute("SELECT COUNT(*) FROM submissions WHERE score IS NOT NULL").fetchone()[0]
+        ctf_solves = conn.execute("SELECT COUNT(*) FROM ctf_solves WHERE is_correct = 1").fetchone()[0]
+        ctf_points = conn.execute("SELECT COALESCE(SUM(points_earned), 0) FROM ctf_solves WHERE is_correct = 1").fetchone()[0]
+        active_students = conn.execute("""
+            SELECT COUNT(DISTINCT email) FROM (
+                SELECT user_email AS email FROM submissions
+                UNION
+                SELECT user_email AS email FROM ctf_solves WHERE is_correct = 1
+                UNION
+                SELECT user_email AS email FROM user_badges
+            )
+        """).fetchone()[0]
+        log_datasets = conn.execute("SELECT COUNT(*) FROM datasets WHERE source LIKE 'log_ingest:%'").fetchone()[0]
+        feed_iocs = conn.execute("SELECT COUNT(*) FROM iocs WHERE source != 'uploaded'").fetchone()[0]
         subs_today = conn.execute(
             "SELECT COUNT(*) FROM submissions WHERE date(submitted_at) = date('now')"
         ).fetchone()[0]
         pending    = conn.execute(
             "SELECT COUNT(*) FROM submissions WHERE score IS NULL"
         ).fetchone()[0]
+        top_students = conn.execute("""
+            SELECT u.name, u.email,
+                   COUNT(DISTINCT s.id) AS submissions,
+                   COUNT(DISTINCT cs.id) AS ctf_solves,
+                   COALESCE(SUM(DISTINCT cs.points_earned), 0) AS ctf_points,
+                   ROUND(AVG(s.score), 1) AS avg_score
+            FROM users u
+            LEFT JOIN submissions s ON s.user_email = u.email
+            LEFT JOIN ctf_solves cs ON cs.user_email = u.email AND cs.is_correct = 1
+            WHERE u.role = 'student'
+            GROUP BY u.email
+            ORDER BY ctf_points DESC, ctf_solves DESC, submissions DESC, u.name
+            LIMIT 5
+        """).fetchall()
+        team_progress = conn.execute("""
+            SELECT t.id, t.name, t.color,
+                   COUNT(DISTINCT tm.user_email) AS members,
+                   COUNT(DISTINCT tca.challenge_id) AS assigned_challenges,
+                   COUNT(DISTINCT tb.badge_id) AS badges
+            FROM teams t
+            LEFT JOIN team_members tm ON tm.team_id = t.id
+            LEFT JOIN team_challenge_assignments tca ON tca.team_id = t.id
+            LEFT JOIN team_badges tb ON tb.team_id = t.id
+            GROUP BY t.id
+            ORDER BY badges DESC, assigned_challenges DESC, t.name
+        """).fetchall()
         recent_subs = conn.execute("""
             SELECT s.user_name, s.user_email, c.title AS challenge, s.submitted_at, s.score
             FROM submissions s JOIN challenges c ON s.challenge_id = c.id
             ORDER BY s.submitted_at DESC LIMIT 5
         """).fetchall()
     return {
-        "students": users, "active_challenges": challenges,
-        "datasets": datasets, "submissions_today": subs_today,
-        "pending_scoring": pending,
+        "students": users, "total_users": total_users, "admins": admins,
+        "active_challenges": challenges, "datasets": datasets,
+        "teams": teams, "team_members": team_members,
+        "submissions_today": subs_today, "total_submissions": total_submissions,
+        "graded_submissions": graded_submissions, "pending_scoring": pending,
+        "ctf_solves": ctf_solves, "ctf_points": ctf_points,
+        "active_students": active_students, "log_datasets": log_datasets,
+        "feed_iocs": feed_iocs,
+        "live_events": len(live_service.get_history(300)),
+        "live_clients": live_service.client_count(),
+        "top_students": [dict(r) for r in top_students],
+        "team_progress": [dict(r) for r in team_progress],
         "recent_submissions": [dict(r) for r in recent_subs],
     }
 
@@ -828,6 +1168,150 @@ def _has_challenge_access(conn, challenge_id: int, user_email: str):
         WHERE tca.challenge_id = ? AND tm.user_email = ?
         LIMIT 1
     """, (challenge_id, user_email)).fetchone()
+
+
+DOCS_DIR = Path(os.getenv("DOCS_DIR", "/data/documents"))
+ALLOWED_TYPES = {
+    "application/pdf":                                                    "pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/msword":                                                 "doc",
+}
+MAX_PAGES   = 4
+MAX_SIZE_MB = 10
+
+
+def _count_pdf_pages(data: bytes) -> int:
+    return len(re.findall(rb"/Type\s*/Page[^s]", data))
+
+
+def _count_docx_pages(data: bytes) -> int | None:
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            if "docProps/app.xml" in z.namelist():
+                import xml.etree.ElementTree as ET
+                tree = ET.fromstring(z.read("docProps/app.xml"))
+                ns   = "{http://schemas.openxmlformats.org/officeDocument/2006/extended-properties}"
+                el   = tree.find(f"{ns}Pages")
+                if el is not None and el.text:
+                    return int(el.text)
+    except Exception:
+        pass
+    return None
+
+
+@app.post("/student/challenges/{challenge_id}/upload-document")
+async def student_upload_document(
+    challenge_id: int,
+    file: UploadFile = File(...),
+    authorization: str = Header(None),
+):
+    user = _require_user(authorization)
+    email = user["email"]
+
+    # ── Validate type ──────────────────────────────────────────────────────
+    ct = (file.content_type or "").split(";")[0].strip()
+    if ct not in ALLOWED_TYPES:
+        raise HTTPException(status_code=415, detail="Solo se aceptan archivos PDF, DOCX o DOC.")
+
+    data = await file.read()
+
+    # ── Validate size ──────────────────────────────────────────────────────
+    if len(data) > MAX_SIZE_MB * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"El archivo supera el límite de {MAX_SIZE_MB} MB.")
+
+    # ── Count pages ────────────────────────────────────────────────────────
+    ext = ALLOWED_TYPES[ct]
+    if ext == "pdf":
+        pages = _count_pdf_pages(data)
+    elif ext == "docx":
+        pages = _count_docx_pages(data)
+    else:
+        pages = None  # .doc binario — no podemos contar páginas sin LibreOffice
+
+    if pages is not None and pages > MAX_PAGES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"El documento tiene {pages} páginas. El máximo permitido es {MAX_PAGES}.",
+        )
+
+    # ── Access check ───────────────────────────────────────────────────────
+    with get_conn() as conn:
+        if not _has_challenge_access(conn, challenge_id, email):
+            raise HTTPException(status_code=403, detail="Sin acceso a este reto.")
+
+    # ── Save file ──────────────────────────────────────────────────────────
+    safe_email = re.sub(r"[^\w@.]", "_", email)
+    dest_dir   = DOCS_DIR / str(challenge_id) / safe_email
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = re.sub(r"[^\w.\-]", "_", file.filename or f"document.{ext}")
+    dest_path = dest_dir / safe_name
+    dest_path.write_bytes(data)
+
+    # ── Update/create submission record ───────────────────────────────────
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT id FROM submissions WHERE challenge_id=? AND user_email=?",
+            (challenge_id, email),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE submissions SET document_path=?, document_filename=?, document_pages=? WHERE id=?",
+                (str(dest_path), safe_name, pages, existing["id"]),
+            )
+            sub_id = existing["id"]
+        else:
+            cur = conn.execute(
+                """INSERT INTO submissions (challenge_id, user_email, user_name, code, output,
+                   plots_json, notes, document_path, document_filename, document_pages)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (challenge_id, email, user.get("name",""), "", "", "[]", "",
+                 str(dest_path), safe_name, pages),
+            )
+            sub_id = cur.lastrowid
+
+    return {
+        "ok": True,
+        "submission_id": sub_id,
+        "filename": safe_name,
+        "pages": pages,
+        "size_kb": round(len(data) / 1024, 1),
+    }
+
+
+@app.get("/admin/submissions/{submission_id}/document")
+def admin_download_document(submission_id: int, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT document_path, document_filename FROM submissions WHERE id=?",
+            (submission_id,),
+        ).fetchone()
+    if not row or not row["document_path"]:
+        raise HTTPException(status_code=404, detail="No hay documento adjunto en esta entrega.")
+    path = Path(row["document_path"])
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado en el servidor.")
+    media = "application/pdf" if row["document_filename"].endswith(".pdf") else \
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    return FileResponse(str(path), filename=row["document_filename"], media_type=media)
+
+
+@app.get("/student/challenges/{challenge_id}/document-status")
+def student_document_status(challenge_id: int, authorization: str = Header(None)):
+    user = _require_user(authorization)
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT document_filename, document_pages FROM submissions WHERE challenge_id=? AND user_email=?",
+            (challenge_id, user["email"]),
+        ).fetchone()
+    if not row or not row["document_filename"]:
+        return {"uploaded": False}
+    return {
+        "uploaded":  True,
+        "filename":  row["document_filename"],
+        "pages":     row["document_pages"],
+    }
 
 
 def _auto_award_due_team_badges(conn) -> None:
@@ -1655,3 +2139,509 @@ def rules_ioa_catalog():
         }
         for ttp, meta in TTP_IOA_MAP.items()
     ]
+
+
+# ── Log Ingestion ─────────────────────────────────────────────────────────────
+
+@app.post("/logs/ingest")
+async def logs_ingest(
+    file: UploadFile | None = File(None),
+    raw_text: str | None = Form(None),
+    format_hint: str | None = Form(None),
+    save_dataset: str = Form("false"),
+    dataset_name: str = Form(""),
+    authorization: str | None = Header(None),
+):
+    """
+    Parse and optionally persist log data.
+
+    Accepts either:
+    - multipart file upload (any text format)
+    - raw_text form field (paste logs directly)
+
+    Returns parsed rows, detected format, and extracted IOCs.
+    If save_dataset=true and the caller is authenticated, the parsed
+    rows are stored as a dataset accessible to students.
+    """
+    if file:
+        raw = (await file.read()).decode("utf-8", errors="replace")
+        name = file.filename or "upload"
+    elif raw_text:
+        raw = raw_text
+        name = "paste"
+    else:
+        raise HTTPException(status_code=400, detail="Provide 'file' or 'raw_text'.")
+
+    if len(raw) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Input too large. Maximum 8 MB.")
+
+    result = parse_logs(raw, hint=format_hint or None)
+
+    # Persist extracted IOCs into the iocs table
+    ioc_records = [
+        {"ioc": i["ioc"], "type": i["type"], "threat_actor": "log_ingest",
+         "severity": "medium", "mitre": "", "country": "", "source": f"log:{name}"}
+        for i in result["iocs"]
+    ]
+    added_iocs = add_uploaded_iocs(ioc_records) if ioc_records else []
+
+    # Optionally save as a student-accessible dataset
+    dataset_id = None
+    if save_dataset.lower() == "true" and result["rows"]:
+        user = _require_user(authorization or "")
+        ds_name = (dataset_name.strip() or f"Log Ingest — {name}").strip()[:120]
+        with get_conn() as conn:
+            cur = conn.execute(
+                "INSERT INTO datasets (name, description, source, data_json, schema_json, created_by) VALUES (?,?,?,?,?,?)",
+                (
+                    ds_name,
+                    f"Logs ingestados desde {name} · formato {result['format']} · {result['line_count']} entradas",
+                    f"log_ingest:{name}",
+                    json.dumps(result["rows"], ensure_ascii=False),
+                    json.dumps(result["schema"], ensure_ascii=False),
+                    user["email"],
+                ),
+            )
+            dataset_id = cur.lastrowid
+
+    # Broadcast to SSE clients
+    live_service.publish("log_ingested", {
+        "source": name,
+        "format": result["format"],
+        "line_count": result["line_count"],
+        "ioc_count": len(result["iocs"]),
+        "dataset_id": dataset_id,
+    })
+
+    return {
+        "format":     result["format"],
+        "line_count": result["line_count"],
+        "rows":       result["rows"][:500],   # first 500 rows for the response
+        "schema":     result["schema"],
+        "iocs":       result["iocs"],
+        "iocs_added": len(added_iocs),
+        "dataset_id": dataset_id,
+    }
+
+
+@app.post("/logs/extract-iocs")
+async def logs_extract_iocs(payload: dict = Body(...)):
+    """
+    Extract IOCs from arbitrary text without storing anything.
+    Body: {"text": "..."}
+    """
+    text = payload.get("text", "")
+    if not text:
+        return {"iocs": []}
+    if len(text) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Text too large. Maximum 2 MB.")
+    return {"iocs": extract_iocs(text), "format": detect_format(text)}
+
+
+# ── SSE Live Feed ─────────────────────────────────────────────────────────────
+
+@app.get("/live/feed")
+async def live_feed(request: Request):
+    """
+    Server-Sent Events stream.  Each event is a JSON object with at minimum:
+      {"type": "...", "ts": "ISO-8601", ...payload...}
+
+    Event types:
+      - ioc_added       — new IOC persisted (from feed sync or log ingest)
+      - log_ingested    — log batch processed
+      - feed_synced     — a feed source was refreshed
+      - heartbeat       — keepalive (comment line, no data)
+
+    The first batch of events replays the last 100 from history so
+    freshly-connected clients are not starting cold.
+    """
+    queue = live_service.subscribe()
+
+    async def generator():
+        for ev in live_service.get_history(100):
+            yield f"data: {json.dumps(ev)}\n\n"
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    ev = await asyncio.wait_for(queue.get(), timeout=20)
+                    yield f"data: {json.dumps(ev)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"
+        finally:
+            live_service.unsubscribe(queue)
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/live/status")
+def live_status():
+    """Returns current SSE subscriber count and recent event count."""
+    return {
+        "clients":       live_service.client_count(),
+        "history_count": len(live_service.get_history(300)),
+    }
+
+
+@app.get("/live/export")
+def live_export(format: str = "csv", limit: int = 300):
+    """
+    Export recent SSE history for evidence, audit, or offline analysis.
+    Supports csv and json.
+    """
+    fmt = format.lower().strip()
+    if fmt not in {"csv", "json"}:
+        raise HTTPException(status_code=400, detail="format must be csv or json")
+
+    events = live_service.get_history(max(1, min(limit, 300)))
+    stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    if fmt == "csv":
+        return _csv_response(f"cti-live-feed-{stamp}.csv", events)
+
+    payload = {
+        "exported_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        "count": len(events),
+        "limit": limit,
+        "events": events,
+    }
+    return StreamingResponse(
+        iter([json.dumps(payload, ensure_ascii=False, indent=2)]),
+        media_type="application/json; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename=cti-live-feed-{stamp}.json"},
+    )
+
+
+# ── Feed Sync ─────────────────────────────────────────────────────────────────
+
+@app.post("/admin/feeds/sync")
+def admin_feeds_sync(payload: dict = Body(...), authorization: str = Header(None)):
+    """
+    Trigger a manual sync of one or more public feeds.
+    Body: {"feeds": ["ThreatFox", "URLhaus", ...]}  or {"feeds": "all"}
+    Returns per-feed results.
+    """
+    _require_admin(authorization)
+    requested = payload.get("feeds", "all")
+    names = PUBLIC_FEEDS if requested == "all" else (
+        [n for n in requested if n in FETCH_REGISTRY] if isinstance(requested, list) else []
+    )
+    if not names:
+        raise HTTPException(status_code=400, detail="No valid feed names provided.")
+
+    results = {}
+    total_added = 0
+    for name in names:
+        fetcher = FETCH_REGISTRY[name]
+        try:
+            raw_iocs = fetcher(limit=100)
+            # Filter out error entries
+            good = [i for i in raw_iocs if "error" not in i and i.get("ioc")]
+            added = add_uploaded_iocs(good)
+            total_added += len(added)
+            results[name] = {"fetched": len(good), "added": len(added), "ok": True}
+
+            # Update feed_sources stats
+            with get_conn() as conn:
+                conn.execute(
+                    """UPDATE feed_sources SET last_fetched = datetime('now'), last_count = ?
+                       WHERE name = ?""",
+                    (len(good), name),
+                )
+
+            # Broadcast each added IOC to SSE (batch as one event)
+            if added:
+                live_service.publish("feed_synced", {
+                    "feed": name,
+                    "fetched": len(good),
+                    "added": len(added),
+                    "sample": added[:3],
+                })
+        except Exception as exc:
+            results[name] = {"ok": False, "error": str(exc)}
+
+    return {"results": results, "total_added": total_added}
+
+
+# ── Student: Logs / Datasets ──────────────────────────────────────────────────
+
+@app.get("/student/logs")
+def student_logs(
+    format: str | None = None,
+    authorization: str = Header(None),
+):
+    """
+    List datasets available to a student, optionally filtered by log source.
+    format query param filters by source prefix: "log_ingest", "CTI-Lab", etc.
+    """
+    _require_user(authorization)
+    with get_conn() as conn:
+        if format:
+            rows = conn.execute(
+                """SELECT id, name, description, source, schema_json, created_at
+                   FROM datasets WHERE source LIKE ? ORDER BY created_at DESC""",
+                (f"%{format}%",),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT id, name, description, source, schema_json, created_at
+                   FROM datasets ORDER BY created_at DESC"""
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/student/logs/{dataset_id}/raw")
+def student_log_raw(dataset_id: int, authorization: str = Header(None)):
+    """
+    Return the raw data_json of a dataset so students can download
+    unparsed / structured logs for their own analysis.
+    """
+    _require_user(authorization)
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT name, description, source, data_json, schema_json, created_at FROM datasets WHERE id = ?",
+            (dataset_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Dataset not found.")
+    return {
+        "id":          dataset_id,
+        "name":        row["name"],
+        "description": row["description"],
+        "source":      row["source"],
+        "schema":      json.loads(row["schema_json"] or "{}"),
+        "data":        json.loads(row["data_json"] or "[]"),
+        "created_at":  row["created_at"],
+    }
+
+
+@app.get("/student/logs/{dataset_id}/iocs")
+def student_log_iocs(dataset_id: int, authorization: str = Header(None)):
+    """
+    Re-run IOC extraction on a stored dataset and return the results.
+    This lets students discover IOCs from any lab dataset on demand.
+    """
+    _require_user(authorization)
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT name, data_json FROM datasets WHERE id = ?", (dataset_id,)
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Dataset not found.")
+    try:
+        rows = json.loads(row["data_json"] or "[]")
+        blob = " ".join(json.dumps(r) for r in rows)
+        iocs = extract_iocs(blob)
+    except Exception:
+        iocs = []
+    return {"dataset": row["name"], "iocs": iocs, "count": len(iocs)}
+
+
+# ── RedCiber Fusion Engine — Gemini endpoints ─────────────────────────────────
+#
+# All calls are proxied through the backend so GEMINI_API_KEY never reaches
+# the browser.  Every endpoint returns HTTP 503 if the key is not configured,
+# which the frontend can handle gracefully.
+#
+
+def _gemini_wrap(fn, *args, **kwargs):
+    """Call a fusion engine function and surface errors cleanly."""
+    try:
+        return fn(*args, **kwargs)
+    except (GeminiNotConfiguredError, ClaudeNotConfiguredError) as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        msg = str(e)
+        # Detect Anthropic credit exhaustion and surface a clear message
+        if "credit balance is too low" in msg or "Your credit balance" in msg:
+            raise HTTPException(
+                status_code=402,
+                detail="Créditos de Anthropic agotados. Ve a console.anthropic.com → Plans & Billing y agrega créditos.",
+            )
+        engine = _fusion_engine()
+        raise HTTPException(status_code=502, detail=f"Error del motor CTI ({engine}): {msg}")
+
+
+@app.get("/ai/gemini/status")
+def gemini_status():
+    """Check which fusion engine is active (Gemini, Claude, or none)."""
+    engine = _fusion_engine()
+    if engine == "gemini":
+        return {"configured": True, "engine": "gemini", "model_fast": os.getenv("GEMINI_MODEL_FAST", "gemini-2.0-flash")}
+    if engine == "claude":
+        from ai.claude_fusion_engine import _MODEL as claude_model
+        return {"configured": True, "engine": "claude", "model_fast": claude_model}
+    return {"configured": False, "engine": "none", "model_fast": "—"}
+
+
+@app.post("/ai/gemini/threat-data")
+def gemini_threat_data(payload: dict = Body(...)):
+    """
+    Generate 60 (operativo) or 500 (annual) structured threat events via Gemini.
+    Body: { "topic": str, "is_annual": bool }
+    """
+    return _gemini_wrap(
+        generate_threat_data,
+        payload.get("topic", ""),
+        bool(payload.get("is_annual", False)),
+    )
+
+
+@app.post("/ai/gemini/quantum")
+def gemini_quantum(payload: dict = Body(...)):
+    """Quantum / PQC risk analysis for a threat actor."""
+    return _gemini_wrap(
+        generate_quantum_threat_analysis,
+        payload.get("actor", ""),
+        payload.get("events", []),
+    )
+
+
+@app.post("/ai/gemini/predictive")
+def gemini_predictive(payload: dict = Body(...)):
+    """Predictive analysis: next tactic, attribution, multi-actor correlation."""
+    return _gemini_wrap(
+        generate_predictive_analysis,
+        payload.get("threats", []),
+        payload.get("query", ""),
+    )
+
+
+@app.post("/ai/gemini/fusion-report")
+def gemini_fusion_report(payload: dict = Body(...)):
+    """Executive intelligence fusion report with Google Search grounding."""
+    return _gemini_wrap(
+        generate_fusion_report,
+        payload.get("query", ""),
+        payload.get("threats", []),
+    )
+
+
+@app.post("/ai/gemini/mitre-details")
+def gemini_mitre_details(payload: dict = Body(...)):
+    """MITRE ATT&CK technique deep-dive for a specific actor."""
+    return _gemini_wrap(
+        generate_mitre_details,
+        payload.get("actor", ""),
+        payload.get("technique_ids", []),
+    )
+
+
+@app.get("/ai/gemini/welcome")
+def gemini_welcome():
+    """Welcome panel: 5 recent APTs + 5 CVEs + 5 LATAM incidents."""
+    return _gemini_wrap(generate_welcome_data)
+
+
+@app.post("/ai/gemini/ioc-context")
+def gemini_ioc_context(payload: dict = Body(...)):
+    """IOC context with Google Search grounding (actor, malware, campaigns)."""
+    ioc = payload.get("ioc", "").strip()
+    if not ioc:
+        raise HTTPException(status_code=400, detail="'ioc' field required.")
+    return _gemini_wrap(query_ioc_context, ioc)
+
+
+@app.post("/ai/gemini/weekly-report")
+def gemini_weekly_report(payload: dict = Body(...)):
+    """Weekly flash report: TTPs, IOCs, hunting queries (Sigma/KQL/Splunk/YARA/PS)."""
+    return _gemini_wrap(
+        generate_weekly_flash_report,
+        payload.get("query", ""),
+        payload.get("events", []),
+    )
+
+
+@app.post("/ai/gemini/extract-entities")
+def gemini_extract_entities(payload: dict = Body(...)):
+    """Extract IOCs, actors, malware, CVEs from unstructured text."""
+    text = payload.get("text", "")
+    if not text:
+        raise HTTPException(status_code=400, detail="'text' field required.")
+    return _gemini_wrap(extract_entities_from_text, text)
+
+
+@app.post("/ai/gemini/colombia-risk")
+def gemini_colombia_risk(payload: dict = Body(...)):
+    """Colombian critical infrastructure risk assessment (Decreto 338/2022)."""
+    return _gemini_wrap(
+        assess_colombian_risk,
+        payload.get("actor", ""),
+        payload.get("events", []),
+    )
+
+
+@app.post("/ai/gemini/crisis-map")
+def gemini_crisis_map(payload: dict = Body(...)):
+    """Cyber crisis map: attack phases + strategic responses."""
+    return _gemini_wrap(
+        generate_crisis_map,
+        payload.get("actor", ""),
+        payload.get("ttps", []),
+    )
+
+
+@app.post("/ai/gemini/team-scenarios")
+def gemini_team_scenarios(payload: dict = Body(...)):
+    """Red / Blue / Purple / White Team simulation scenarios."""
+    return _gemini_wrap(
+        generate_team_scenarios,
+        payload.get("actor", ""),
+        payload.get("ttps", []),
+    )
+
+
+@app.post("/ai/gemini/behavioral")
+def gemini_behavioral(payload: dict = Body(...)):
+    """Behavioral analysis: threat behavior + historical event explanations."""
+    return _gemini_wrap(
+        generate_behavioral_analysis,
+        payload.get("topic", ""),
+        payload.get("threats", []),
+    )
+
+
+@app.post("/ai/gemini/playbook")
+def gemini_playbook(payload: dict = Body(...)):
+    """Incident response playbook for a given threat."""
+    return _gemini_wrap(
+        generate_playbook,
+        payload.get("threat_name", ""),
+        payload.get("threat_type", "Malware"),
+    )
+
+
+@app.post("/ai/gemini/ml-proposals")
+def gemini_ml_proposals(payload: dict = Body(...)):
+    """ML model proposals (Random Forest / LSTM / SVM / Clustering) per event."""
+    return _gemini_wrap(generate_ml_proposals, payload.get("events", []))
+
+
+@app.post("/ai/gemini/geopolitical")
+def gemini_geopolitical(payload: dict = Body(...)):
+    """Geopolitical deep-dive with anticipatory threats and stability score."""
+    return _gemini_wrap(
+        generate_geopolitical_analysis,
+        payload.get("query", ""),
+    )
+
+
+@app.post("/ai/gemini/threat-graph")
+def gemini_threat_graph(payload: dict = Body(...)):
+    """Actor → IOC → Campaign correlation graph enriched with CISA APT database."""
+    return _gemini_wrap(
+        generate_threat_graph,
+        payload.get("events", []),
+        payload.get("query", ""),
+    )
+
+
+@app.get("/apt-database")
+def apt_database_endpoint():
+    """Returns the full CISA-sourced APT database for frontend enrichment."""
+    from intelligence.apt_database import get_full_database
+    return get_full_database()

@@ -44,6 +44,66 @@ function parseOutput(raw: string): OutputPart[] {
   })).filter(p => p.content)
 }
 
+function safeFilename(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w.-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 70) || 'dataset'
+}
+
+function rowsToCsv(rows: Record<string, unknown>[]) {
+  if (!rows.length) return ''
+  const columns = Array.from(new Set(rows.flatMap(row => Object.keys(row))))
+  const escapeCell = (value: unknown) => {
+    const text = value == null
+      ? ''
+      : typeof value === 'object'
+        ? JSON.stringify(value)
+        : String(value)
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+  }
+  return [
+    columns.map(escapeCell).join(','),
+    ...rows.map(row => columns.map(col => escapeCell(row[col])).join(',')),
+  ].join('\n')
+}
+
+function downloadText(filename: string, content: string, type: string) {
+  const url = URL.createObjectURL(new Blob([content], { type }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function datasetRows(payload: DatasetPayload): Record<string, unknown>[] {
+  try {
+    const parsed = JSON.parse(payload.data_json || '[]')
+    if (Array.isArray(parsed)) return parsed.filter(row => row && typeof row === 'object')
+  } catch {
+    return []
+  }
+  return []
+}
+
+async function exportChallengeDataset(challengeId: number, token: string | null | undefined, fallbackName: string) {
+  const res = await fetch(`${API}/student/challenges/${challengeId}/dataset`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error('Dataset no disponible para descarga')
+  const payload: DatasetPayload = await res.json()
+  const rows = datasetRows(payload)
+  if (!rows.length) throw new Error('El dataset no tiene filas exportables')
+  downloadText(
+    `${safeFilename(payload.name || fallbackName)}.csv`,
+    `\uFEFF${rowsToCsv(rows)}`,
+    'text/csv;charset=utf-8',
+  )
+}
+
 // ── Dataset Diagram ───────────────────────────────────────────────────────────
 
 function DatasetDiagram({ schema, name }: { schema: Record<string, string>; name: string }) {
@@ -145,6 +205,11 @@ function Arena({ challenge }: { challenge: Challenge }) {
   const [notes,      setNotes]      = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted,  setSubmitted]  = useState(challenge.submitted > 0)
+  const [docFile,    setDocFile]    = useState<File | null>(null)
+  const [docStatus,  setDocStatus]  = useState<{ uploaded: boolean; filename?: string; pages?: number } | null>(null)
+  const [docUploading, setDocUploading] = useState(false)
+  const [docError,   setDocError]   = useState('')
+  const [submitError, setSubmitError] = useState('')
   const [schema,     setSchema]     = useState<Record<string, string>>({})
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -167,16 +232,19 @@ print(challenge_df.describe(include='all'))
 
   useEffect(() => {
     setCode(STARTER)
-    // Load dataset into pyodide if available
     if (!challenge.id) return
     fetch(`${API}/student/challenges/${challenge.id}/dataset`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => {
-        try { setSchema(JSON.parse(d.schema_json)) } catch { /* ok */ }
-        return d
-      })
+      .then(d => { try { setSchema(JSON.parse(d.schema_json)) } catch { /* ok */ } })
+      .catch(() => {})
+    // Load existing document status
+    fetch(`${API}/student/challenges/${challenge.id}/document-status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setDocStatus(d) })
       .catch(() => {})
   }, [challenge.id, token])  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -246,8 +314,38 @@ print(challenge_df.describe(include='all'))
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runCode()
   }
 
+  const uploadDoc = async (file: File) => {
+    setDocError('')
+    const allowed = ['application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword']
+    if (!allowed.includes(file.type) && !file.name.match(/\.(pdf|docx|doc)$/i)) {
+      setDocError('Solo se aceptan PDF, DOCX o DOC.')
+      return
+    }
+    setDocUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`${API}/student/challenges/${challenge.id}/upload-document`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail ?? 'Error al subir el documento.')
+      setDocStatus({ uploaded: true, filename: data.filename, pages: data.pages })
+      setDocFile(null)
+    } catch (e) {
+      setDocError(String(e instanceof Error ? e.message : e))
+    } finally {
+      setDocUploading(false)
+    }
+  }
+
   const submit = async () => {
-    if (!output) return alert('Ejecuta tu código primero para generar output.')
+    if (!output) { setSubmitError('Ejecuta tu código primero para generar output.'); return }
+    setSubmitError('')
     setSubmitting(true)
     const parts = parseOutput(output)
     const plots = parts.filter(p => p.type === 'plot').map(p => p.content)
@@ -258,7 +356,7 @@ print(challenge_df.describe(include='all'))
         body: JSON.stringify({ code, output, plots, notes }),
       })
       setSubmitted(true)
-    } catch { alert('Error al entregar. Intenta de nuevo.') }
+    } catch { setSubmitError('Error al entregar. Intenta de nuevo.') }
     finally { setSubmitting(false) }
   }
 
@@ -308,7 +406,18 @@ print(challenge_df.describe(include='all'))
 
       {/* Dataset diagram */}
       {Object.keys(schema).length > 0 && (
-        <DatasetDiagram schema={schema} name={challenge.dataset_name ?? 'Dataset'} />
+        <div className="space-y-2">
+          <div className="flex justify-end">
+            <button
+              onClick={() => exportChallengeDataset(challenge.id, token, challenge.dataset_name ?? challenge.title)
+                .catch(err => alert(String(err)))}
+              className="px-3 py-1.5 rounded-lg text-[10px] font-bold"
+              style={{ background: 'rgba(249,115,22,0.1)', color: '#f97316', border: '1px solid rgba(249,115,22,0.25)' }}>
+              Descargar dataset CSV
+            </button>
+          </div>
+          <DatasetDiagram schema={schema} name={challenge.dataset_name ?? 'Dataset'} />
+        </div>
       )}
 
       {/* Python editor */}
@@ -371,6 +480,45 @@ print(challenge_df.describe(include='all'))
         <p className="text-[10px] font-bold text-green-700 uppercase tracking-wider">
           {submitted ? '✓ Entrega registrada' : 'Entregar análisis'}
         </p>
+        {/* Document upload — siempre visible */}
+        <div className="rounded-lg p-3 space-y-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+            📄 Documento adjunto <span className="text-slate-700 font-normal normal-case">(PDF o Word · máx. 4 páginas)</span>
+          </p>
+          {docStatus?.uploaded ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
+                ✓ {docStatus.filename}
+                {docStatus.pages != null && ` · ${docStatus.pages} pág.`}
+              </span>
+              <label className="text-[10px] text-slate-600 hover:text-slate-300 cursor-pointer">
+                Reemplazar
+                <input type="file" accept=".pdf,.docx,.doc" className="hidden"
+                       onChange={e => { const f = e.target.files?.[0]; if (f) uploadDoc(f) }} />
+              </label>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-wrap">
+              <label className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs cursor-pointer transition-all"
+                     style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: '#22d3ee' }}>
+                {docUploading ? 'Subiendo...' : (docFile ? `${docFile.name}` : 'Seleccionar archivo...')}
+                <input type="file" accept=".pdf,.docx,.doc" className="hidden" disabled={docUploading}
+                       onChange={e => { const f = e.target.files?.[0]; if (f) { setDocFile(f); setDocError('') } }} />
+              </label>
+              {docFile && !docUploading && (
+                <button onClick={() => uploadDoc(docFile)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold"
+                        style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.35)', color: '#22d3ee' }}>
+                  Subir →
+                </button>
+              )}
+              {docUploading && <span className="text-[10px] text-slate-500 animate-pulse">Validando páginas...</span>}
+            </div>
+          )}
+          {docError && <p className="text-[10px] text-red-400">{docError}</p>}
+        </div>
+
         {!submitted && (
           <>
             <textarea value={notes} onChange={e => setNotes(e.target.value)}
@@ -382,13 +530,17 @@ print(challenge_df.describe(include='all'))
               <p className="text-[10px] text-slate-600 flex-1">
                 Se entregará: tu código, el output y {parseOutput(output).filter(p => p.type === 'plot').length} gráficas.
                 {!output && ' ⚠ Ejecuta el código primero.'}
+                {docStatus?.uploaded && ' · 📄 Documento adjunto.'}
               </p>
-              <button onClick={submit} disabled={submitting || !output}
+              <button onClick={submit} disabled={submitting}
                       className="px-5 py-2 rounded-lg text-xs font-bold disabled:opacity-40 shrink-0"
                       style={{ background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.4)', color: '#4ade80' }}>
                 {submitting ? 'Enviando...' : `Entregar → (${user?.name})`}
               </button>
             </div>
+            {submitError && (
+              <p className="text-[11px] text-red-400">{submitError}</p>
+            )}
           </>
         )}
         {submitted && challenge.my_score != null && (
@@ -503,6 +655,11 @@ function TeamChallengeCard({ teamInfo }: { teamInfo: TeamInfo }) {
   const [images, setImages] = useState<Record<number, string[]>>({})
   const [submitting, setSubmitting] = useState<Record<number, boolean>>({})
   const [now, setNow] = useState(() => new Date())
+  const [teamDocFiles,     setTeamDocFiles]     = useState<Record<number, File | null>>({})
+  const [teamDocStatuses,  setTeamDocStatuses]  = useState<Record<number, { uploaded: boolean; filename?: string; pages?: number }>>({})
+  const [teamDocUploading, setTeamDocUploading] = useState<Record<number, boolean>>({})
+  const [teamDocErrors,    setTeamDocErrors]    = useState<Record<number, string>>({})
+  const [teamSubmitErrors, setTeamSubmitErrors] = useState<Record<number, string>>({})
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000)
@@ -544,7 +701,7 @@ function TeamChallengeCard({ teamInfo }: { teamInfo: TeamInfo }) {
 
   const exportReport = (challenge: TeamChallenge, steps: RoleStep[]) => {
     const ds = datasets[challenge.id]
-    const rows = ds ? JSON.parse(ds.data_json || '[]').slice(0, 10) : []
+    const rows = ds ? (() => { try { return JSON.parse(ds.data_json || '[]').slice(0, 10) } catch { return [] } })() : []
     const reportText = reports[challenge.id] || 'Informe pendiente de completar.'
     const html = `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><title>${escapeHtml(challenge.title)}</title>
@@ -563,9 +720,32 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
     URL.revokeObjectURL(url)
   }
 
+  const uploadTeamDoc = async (challengeId: number, file: File) => {
+    setTeamDocErrors(p => ({ ...p, [challengeId]: '' }))
+    setTeamDocUploading(p => ({ ...p, [challengeId]: true }))
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`${API}/student/challenges/${challengeId}/upload-document`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail ?? 'Error al subir el documento.')
+      setTeamDocStatuses(p => ({ ...p, [challengeId]: { uploaded: true, filename: data.filename, pages: data.pages } }))
+      setTeamDocFiles(p => ({ ...p, [challengeId]: null }))
+    } catch (e) {
+      setTeamDocErrors(p => ({ ...p, [challengeId]: String(e instanceof Error ? e.message : e) }))
+    } finally {
+      setTeamDocUploading(p => ({ ...p, [challengeId]: false }))
+    }
+  }
+
   const submitTeamWork = async (challenge: TeamChallenge) => {
     const notes = reports[challenge.id]?.trim() ?? ''
-    if (!notes) return alert('Escribe el texto de entrega antes de enviar.')
+    if (!notes) { setTeamSubmitErrors(p => ({ ...p, [challenge.id]: 'Escribe el texto de entrega antes de enviar.' })); return }
+    setTeamSubmitErrors(p => ({ ...p, [challenge.id]: '' }))
     setSubmitting(p => ({ ...p, [challenge.id]: true }))
     try {
       const res = await fetch(`${API}/student/challenges/${challenge.id}/submit`, {
@@ -579,9 +759,9 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
         }),
       })
       if (!res.ok) throw new Error('No se pudo registrar la entrega')
-      alert('Entrega registrada.')
+      setTeamSubmitErrors(p => ({ ...p, [challenge.id]: '✓ Entrega registrada correctamente.' }))
     } catch (err) {
-      alert(String(err))
+      setTeamSubmitErrors(p => ({ ...p, [challenge.id]: String(err) }))
     } finally {
       setSubmitting(p => ({ ...p, [challenge.id]: false }))
     }
@@ -861,11 +1041,19 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
                           <p className="text-[9px] font-bold text-orange-500 uppercase tracking-wider">Explorar dataset</p>
                           <p className="text-[10px] text-slate-600">{c.dataset_name}</p>
                         </div>
-                        <button onClick={() => loadDataset(c.id)}
-                                className="px-2.5 py-1 rounded text-[10px] font-bold"
-                                style={{ background: 'rgba(249,115,22,0.1)', color: '#f97316', border: '1px solid rgba(249,115,22,0.25)' }}>
-                          {datasetOpen[c.id] ? 'Ocultar' : 'Abrir'}
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button onClick={() => exportChallengeDataset(c.id, token, c.dataset_name ?? c.title)
+                                  .catch(err => alert(String(err)))}
+                                  className="px-2.5 py-1 rounded text-[10px] font-bold"
+                                  style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.22)' }}>
+                            Descargar CSV
+                          </button>
+                          <button onClick={() => loadDataset(c.id)}
+                                  className="px-2.5 py-1 rounded text-[10px] font-bold"
+                                  style={{ background: 'rgba(249,115,22,0.1)', color: '#f97316', border: '1px solid rgba(249,115,22,0.25)' }}>
+                            {datasetOpen[c.id] ? 'Ocultar' : 'Abrir'}
+                          </button>
+                        </div>
                       </div>
                       {datasetOpen[c.id] && (
                         <div className="p-3 space-y-3">
@@ -948,6 +1136,51 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
                         {submitting[c.id] ? 'Enviando...' : 'Enviar entrega'}
                       </button>
                     </div>
+                    {teamSubmitErrors[c.id] && (
+                      <p className="text-[11px]"
+                         style={{ color: teamSubmitErrors[c.id]?.startsWith('✓') ? '#4ade80' : '#f87171' }}>
+                        {teamSubmitErrors[c.id]}
+                      </p>
+                    )}
+
+                    {/* Document upload — equipo */}
+                    <div className="rounded-lg p-3 space-y-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <p className="text-[9px] font-semibold text-slate-600 uppercase tracking-wider">
+                        📄 Documento adjunto <span className="font-normal normal-case text-slate-700">(PDF o Word · máx. 4 páginas)</span>
+                      </p>
+                      {teamDocStatuses[c.id]?.uploaded ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+                                style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
+                            ✓ {teamDocStatuses[c.id].filename}
+                            {teamDocStatuses[c.id].pages != null && ` · ${teamDocStatuses[c.id].pages} pág.`}
+                          </span>
+                          <label className="text-[9px] text-slate-600 hover:text-slate-300 cursor-pointer">
+                            Reemplazar
+                            <input type="file" accept=".pdf,.docx,.doc" className="hidden"
+                                   onChange={e => { const f = e.target.files?.[0]; if (f) uploadTeamDoc(c.id, f) }} />
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded cursor-pointer text-[10px]"
+                                 style={{ background: 'rgba(34,211,238,0.07)', border: '1px solid rgba(34,211,238,0.18)', color: '#22d3ee' }}>
+                            {teamDocUploading[c.id] ? 'Subiendo...' : (teamDocFiles[c.id] ? teamDocFiles[c.id]!.name : 'Seleccionar PDF/Word...')}
+                            <input type="file" accept=".pdf,.docx,.doc" className="hidden" disabled={Boolean(teamDocUploading[c.id])}
+                                   onChange={e => { const f = e.target.files?.[0]; if (f) setTeamDocFiles(p => ({ ...p, [c.id]: f })) }} />
+                          </label>
+                          {teamDocFiles[c.id] && !teamDocUploading[c.id] && (
+                            <button onClick={() => uploadTeamDoc(c.id, teamDocFiles[c.id]!)}
+                                    className="px-2.5 py-1.5 rounded text-[10px] font-bold"
+                                    style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: '#22d3ee' }}>
+                              Subir →
+                            </button>
+                          )}
+                          {teamDocUploading[c.id] && <span className="text-[9px] text-slate-600 animate-pulse">Validando...</span>}
+                        </div>
+                      )}
+                      {teamDocErrors[c.id] && <p className="text-[9px] text-red-400">{teamDocErrors[c.id]}</p>}
+                    </div>
                     {(images[c.id] ?? []).length > 0 && (
                       <div className="flex gap-2 overflow-x-auto pb-1">
                         {(images[c.id] ?? []).map((img, i) => (
@@ -990,6 +1223,7 @@ export default function ChallengeArena() {
   const [solved,     setSolved]         = useState<SolvedChallenge[]>([])
   const [loading,    setLoading]        = useState(true)
   const [active,     setActive]         = useState<Challenge | null>(null)
+  const [showAllSolved, setShowAllSolved] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -1042,7 +1276,7 @@ export default function ChallengeArena() {
             <span className="text-[10px] text-slate-600">{solved.length} entregas registradas</span>
           </div>
           <div className="grid gap-2">
-            {solved.slice(0, 6).map(s => {
+            {(showAllSolved ? solved : solved.slice(0, 6)).map(s => {
               const tc = s.badge_tier ? (TIER_COLOR[s.badge_tier] ?? '#facc15') : '#4ade80'
               return (
                 <div key={`${s.id}-${s.submitted_at}`} className="flex items-center gap-3 rounded-lg px-3 py-2"
@@ -1066,6 +1300,13 @@ export default function ChallengeArena() {
               )
             })}
           </div>
+          {solved.length > 6 && (
+            <button onClick={() => setShowAllSolved(v => !v)}
+                    className="w-full py-1.5 rounded-lg text-[10px] text-slate-600 hover:text-slate-400 transition-colors"
+                    style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+              {showAllSolved ? `Ocultar (mostrar 6 de ${solved.length})` : `Ver los ${solved.length - 6} restantes ↓`}
+            </button>
+          )}
         </div>
       )}
 
@@ -1150,10 +1391,22 @@ export default function ChallengeArena() {
                     {/* Bottom row: dataset + badge reward */}
                     <div className="flex items-center gap-3 mt-2 flex-wrap">
                       {c.dataset_name && (
-                        <span className="text-[9px] px-2 py-0.5 rounded"
-                              style={{ background: 'rgba(249,115,22,0.08)', color: '#f97316', border: '1px solid rgba(249,115,22,0.2)' }}>
-                          📊 {c.dataset_name}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] px-2 py-0.5 rounded"
+                                style={{ background: 'rgba(249,115,22,0.08)', color: '#f97316', border: '1px solid rgba(249,115,22,0.2)' }}>
+                            📊 {c.dataset_name}
+                          </span>
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              exportChallengeDataset(c.id, token, c.dataset_name ?? c.title)
+                                .catch(err => alert(String(err)))
+                            }}
+                            className="text-[9px] px-2 py-0.5 rounded font-bold"
+                            style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.22)' }}>
+                            Descargar CSV
+                          </button>
+                        </div>
                       )}
 
                       {c.badge_name && tierColor && !earned && (

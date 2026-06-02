@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 
 # ── MITRE D3FEND countermeasures per ATT&CK technique ────────────────────────

@@ -131,11 +131,11 @@ export default function GlobalOverview() {
   const [logs,       setLogs]       = useState(LOG_POOL.slice(0, 6))
 
   useEffect(() => {
-    // Public CTI endpoints
+    // CTI endpoints are role-scoped by the backend.
     Promise.all([
-      fetch(`${API}/ioc-feed`).then(r => r.json()),
-      fetch(`${API}/threat-actors`).then(r => r.json()),
-      fetch(`${API}/ioas`).then(r => r.json()),
+      fetch(`${API}/ioc-feed`,       { headers }).then(r => r.ok ? r.json() : []),
+      fetch(`${API}/threat-actors`,  { headers }).then(r => r.ok ? r.json() : []),
+      fetch(`${API}/ioas`,           { headers }).then(r => r.ok ? r.json() : []),
     ]).then(([i, a, io]) => { setIocs(i); setActors(a); setIoas(io) }).catch(() => {})
 
     // Auth-gated endpoints

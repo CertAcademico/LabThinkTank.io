@@ -8,6 +8,7 @@ import os
 import re
 import uuid
 import zipfile
+from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -144,6 +145,170 @@ def _is_due(value: str | None) -> bool:
     return bool(dt and _now_bogota() >= dt)
 
 
+PRIVILEGED_ROLES = {"admin", "instructor", "senior_analyst", "analyst"}
+
+
+def _is_privileged(user: dict | None) -> bool:
+    return bool(user and user.get("role") in PRIVILEGED_ROLES)
+
+
+def _auth_user_or_raise(authorization: str | None) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="No autenticado")
+    user = verify_token(authorization[7:])
+    if not user:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    return user
+
+
+def _dataset_rows_for_user(user: dict) -> list[dict]:
+    """Rows from datasets attached to challenges assigned to the student or their team."""
+    if _is_privileged(user):
+        return []
+    email = user["email"]
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT DISTINCT d.data_json
+            FROM datasets d
+            JOIN challenges c ON c.dataset_id = d.id
+            JOIN challenge_assignments ca ON ca.challenge_id = c.id
+            WHERE ca.user_email = ?
+
+            UNION
+
+            SELECT DISTINCT d.data_json
+            FROM datasets d
+            JOIN challenges c ON c.dataset_id = d.id
+            JOIN team_challenge_assignments tca ON tca.challenge_id = c.id
+            JOIN team_members tm ON tm.team_id = tca.team_id
+            WHERE tm.user_email = ?
+
+            UNION
+
+            SELECT DISTINCT d.data_json
+            FROM datasets d
+            JOIN challenge_datasets cd ON cd.dataset_id = d.id
+            JOIN challenge_assignments ca ON ca.challenge_id = cd.challenge_id
+            WHERE ca.user_email = ?
+
+            UNION
+
+            SELECT DISTINCT d.data_json
+            FROM datasets d
+            JOIN challenge_datasets cd ON cd.dataset_id = d.id
+            JOIN team_challenge_assignments tca ON tca.challenge_id = cd.challenge_id
+            JOIN team_members tm ON tm.team_id = tca.team_id
+            WHERE tm.user_email = ?
+        """, (email, email, email, email)).fetchall()
+
+    out: list[dict] = []
+    for row in rows:
+        try:
+            parsed = json.loads(row["data_json"] or "[]")
+        except Exception:
+            parsed = []
+        if isinstance(parsed, dict):
+            parsed = parsed.get("rows") or parsed.get("data") or []
+        if isinstance(parsed, list):
+            out.extend([r for r in parsed if isinstance(r, dict)])
+    return out
+
+
+def _row_value(row: dict, *keys: str, default: str = "") -> str:
+    for key in keys:
+        value = row.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return default
+
+
+def _scoped_ioc_feed(user: dict) -> list[dict]:
+    if _is_privileged(user):
+        return get_threat_feed()
+
+    scoped: list[dict] = []
+    seen: set[str] = set()
+    for idx, row in enumerate(_dataset_rows_for_user(user), start=1):
+        value = _row_value(row, "ioc", "indicator", "value", "domain", "ip", "url", "hash")
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        scoped.append({
+            "id": row.get("id", idx),
+            "ioc": value,
+            "type": _row_value(row, "type", "ioc_type", "kind", default="unknown"),
+            "threat_actor": _row_value(row, "threat_actor", "actor", "apt", default="Reto asignado"),
+            "severity": _row_value(row, "severity", "priority", default="medium").lower(),
+            "mitre": _row_value(row, "mitre", "mitreTechniqueId", "ttp", "technique_id"),
+            "country": _row_value(row, "country", "targetCountry", "sourceCountry", default=""),
+            "source": "assigned-challenge",
+            "scope": "assigned-challenge",
+        })
+    return scoped[:120]
+
+
+def _scoped_actors(user: dict) -> list[dict]:
+    actors = get_threat_actors()
+    if _is_privileged(user):
+        return actors
+
+    allowed = {
+        row.get("threat_actor", "").lower()
+        for row in _scoped_ioc_feed(user)
+        if row.get("threat_actor")
+    }
+    if not allowed:
+        return []
+    return [
+        {
+            "id": actor.get("id"),
+            "name": actor.get("name"),
+            "country": actor.get("country"),
+            "severity": actor.get("severity", "medium"),
+            "active_campaign": actor.get("active_campaign", ""),
+            "motivation": actor.get("motivation", ""),
+            "ttps": actor.get("ttps", [])[:4],
+            "scope": "assigned-challenge",
+        }
+        for actor in actors
+        if str(actor.get("name", "")).lower() in allowed
+    ]
+
+
+def _scoped_ioas(user: dict) -> list[dict]:
+    ioas = get_ioas()
+    if _is_privileged(user):
+        return ioas
+
+    feed = _scoped_ioc_feed(user)
+    actors = {str(row.get("threat_actor", "")).lower() for row in feed}
+    ttps = {str(row.get("mitre", "")).lower() for row in feed if row.get("mitre")}
+    return [
+        ioa for ioa in ioas
+        if str(ioa.get("attributed_actor", "")).lower() in actors
+        or str(ioa.get("ttp", "")).lower() in ttps
+    ][:80]
+
+
+def _scoped_campaigns(user: dict) -> list[dict]:
+    camps = get_campaigns()
+    if _is_privileged(user):
+        return camps
+    actors = {str(row.get("threat_actor", "")).lower() for row in _scoped_ioc_feed(user)}
+    return [
+        {
+            "name": c.get("name"),
+            "actor": c.get("actor"),
+            "status": c.get("status"),
+            "last_activity": c.get("last_activity"),
+            "ioc_count": c.get("ioc_count", 0),
+            "scope": "assigned-challenge",
+        }
+        for c in camps
+        if str(c.get("actor", "")).lower() in actors
+    ]
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
@@ -218,15 +383,15 @@ def home():
 
 @app.get("/search")
 def search(q: str = "", authorization: str = Header(None)):
-    _require_user(authorization)
+    user = _auth_user_or_raise(authorization)
     q = q.strip().lower()
     if len(q) < 2:
         return {"iocs": [], "actors": [], "campaigns": [], "ttps": []}
 
-    feed    = get_threat_feed()
-    actors  = get_threat_actors()
-    camps   = get_campaigns()
-    ioas    = get_ioas()
+    feed    = _scoped_ioc_feed(user)
+    actors  = _scoped_actors(user)
+    camps   = _scoped_campaigns(user)
+    ioas    = _scoped_ioas(user)
 
     def _match(text: str) -> bool:
         return q in str(text).lower()
@@ -283,8 +448,9 @@ def missions():
 # ── Threat Intelligence ───────────────────────────────────────────────────────
 
 @app.get("/ioc-feed")
-def ioc_feed():
-    return get_threat_feed()
+def ioc_feed(authorization: str = Header(None)):
+    user = _auth_user_or_raise(authorization)
+    return _scoped_ioc_feed(user)
 
 
 def _csv_response(filename: str, rows: list[dict]):
@@ -361,6 +527,7 @@ def ioc_feed_export(
     severity: str | None = None,
     type: str | None = None,
     limit: int = 1000,
+    authorization: str = Header(None),
 ):
     """
     Export the consumed CTI feed for analysis or handoff.
@@ -370,7 +537,8 @@ def ioc_feed_export(
     if fmt not in {"csv", "json", "stix"}:
         raise HTTPException(status_code=400, detail="format must be csv, json, or stix")
 
-    rows = get_threat_feed()
+    user = _auth_user_or_raise(authorization)
+    rows = _scoped_ioc_feed(user)
     if source:
         rows = [r for r in rows if str(r.get("source", "")).lower() == source.lower()]
     if severity:
@@ -399,13 +567,15 @@ def ioc_feed_export(
 
 
 @app.get("/threat-actors")
-def threat_actors():
-    return get_threat_actors()
+def threat_actors(authorization: str = Header(None)):
+    user = _auth_user_or_raise(authorization)
+    return _scoped_actors(user)
 
 
 @app.get("/campaigns")
-def campaigns():
-    return get_campaigns()
+def campaigns(authorization: str = Header(None)):
+    user = _auth_user_or_raise(authorization)
+    return _scoped_campaigns(user)
 
 
 @app.get("/findings")
@@ -425,8 +595,9 @@ def create_finding(payload: dict = Body(...)):
 
 
 @app.get("/ioas")
-def ioas():
-    return get_ioas()
+def ioas(authorization: str = Header(None)):
+    user = _auth_user_or_raise(authorization)
+    return _scoped_ioas(user)
 
 
 # ── CTI Toolkit ───────────────────────────────────────────────────────────────
@@ -457,12 +628,14 @@ def cti_sources(category: str = None, authorization: str = Header(None)):
 # ── MISP ──────────────────────────────────────────────────────────────────────
 
 @app.get("/misp/status")
-def misp_status():
+def misp_status(authorization: str = Header(None)):
+    _require_fusion_access(authorization)
     return get_misp_status()
 
 
 @app.get("/misp/iocs")
-def misp_iocs(limit: int = 50):
+def misp_iocs(limit: int = 50, authorization: str = Header(None)):
+    _require_fusion_access(authorization)
     try:
         iocs = fetch_misp_iocs(limit=min(limit, 200))
         return {"count": len(iocs), "iocs": iocs}
@@ -471,8 +644,9 @@ def misp_iocs(limit: int = 50):
 
 
 @app.post("/misp/import")
-def misp_import(limit: int = 50):
+def misp_import(limit: int = 50, authorization: str = Header(None)):
     """Pull IOCs from MISP and persist them into the local DB."""
+    _require_fusion_access(authorization)
     try:
         iocs = fetch_misp_iocs(limit=min(limit, 200))
     except Exception as e:
@@ -2080,11 +2254,12 @@ def admin_team_members(team_id: int, authorization: str = Header(None)):
 # ── Rule Depuration Pipeline ───────────────────────────────────────────────────
 
 @app.post("/rules/depurate")
-def rules_depurate(payload: dict = Body(...)):
+def rules_depurate(payload: dict = Body(...), authorization: str = Header(None)):
     """
     Validates an IOA/IOC through the CTI depuration pipeline before rule deployment.
     Checks: CTI context → IoC lifecycle → IoA lifecycle → MITRE D3FEND mapping.
     """
+    _auth_user_or_raise(authorization)
     ttp          = payload.get("ttp", "").upper()
     ioc_value    = payload.get("ioc_value", "")
     ioc_type     = payload.get("ioc_type", "ip")
@@ -2126,8 +2301,11 @@ def rules_depurate(payload: dict = Body(...)):
 
 
 @app.get("/rules/ioa-catalog")
-def rules_ioa_catalog():
+def rules_ioa_catalog(authorization: str = Header(None)):
     """Returns all available TTPs with their IoA metadata for the depuration selector."""
+    user = _auth_user_or_raise(authorization)
+    scoped = _scoped_ioas(user)
+    allowed_ttps = {str(ioa.get("ttp", "")).upper() for ioa in scoped}
     return [
         {
             "ttp":            ttp,
@@ -2138,6 +2316,7 @@ def rules_ioa_catalog():
             "priority":       meta["priority"],
         }
         for ttp, meta in TTP_IOA_MAP.items()
+        if _is_privileged(user) or ttp.upper() in allowed_ttps
     ]
 
 
@@ -2163,6 +2342,7 @@ async def logs_ingest(
     If save_dataset=true and the caller is authenticated, the parsed
     rows are stored as a dataset accessible to students.
     """
+    user = _auth_user_or_raise(authorization)
     if file:
         raw = (await file.read()).decode("utf-8", errors="replace")
         name = file.filename or "upload"
@@ -2188,7 +2368,6 @@ async def logs_ingest(
     # Optionally save as a student-accessible dataset
     dataset_id = None
     if save_dataset.lower() == "true" and result["rows"]:
-        user = _require_user(authorization or "")
         ds_name = (dataset_name.strip() or f"Log Ingest — {name}").strip()[:120]
         with get_conn() as conn:
             cur = conn.execute(
@@ -2225,11 +2404,12 @@ async def logs_ingest(
 
 
 @app.post("/logs/extract-iocs")
-async def logs_extract_iocs(payload: dict = Body(...)):
+async def logs_extract_iocs(payload: dict = Body(...), authorization: str = Header(None)):
     """
     Extract IOCs from arbitrary text without storing anything.
     Body: {"text": "..."}
     """
+    _auth_user_or_raise(authorization)
     text = payload.get("text", "")
     if not text:
         return {"iocs": []}
@@ -2255,6 +2435,9 @@ async def live_feed(request: Request):
     The first batch of events replays the last 100 from history so
     freshly-connected clients are not starting cold.
     """
+    token = request.query_params.get("token", "")
+    if not verify_token(token):
+        raise HTTPException(status_code=401, detail="No autenticado")
     queue = live_service.subscribe()
 
     async def generator():
@@ -2280,8 +2463,9 @@ async def live_feed(request: Request):
 
 
 @app.get("/live/status")
-def live_status():
+def live_status(authorization: str = Header(None)):
     """Returns current SSE subscriber count and recent event count."""
+    _auth_user_or_raise(authorization)
     return {
         "clients":       live_service.client_count(),
         "history_count": len(live_service.get_history(300)),
@@ -2466,9 +2650,169 @@ def _gemini_wrap(fn, *args, **kwargs):
         raise HTTPException(status_code=502, detail=f"Error del motor CTI ({engine}): {msg}")
 
 
+def _norm_severity(value: str | None) -> str:
+    sev = (value or "medium").strip().lower()
+    if sev == "critical":
+        return "Critical"
+    if sev == "high":
+        return "High"
+    return "Medium"
+
+
+def _fallback_predictive_analysis(threats: list[dict], query: str, reason: str = "") -> dict:
+    """Deterministic predictive analysis used when the external LLM fails."""
+    events = threats or []
+    severities = [_norm_severity(str(e.get("severity", ""))) for e in events]
+    actors = [str(e.get("threatActor") or e.get("threat_actor") or "Unknown") for e in events]
+    tactics = [
+        str(e.get("mitreTactic") or e.get("mitre_tactic") or e.get("mitre") or "")
+        for e in events
+        if e.get("mitreTactic") or e.get("mitre_tactic") or e.get("mitre")
+    ]
+    countries = [
+        str(e.get("targetCountry") or e.get("country") or "")
+        for e in events
+        if e.get("targetCountry") or e.get("country")
+    ]
+
+    sev_counts = Counter(severities)
+    actor_counts = Counter(a for a in actors if a and a != "Unknown")
+    tactic_counts = Counter(t for t in tactics if t)
+    country_counts = Counter(c for c in countries if c)
+
+    top_actor = actor_counts.most_common(1)[0][0] if actor_counts else (query or "Actor no determinado")
+    top_tactic = tactic_counts.most_common(1)[0][0] if tactic_counts else "Initial Access"
+    top_country = country_counts.most_common(1)[0][0] if country_counts else "objetivos mixtos"
+
+    critical = sev_counts.get("Critical", 0)
+    high = sev_counts.get("High", 0)
+    total = max(len(events), 1)
+    risk_ratio = (critical * 1.0 + high * 0.65) / total
+    if critical or risk_ratio >= 0.55:
+        severity = "Critical"
+    elif high or risk_ratio >= 0.25:
+        severity = "High"
+    else:
+        severity = "Medium"
+    probability = round(min(0.92, max(0.45, 0.42 + risk_ratio + min(len(actor_counts), 5) * 0.035)), 2)
+
+    next_tactic_map = {
+        "Initial Access": "Execution",
+        "Execution": "Persistence",
+        "Persistence": "Privilege Escalation",
+        "Privilege Escalation": "Defense Evasion",
+        "Defense Evasion": "Credential Access",
+        "Credential Access": "Discovery",
+        "Discovery": "Lateral Movement",
+        "Lateral Movement": "Collection",
+        "Collection": "Exfiltration",
+        "Command and Control": "Actions on Objectives",
+    }
+    next_tactic = next_tactic_map.get(top_tactic, "Command and Control")
+
+    historical = []
+    for actor, count in actor_counts.most_common(5):
+        actor_tactics = [
+            str(e.get("mitreTactic") or e.get("mitre_tactic") or e.get("mitre") or "")
+            for e in events
+            if str(e.get("threatActor") or e.get("threat_actor") or "Unknown") == actor
+        ]
+        actor_tactic_counts = Counter(t for t in actor_tactics if t)
+        historical.append({
+            "actor": actor,
+            "consistencyScore": round(min(0.95, 0.58 + count / total * 0.35), 2),
+            "anomalousActions": [
+                "Revisar eventos con severidad alta fuera de la táctica dominante",
+                "Validar infraestructura compartida antes de atribución definitiva",
+            ],
+            "confirmedPatterns": [
+                f"{count} eventos asociados al actor",
+                f"Táctica dominante: {actor_tactic_counts.most_common(1)[0][0] if actor_tactic_counts else top_tactic}",
+            ],
+        })
+
+    cross_actor = []
+    if len(actor_counts) > 1 and tactic_counts:
+        actors_top = [a for a, _ in actor_counts.most_common(3)]
+        cross_actor.append({
+            "actors": actors_top,
+            "sharedTtp": top_tactic,
+            "sharedInfrastructure": "Coincidencia operativa inferida por táctica, severidad y ventana de eventos; requiere validación con IOC/ASN/WHOIS.",
+            "targetOverlapScore": round(min(0.9, 0.35 + len(actors_top) * 0.12 + risk_ratio * 0.35), 2),
+        })
+
+    fallback_note = " Análisis generado en modo heurístico local por indisponibilidad temporal del motor IA." if reason else ""
+    return {
+        "potentialImpact": {
+            "severity": severity,
+            "probability": probability,
+            "reasoning": (
+                f"Se analizaron {len(events)} eventos para '{query}'. Predominan {top_actor}, "
+                f"{top_tactic} y objetivos en {top_country}. La ponderación de severidad "
+                f"({critical} críticos, {high} altos) sugiere impacto {severity}."
+                f"{fallback_note}"
+            ),
+        },
+        "predictedNextTactic": {
+            "tactic": next_tactic,
+            "reasoning": f"Después de {top_tactic}, la progresión ATT&CK más probable es {next_tactic}, especialmente si existen eventos de severidad alta o crítica.",
+        },
+        "recalculatedAttribution": {
+            "actor": top_actor,
+            "confidence": round(min(0.9, 0.48 + (actor_counts.get(top_actor, 1) / total) * 0.38 + risk_ratio * 0.12), 2),
+            "reasoning": "La atribución se recalcula por frecuencia del actor, severidad, táctica dominante y solapamiento de objetivos. Requiere enriquecimiento externo para confirmación final.",
+        },
+        "multiActorCorrelation": (
+            f"Se observan {len(actor_counts)} actores con posible solapamiento táctico en {top_tactic}."
+            if len(actor_counts) > 1 else "No hay suficientes actores distintos para inferir correlación multi-actor robusta."
+        ),
+        "historicalValidation": historical,
+        "crossActorNexus": cross_actor,
+        "analysisMode": "heuristic-fallback" if reason else "heuristic",
+        "engineWarning": reason,
+    }
+
+
+def _fallback_ml_proposals(events: list[dict], reason: str = "") -> dict:
+    rows = events or []
+    actor_counts = Counter(str(e.get("threatActor") or e.get("threat_actor") or "Unknown") for e in rows)
+    sev_counts = Counter(_norm_severity(str(e.get("severity", ""))) for e in rows)
+    proposals = []
+    for actor, count in actor_counts.most_common(6):
+        high_signal = sev_counts.get("Critical", 0) + sev_counts.get("High", 0)
+        model = "Random Forest" if count >= 3 else "Isolation Forest"
+        if high_signal >= max(3, len(rows) // 3):
+            model = "Gradient Boosted Trees"
+        proposals.append({
+            "actor": actor,
+            "suggestedModel": model,
+            "reasoning": f"Modelo recomendado por volumen relativo ({count} eventos), severidad y mezcla de TTP/IOC disponible.",
+            "featuresToUse": ["severity_score", "mitre_tactic", "ioc_type", "source_country", "target_country", "confidence_score"],
+            "labelStrategy": "Clasificación supervisada si hay etiquetas históricas; anomalía no supervisada si el dataset es nuevo.",
+            "validationMetric": "F1 macro + matriz de confusión por severidad",
+        })
+    return {
+        "summary": f"Propuestas ML generadas para {len(rows)} eventos. " + ("Modo heurístico local por fallo temporal del motor IA." if reason else ""),
+        "proposals": proposals,
+        "analysisMode": "heuristic-fallback" if reason else "heuristic",
+        "engineWarning": reason,
+    }
+
+
+def _require_fusion_access(authorization: str | None) -> dict:
+    user = _auth_user_or_raise(authorization)
+    if not _is_privileged(user):
+        raise HTTPException(
+            status_code=403,
+            detail="El Motor de Fusión completo está reservado para roles de análisis/instrucción. Los estudiantes acceden a inteligencia limitada por reto asignado.",
+        )
+    return user
+
+
 @app.get("/ai/gemini/status")
-def gemini_status():
+def gemini_status(authorization: str = Header(None)):
     """Check which fusion engine is active (Gemini, Claude, or none)."""
+    _require_fusion_access(authorization)
     engine = _fusion_engine()
     if engine == "gemini":
         return {"configured": True, "engine": "gemini", "model_fast": os.getenv("GEMINI_MODEL_FAST", "gemini-2.0-flash")}
@@ -2479,11 +2823,12 @@ def gemini_status():
 
 
 @app.post("/ai/gemini/threat-data")
-def gemini_threat_data(payload: dict = Body(...)):
+def gemini_threat_data(payload: dict = Body(...), authorization: str = Header(None)):
     """
     Generate 60 (operativo) or 500 (annual) structured threat events via Gemini.
     Body: { "topic": str, "is_annual": bool }
     """
+    _require_fusion_access(authorization)
     return _gemini_wrap(
         generate_threat_data,
         payload.get("topic", ""),
@@ -2492,8 +2837,9 @@ def gemini_threat_data(payload: dict = Body(...)):
 
 
 @app.post("/ai/gemini/quantum")
-def gemini_quantum(payload: dict = Body(...)):
+def gemini_quantum(payload: dict = Body(...), authorization: str = Header(None)):
     """Quantum / PQC risk analysis for a threat actor."""
+    _require_fusion_access(authorization)
     return _gemini_wrap(
         generate_quantum_threat_analysis,
         payload.get("actor", ""),
@@ -2502,18 +2848,21 @@ def gemini_quantum(payload: dict = Body(...)):
 
 
 @app.post("/ai/gemini/predictive")
-def gemini_predictive(payload: dict = Body(...)):
+def gemini_predictive(payload: dict = Body(...), authorization: str = Header(None)):
     """Predictive analysis: next tactic, attribution, multi-actor correlation."""
-    return _gemini_wrap(
-        generate_predictive_analysis,
-        payload.get("threats", []),
-        payload.get("query", ""),
-    )
+    _require_fusion_access(authorization)
+    threats = payload.get("threats", [])
+    query = payload.get("query", "")
+    try:
+        return _gemini_wrap(generate_predictive_analysis, threats, query)
+    except HTTPException as e:
+        return _fallback_predictive_analysis(threats, query, str(e.detail))
 
 
 @app.post("/ai/gemini/fusion-report")
-def gemini_fusion_report(payload: dict = Body(...)):
+def gemini_fusion_report(payload: dict = Body(...), authorization: str = Header(None)):
     """Executive intelligence fusion report with Google Search grounding."""
+    _require_fusion_access(authorization)
     return _gemini_wrap(
         generate_fusion_report,
         payload.get("query", ""),
@@ -2522,8 +2871,9 @@ def gemini_fusion_report(payload: dict = Body(...)):
 
 
 @app.post("/ai/gemini/mitre-details")
-def gemini_mitre_details(payload: dict = Body(...)):
+def gemini_mitre_details(payload: dict = Body(...), authorization: str = Header(None)):
     """MITRE ATT&CK technique deep-dive for a specific actor."""
+    _require_fusion_access(authorization)
     return _gemini_wrap(
         generate_mitre_details,
         payload.get("actor", ""),
@@ -2532,14 +2882,16 @@ def gemini_mitre_details(payload: dict = Body(...)):
 
 
 @app.get("/ai/gemini/welcome")
-def gemini_welcome():
+def gemini_welcome(authorization: str = Header(None)):
     """Welcome panel: 5 recent APTs + 5 CVEs + 5 LATAM incidents."""
+    _require_fusion_access(authorization)
     return _gemini_wrap(generate_welcome_data)
 
 
 @app.post("/ai/gemini/ioc-context")
-def gemini_ioc_context(payload: dict = Body(...)):
+def gemini_ioc_context(payload: dict = Body(...), authorization: str = Header(None)):
     """IOC context with Google Search grounding (actor, malware, campaigns)."""
+    _require_fusion_access(authorization)
     ioc = payload.get("ioc", "").strip()
     if not ioc:
         raise HTTPException(status_code=400, detail="'ioc' field required.")
@@ -2547,8 +2899,9 @@ def gemini_ioc_context(payload: dict = Body(...)):
 
 
 @app.post("/ai/gemini/weekly-report")
-def gemini_weekly_report(payload: dict = Body(...)):
+def gemini_weekly_report(payload: dict = Body(...), authorization: str = Header(None)):
     """Weekly flash report: TTPs, IOCs, hunting queries (Sigma/KQL/Splunk/YARA/PS)."""
+    _require_fusion_access(authorization)
     return _gemini_wrap(
         generate_weekly_flash_report,
         payload.get("query", ""),
@@ -2557,8 +2910,9 @@ def gemini_weekly_report(payload: dict = Body(...)):
 
 
 @app.post("/ai/gemini/extract-entities")
-def gemini_extract_entities(payload: dict = Body(...)):
+def gemini_extract_entities(payload: dict = Body(...), authorization: str = Header(None)):
     """Extract IOCs, actors, malware, CVEs from unstructured text."""
+    _require_fusion_access(authorization)
     text = payload.get("text", "")
     if not text:
         raise HTTPException(status_code=400, detail="'text' field required.")
@@ -2566,8 +2920,9 @@ def gemini_extract_entities(payload: dict = Body(...)):
 
 
 @app.post("/ai/gemini/colombia-risk")
-def gemini_colombia_risk(payload: dict = Body(...)):
+def gemini_colombia_risk(payload: dict = Body(...), authorization: str = Header(None)):
     """Colombian critical infrastructure risk assessment (Decreto 338/2022)."""
+    _require_fusion_access(authorization)
     return _gemini_wrap(
         assess_colombian_risk,
         payload.get("actor", ""),
@@ -2576,8 +2931,9 @@ def gemini_colombia_risk(payload: dict = Body(...)):
 
 
 @app.post("/ai/gemini/crisis-map")
-def gemini_crisis_map(payload: dict = Body(...)):
+def gemini_crisis_map(payload: dict = Body(...), authorization: str = Header(None)):
     """Cyber crisis map: attack phases + strategic responses."""
+    _require_fusion_access(authorization)
     return _gemini_wrap(
         generate_crisis_map,
         payload.get("actor", ""),
@@ -2586,8 +2942,9 @@ def gemini_crisis_map(payload: dict = Body(...)):
 
 
 @app.post("/ai/gemini/team-scenarios")
-def gemini_team_scenarios(payload: dict = Body(...)):
+def gemini_team_scenarios(payload: dict = Body(...), authorization: str = Header(None)):
     """Red / Blue / Purple / White Team simulation scenarios."""
+    _require_fusion_access(authorization)
     return _gemini_wrap(
         generate_team_scenarios,
         payload.get("actor", ""),
@@ -2596,8 +2953,9 @@ def gemini_team_scenarios(payload: dict = Body(...)):
 
 
 @app.post("/ai/gemini/behavioral")
-def gemini_behavioral(payload: dict = Body(...)):
+def gemini_behavioral(payload: dict = Body(...), authorization: str = Header(None)):
     """Behavioral analysis: threat behavior + historical event explanations."""
+    _require_fusion_access(authorization)
     return _gemini_wrap(
         generate_behavioral_analysis,
         payload.get("topic", ""),
@@ -2606,8 +2964,9 @@ def gemini_behavioral(payload: dict = Body(...)):
 
 
 @app.post("/ai/gemini/playbook")
-def gemini_playbook(payload: dict = Body(...)):
+def gemini_playbook(payload: dict = Body(...), authorization: str = Header(None)):
     """Incident response playbook for a given threat."""
+    _require_fusion_access(authorization)
     return _gemini_wrap(
         generate_playbook,
         payload.get("threat_name", ""),
@@ -2616,14 +2975,20 @@ def gemini_playbook(payload: dict = Body(...)):
 
 
 @app.post("/ai/gemini/ml-proposals")
-def gemini_ml_proposals(payload: dict = Body(...)):
+def gemini_ml_proposals(payload: dict = Body(...), authorization: str = Header(None)):
     """ML model proposals (Random Forest / LSTM / SVM / Clustering) per event."""
-    return _gemini_wrap(generate_ml_proposals, payload.get("events", []))
+    _require_fusion_access(authorization)
+    events = payload.get("events", [])
+    try:
+        return _gemini_wrap(generate_ml_proposals, events)
+    except HTTPException as e:
+        return _fallback_ml_proposals(events, str(e.detail))
 
 
 @app.post("/ai/gemini/geopolitical")
-def gemini_geopolitical(payload: dict = Body(...)):
+def gemini_geopolitical(payload: dict = Body(...), authorization: str = Header(None)):
     """Geopolitical deep-dive with anticipatory threats and stability score."""
+    _require_fusion_access(authorization)
     return _gemini_wrap(
         generate_geopolitical_analysis,
         payload.get("query", ""),
@@ -2631,8 +2996,9 @@ def gemini_geopolitical(payload: dict = Body(...)):
 
 
 @app.post("/ai/gemini/threat-graph")
-def gemini_threat_graph(payload: dict = Body(...)):
+def gemini_threat_graph(payload: dict = Body(...), authorization: str = Header(None)):
     """Actor → IOC → Campaign correlation graph enriched with CISA APT database."""
+    _require_fusion_access(authorization)
     return _gemini_wrap(
         generate_threat_graph,
         payload.get("events", []),
@@ -2641,7 +3007,24 @@ def gemini_threat_graph(payload: dict = Body(...)):
 
 
 @app.get("/apt-database")
-def apt_database_endpoint():
+def apt_database_endpoint(authorization: str = Header(None)):
     """Returns the full CISA-sourced APT database for frontend enrichment."""
     from intelligence.apt_database import get_full_database
-    return get_full_database()
+    user = _auth_user_or_raise(authorization)
+    rows = get_full_database()
+    if _is_privileged(user):
+        return rows
+    allowed = {str(actor.get("name", "")).lower() for actor in _scoped_actors(user)}
+    return [
+        {
+            "name": row.get("name"),
+            "aliases": row.get("aliases", [])[:3],
+            "country": row.get("country", ""),
+            "risk_level": row.get("risk_level", "Medium"),
+            "known_campaigns": row.get("known_campaigns", [])[:3],
+            "cisa_advisories": row.get("cisa_advisories", [])[:3],
+            "scope": "assigned-challenge",
+        }
+        for row in rows
+        if str(row.get("name", "")).lower() in allowed
+    ]

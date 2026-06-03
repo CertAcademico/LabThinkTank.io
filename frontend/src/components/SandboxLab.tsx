@@ -1031,7 +1031,7 @@ function OutputBlock({ raw }: { raw: string }): ReactNode {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SandboxLab() {
-  const { user } = useAuth()
+  const { user, token } = useAuth()
 
   const [pyodide,     setPyodide]     = useState<PyodideInterface | null>(null)
   const [initStatus,  setInitStatus]  = useState<'loading' | 'ready' | 'error'>('loading')
@@ -1070,7 +1070,9 @@ export default function SandboxLab() {
         const py = await window.loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.5/full/' })
         await py.loadPackage(['pandas', 'numpy'])
 
-        const res = await fetch(`${API_URL}/ioc-feed`)
+        const res = await fetch(`${API_URL}/ioc-feed`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
         const iocs = await res.json()
         py.globals.set('_ioc_json', JSON.stringify(iocs))
         await py.runPythonAsync(`
@@ -1084,7 +1086,7 @@ ioc_df = pd.DataFrame(json.loads(_ioc_json))
     }
     init()
     return () => { cancelled = true }
-  }, [])
+  }, [token])
 
   // Set lesson code when track/lesson changes
   useEffect(() => {

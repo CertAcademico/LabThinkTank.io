@@ -79,6 +79,14 @@ function Shell() {
 
   // Admin goes straight to admin panel on first login
   const isAdmin = user?.role === 'admin'
+  const isPrivileged = ['admin', 'instructor', 'senior_analyst', 'analyst'].includes(user?.role ?? '')
+  const visibleNav = NAV.filter(item =>
+    isPrivileged || item.id !== 'feeds'
+  )
+
+  useEffect(() => {
+    if (!visibleNav.some(item => item.id === view)) setView('overview')
+  }, [view, visibleNav])
 
   if (isAdmin && adminMode) {
     return <AdminPanel onExitAdmin={() => setAdminMode(false)} />
@@ -101,7 +109,7 @@ function Shell() {
     }
   }
 
-  const groups = [...new Set(NAV.map(n => n.group))]
+  const groups = [...new Set(visibleNav.map(n => n.group))]
 
   return (
     <div className="flex h-screen text-white overflow-hidden" style={{ background: '#030712' }}>
@@ -129,7 +137,7 @@ function Shell() {
           {groups.map(group => (
             <div key={group}>
               <p className="text-[9px] font-bold text-slate-700 tracking-widest px-3 py-2 uppercase">{group}</p>
-              {NAV.filter(n => n.group === group).map(item => {
+              {visibleNav.filter(n => n.group === group).map(item => {
                 const active = view === item.id
                 return (
                   <button key={item.id} onClick={() => setView(item.id)}

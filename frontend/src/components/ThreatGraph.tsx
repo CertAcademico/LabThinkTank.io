@@ -13,8 +13,9 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
   Shield, ZoomIn, ZoomOut, Maximize2, RefreshCw,
-  Activity, Layers, Filter, X, ChevronRight,
+  Activity, Layers, Filter, X, ChevronRight, Search,
 } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -40,6 +41,7 @@ interface GNode {
   id: string
   kind: 'actor' | 'campaign' | 'ioc'
   label: string
+  fullLabel?: string
   x: number; y: number
   w: number; h: number
   // actor fields
@@ -67,9 +69,6 @@ const SEV: Record<string, string> = {
 }
 const CLUSTER_COLORS = [
   '#22d3ee', '#a78bfa', '#f472b6', '#4ade80', '#fb923c',
-]
-const ZONE_BG = [
-  'rgba(167,139,250,0.03)', 'rgba(251,146,60,0.03)', 'rgba(34,211,238,0.03)',
 ]
 
 // ── K-Means puro TypeScript ────────────────────────────────────────────────────
@@ -159,7 +158,7 @@ function buildGraph(
   const uniqueActors = Array.from(new Set([
     ...rawActors.map(a => a.name),
     ...rawIocs.map(i => i.threat_actor).filter(Boolean),
-  ])).filter(Boolean).slice(0, 10)
+  ])).filter(Boolean)
 
   uniqueActors.forEach((name, i) => {
     const cisa    = matchCisa(name)
@@ -189,13 +188,12 @@ function buildGraph(
   // Add CISA campaigns for matched actors
   uniqueActors.forEach(name => {
     const cisa = matchCisa(name)
-    cisa?.known_campaigns.slice(0, 2).forEach(c => {
-      if (!campaignMap.has(c) && campaigns.length < 12)
-        campaigns.push({ name: c, actor: name })
+    cisa?.known_campaigns.forEach(c => {
+      if (!campaignMap.has(c)) campaigns.push({ name: c, actor: name })
     })
   })
 
-  campaigns.slice(0, 10).forEach(({ name, actor }, i) => {
+  campaigns.forEach(({ name, actor }, i) => {
     const actorIocs = rawIocs.filter(io => io.threat_actor === actor).length
     const y = TOP_PAD + i * (NODE_H.campaign + GAP_V.campaign)
     const node: GNode = {
@@ -219,7 +217,7 @@ function buildGraph(
 
   // ── IoC nodes ────────────────────────────────────────────────────────────────
   // Sort by cluster so same clusters are adjacent
-  const iocWithCluster = rawIocs.slice(0, 28).map((ioc, i) => ({
+  const iocWithCluster = rawIocs.map((ioc, i) => ({
     ioc, cluster: clusters[i] ?? 0,
   })).sort((a, b) => a.cluster - b.cluster)
 
@@ -230,6 +228,7 @@ function buildGraph(
     const node: GNode = {
       id: `ioc:${ioc.id}`, kind: 'ioc',
       label: ioc.ioc.length > 22 ? ioc.ioc.slice(0, 22) + '…' : ioc.ioc,
+      fullLabel: ioc.ioc,
       x: ZONE_X.ioc, y,
       w: NODE_W.ioc, h: NODE_H.ioc,
       iocType: ioc.type, severity: sev, sevColor: SEV[sev] ?? '#94a3b8',
@@ -497,7 +496,7 @@ function DetailPanel({ node, onClose }: { node: GNode; onClose: () => void }) {
           </div>
           <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#67e8f9',
                         wordBreak: 'break-all', marginBottom: 10, fontWeight: 600 }}>
-            {node.label.replace('…', '')}
+            {node.fullLabel ?? node.label}
           </div>
           {[
             { l: 'Tipo',    v: node.iocType },
@@ -587,6 +586,7 @@ function StatsBar({
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function ThreatGraph() {
+  const { token } = useAuth()
   const [rawIocs,   setRawIocs]   = useState<RawIoc[]>([])
   const [rawActors, setRawActors] = useState<RawActor[]>([])
   const [cisaDb,    setCisaDb]    = useState<CisaEntry[]>([])
@@ -594,10 +594,11 @@ export default function ThreatGraph() {
   const [error,     setError]     = useState('')
   const [selected,  setSelected]  = useState<GNode | null>(null)
   const [filterActor, setFilterActor] = useState('')
+  const [nodeQuery, setNodeQuery] = useState('')
   const [zoom,   setZoom]   = useState(1)
   const [pan,    setPan]    = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
-  const lastPan = useRef({ x: 0, y: 0 })
+  const viewportRef = useRef<HTMLDivElement>(null)
   const dragStart = useRef({ mx: 0, my: 0, px: 0, py: 0 })
 
   // K-Means clusters
@@ -619,6 +620,30 @@ export default function ThreatGraph() {
 
   const nodeMap = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes])
   const SVG_W = 960
+  const VIEW_H = 640
+
+  const graphBounds = useMemo(() => {
+    if (!nodes.length) return { minX: 0, minY: 0, maxX: SVG_W, maxY: svgH }
+    return nodes.reduce((b, n) => ({
+      minX: Math.min(b.minX, n.x),
+      minY: Math.min(b.minY, n.y),
+      maxX: Math.max(b.maxX, n.x + n.w),
+      maxY: Math.max(b.maxY, n.y + n.h),
+    }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity })
+  }, [nodes, svgH])
+
+  const visibleNodes = useMemo(() => {
+    const q = nodeQuery.trim().toLowerCase()
+    if (!q) return nodes.slice(0, 80)
+    return nodes.filter(n =>
+      n.label.toLowerCase().includes(q) ||
+      n.fullLabel?.toLowerCase().includes(q) ||
+      n.actor?.toLowerCase().includes(q) ||
+      n.actorName?.toLowerCase().includes(q) ||
+      n.iocType?.toLowerCase().includes(q) ||
+      n.severity?.toLowerCase().includes(q)
+    ).slice(0, 80)
+  }, [nodes, nodeQuery])
 
   // CISA match count
   const cisaMatches = useMemo(() => {
@@ -635,26 +660,74 @@ export default function ThreatGraph() {
 
   // Load data
   const load = useCallback(() => {
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
     setLoading(true); setError('')
     Promise.all([
-      fetch(`${API}/ioc-feed`).then(r => r.json()).catch(() => []),
-      fetch(`${API}/threat-actors`).then(r => r.json()).catch(() => []),
-      fetch(`${API}/apt-database`).then(r => r.json()).catch(() => []),
+      fetch(`${API}/ioc-feed`,      { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch(`${API}/threat-actors`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch(`${API}/apt-database`,  { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
     ]).then(([iocs, actors, cisa]) => {
       setRawIocs(Array.isArray(iocs) ? iocs : [])
       setRawActors(Array.isArray(actors) ? actors : [])
       setCisaDb(Array.isArray(cisa) ? cisa : [])
     }).catch(() => setError('Error al cargar datos'))
     .finally(() => setLoading(false))
-  }, [])
+  }, [token])
 
   useEffect(() => { load() }, [load])
+
+  const centerOnNode = useCallback((node: GNode, nextZoom = Math.max(zoom, 0.85)) => {
+    setSelected(node)
+    setZoom(nextZoom)
+    setPan({
+      x: SVG_W / 2 - (node.x + node.w / 2) * nextZoom,
+      y: VIEW_H / 2 - (node.y + node.h / 2) * nextZoom,
+    })
+  }, [zoom])
+
+  const fitGraph = useCallback(() => {
+    const width = Math.max(1, graphBounds.maxX - graphBounds.minX + 120)
+    const height = Math.max(1, graphBounds.maxY - graphBounds.minY + 120)
+    const nextZoom = Math.max(0.18, Math.min(1.15, Math.min(SVG_W / width, VIEW_H / height)))
+    setZoom(nextZoom)
+    setPan({
+      x: (SVG_W - (graphBounds.minX + graphBounds.maxX) * nextZoom) / 2,
+      y: (VIEW_H - (graphBounds.minY + graphBounds.maxY) * nextZoom) / 2,
+    })
+  }, [graphBounds])
+
+  const resetView = () => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+    setSelected(null)
+  }
+
+  const jumpToKind = (kind: GNode['kind']) => {
+    const node = nodes.find(n => n.kind === kind)
+    if (node) centerOnNode(node)
+  }
 
   // Pan / zoom handlers
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
-    setZoom(z => Math.max(0.3, Math.min(2.5, z - e.deltaY * 0.001)))
-  }, [])
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+      const rect = viewportRef.current?.getBoundingClientRect()
+      const mx = rect ? e.clientX - rect.left : SVG_W / 2
+      const my = rect ? e.clientY - rect.top : VIEW_H / 2
+      setZoom(prev => {
+        const next = Math.max(0.18, Math.min(2.8, prev * (e.deltaY > 0 ? 0.9 : 1.1)))
+        const graphX = (mx - pan.x) / prev
+        const graphY = (my - pan.y) / prev
+        setPan({ x: mx - graphX * next, y: my - graphY * next })
+        return next
+      })
+      return
+    }
+    setPan(p => ({
+      x: p.x - e.deltaX,
+      y: p.y - e.deltaY,
+    }))
+  }, [pan])
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return
@@ -671,7 +744,15 @@ export default function ThreatGraph() {
 
   const onMouseUp = useCallback(() => setDragging(false), [])
 
-  const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }) }
+  const onMiniMapClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const graphX = ((e.clientX - rect.left) / rect.width) * SVG_W
+    const graphY = ((e.clientY - rect.top) / rect.height) * svgH
+    setPan({
+      x: SVG_W / 2 - graphX * zoom,
+      y: VIEW_H / 2 - graphY * zoom,
+    })
+  }, [svgH, zoom])
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 24,
@@ -709,12 +790,62 @@ export default function ThreatGraph() {
           Actores → Campañas → IoCs · K-Means · CISA
         </span>
         <div style={{ flex: 1 }} />
+        <div style={{ position: 'relative', width: 210 }}>
+          <Search size={11} style={{
+            position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+            color: '#334155', pointerEvents: 'none',
+          }} />
+          <input
+            value={nodeQuery}
+            onChange={e => setNodeQuery(e.target.value)}
+            placeholder="Saltar a actor, CVE, IOC…"
+            style={{
+              width: '100%', height: 26, background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)', borderRadius: 7,
+              color: '#cbd5e1', outline: 'none', fontSize: 10,
+              padding: '0 8px 0 24px',
+            }}
+          />
+          {nodeQuery.trim() && visibleNodes.length > 0 && (
+            <div style={{
+              position: 'absolute', right: 0, top: 30, width: 280, maxHeight: 260,
+              overflowY: 'auto', zIndex: 30, background: 'rgba(5,10,22,0.98)',
+              border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8,
+              boxShadow: '0 18px 36px rgba(0,0,0,0.4)', padding: 4,
+            }}>
+              {visibleNodes.map(node => (
+                <button
+                  key={node.id}
+                  onClick={() => {
+                    centerOnNode(node)
+                    setNodeQuery('')
+                  }}
+                  style={{
+                    width: '100%', display: 'grid', gridTemplateColumns: '54px 1fr',
+                    gap: 8, alignItems: 'center', textAlign: 'left', padding: '6px 7px',
+                    border: 0, borderRadius: 6, background: selected?.id === node.id ? 'rgba(34,211,238,0.1)' : 'transparent',
+                    color: '#cbd5e1', cursor: 'pointer',
+                  }}
+                >
+                  <span style={{
+                    fontSize: 8, fontWeight: 800, textTransform: 'uppercase',
+                    color: node.kind === 'ioc' ? '#22d3ee' : node.kind === 'actor' ? '#a855f7' : '#a78bfa',
+                  }}>{node.kind}</span>
+                  <span style={{
+                    fontSize: 10, fontFamily: node.kind === 'ioc' ? 'monospace' : undefined,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{node.fullLabel ?? node.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {/* Zoom controls */}
         <div style={{ display: 'flex', gap: 4 }}>
           {[
             { icon: <ZoomIn size={12} />,    action: () => setZoom(z => Math.min(2.5, z + 0.15)) },
-            { icon: <ZoomOut size={12} />,   action: () => setZoom(z => Math.max(0.3, z - 0.15)) },
-            { icon: <Maximize2 size={12} />, action: resetView },
+            { icon: <ZoomOut size={12} />,   action: () => setZoom(z => Math.max(0.18, z - 0.15)) },
+            { icon: <Maximize2 size={12} />, action: fitGraph },
             { icon: <RefreshCw size={12} />, action: load },
           ].map((btn, i) => (
             <button key={i} onClick={btn.action} style={{
@@ -723,6 +854,11 @@ export default function ThreatGraph() {
               display: 'flex', alignItems: 'center',
             }}>{btn.icon}</button>
           ))}
+          <button onClick={resetView} style={{
+            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 6, padding: '4px 7px', color: '#64748b', cursor: 'pointer',
+            fontSize: 9, fontWeight: 800,
+          }}>1:1</button>
         </div>
       </div>
 
@@ -732,6 +868,29 @@ export default function ThreatGraph() {
         cisaMatches={cisaMatches} clusterDist={clusterDist}
         filterActor={filterActor} setFilterActor={setFilterActor}
       />
+
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6, padding: '6px 16px',
+        borderBottom: '1px solid rgba(255,255,255,0.04)', background: 'rgba(0,0,0,0.16)',
+      }}>
+        {[
+          { label: 'Actores', kind: 'actor' as const },
+          { label: 'Campañas', kind: 'campaign' as const },
+          { label: 'IoC / CVE', kind: 'ioc' as const },
+        ].map(item => (
+          <button key={item.kind} onClick={() => jumpToKind(item.kind)}
+            style={{
+              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 9,
+              fontWeight: 700, padding: '4px 8px',
+            }}>
+            {item.label}
+          </button>
+        ))}
+        <span style={{ marginLeft: 'auto', fontSize: 8, color: '#334155' }}>
+          Rueda: desplazar · Ctrl/⌘/Alt + rueda: zoom · arrastrar: mover
+        </span>
+      </div>
 
       {/* Zone labels row */}
       <div style={{
@@ -755,10 +914,10 @@ export default function ThreatGraph() {
       </div>
 
       {/* Graph canvas */}
-      <div style={{ position: 'relative', height: Math.min(svgH, 580), overflow: 'hidden' }}>
+      <div ref={viewportRef} style={{ position: 'relative', height: VIEW_H, overflow: 'hidden' }}>
         <svg
           width="100%" height="100%"
-          viewBox={`0 0 ${SVG_W} ${svgH}`}
+          viewBox={`0 0 ${SVG_W} ${VIEW_H}`}
           style={{ cursor: dragging ? 'grabbing' : 'grab' }}
           onWheel={onWheel}
           onMouseDown={onMouseDown}
@@ -826,7 +985,7 @@ export default function ThreatGraph() {
                 width={node.w} height={node.h}
                 overflow="visible"
               >
-                <div xmlns="http://www.w3.org/1999/xhtml" style={{ width: node.w, height: node.h }}>
+                <div style={{ width: node.w, height: node.h }}>
                   {node.kind === 'actor' && (
                     <ActorCard node={node} selected={selected?.id === node.id}
                       onClick={() => setSelected(prev => prev?.id === node.id ? null : node)} />
@@ -844,6 +1003,38 @@ export default function ThreatGraph() {
             ))}
           </g>
         </svg>
+
+        <div
+          onClick={onMiniMapClick}
+          style={{
+            position: 'absolute', left: 12, bottom: 12, width: 168, height: 112,
+            background: 'rgba(2,6,23,0.88)', border: '1px solid rgba(255,255,255,0.09)',
+            borderRadius: 8, zIndex: 8, cursor: 'crosshair', overflow: 'hidden',
+            boxShadow: '0 10px 24px rgba(0,0,0,0.35)',
+          }}
+        >
+          <svg width="100%" height="100%" viewBox={`0 0 ${SVG_W} ${svgH}`} preserveAspectRatio="none">
+            <rect x="0" y="0" width={SVG_W} height={svgH} fill="rgba(15,23,42,0.62)" />
+            {nodes.map(node => (
+              <rect
+                key={node.id}
+                x={node.x} y={node.y} width={node.w} height={node.h}
+                rx={4}
+                fill={node.kind === 'ioc' ? (node.clusterColor ?? '#22d3ee') : node.kind === 'actor' ? '#a855f7' : '#a78bfa'}
+                opacity={node.kind === 'ioc' ? 0.58 : 0.85}
+              />
+            ))}
+            <rect
+              x={Math.max(0, -pan.x / zoom)}
+              y={Math.max(0, -pan.y / zoom)}
+              width={SVG_W / zoom}
+              height={VIEW_H / zoom}
+              fill="rgba(34,211,238,0.12)"
+              stroke="#22d3ee"
+              strokeWidth={8 / zoom}
+            />
+          </svg>
+        </div>
 
         {/* Detail panel */}
         {selected && <DetailPanel node={selected} onClose={() => setSelected(null)} />}

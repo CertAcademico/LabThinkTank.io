@@ -264,7 +264,9 @@ print(challenge_df.describe(include='all'))
         await py.loadPackage(['pandas', 'numpy'])
 
         // Load ioc_df
-        const iocRes = await fetch(`${API}/ioc-feed`)
+        const iocRes = await fetch(`${API}/ioc-feed`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
         const iocs   = await iocRes.json()
         py.globals.set('_ioc_json', JSON.stringify(iocs))
         await py.runPythonAsync(`import pandas as pd, json; ioc_df = pd.DataFrame(json.loads(_ioc_json))`)

@@ -329,7 +329,8 @@ export default function LogIngest() {
   // ── SSE connection ──────────────────────────────────────────────────────────
 
   useEffect(() => {
-    const es = new EventSource(`${API}/live/feed`)
+    if (!token) return
+    const es = new EventSource(`${API}/live/feed?token=${encodeURIComponent(token)}`)
     eventSourceRef.current = es
     es.onopen = () => setLiveConnected(true)
     es.onmessage = (e) => {
@@ -340,7 +341,7 @@ export default function LogIngest() {
     }
     es.onerror = () => { setLiveConnected(false) }
     return () => { es.close() }
-  }, [])
+  }, [token])
 
   // ── File drop ───────────────────────────────────────────────────────────────
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -112,6 +113,7 @@ function PipelineStep({
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function RuleDepuration() {
+  const { token } = useAuth()
   const [catalog, setCatalog]   = useState<IoacatalogEntry[]>([])
   const [selTtp,  setSelTtp]    = useState('')
   const [iocVal,  setIocVal]    = useState('')
@@ -132,11 +134,12 @@ export default function RuleDepuration() {
   }
 
   useEffect(() => {
-    fetch(`${API_URL}/rules/ioa-catalog`)
-      .then(r => r.json())
+    if (!token) return
+    fetch(`${API_URL}/rules/ioa-catalog`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
       .then(setCatalog)
       .catch(() => {})
-  }, [])
+  }, [token])
 
   const selectedMeta = catalog.find(c => c.ttp === selTtp)
 
@@ -146,7 +149,7 @@ export default function RuleDepuration() {
     try {
       const res = await fetch(`${API_URL}/rules/depurate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           ttp:          selTtp,
           ioc_value:    iocVal,

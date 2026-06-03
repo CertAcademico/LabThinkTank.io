@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -106,6 +107,7 @@ function SevBadge({ sev }: { sev: string }) {
 // ── MISP Panel ────────────────────────────────────────────────────────────────
 
 function MispPanel() {
+  const { token } = useAuth()
   const [status, setStatus]       = useState<MispStatus | null>(null)
   const [iocs, setIocs]           = useState<MispIoc[]>([])
   const [loading, setLoading]     = useState(false)
@@ -117,17 +119,19 @@ function MispPanel() {
   const [filterSev, setFilterSev]   = useState('all')
 
   const fetchStatus = useCallback(() => {
-    fetch(`${API_URL}/misp/status`)
-      .then(r => r.json())
+    if (!token) return
+    fetch(`${API_URL}/misp/status`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('MISP no disponible para este rol')))
       .then(setStatus)
       .catch(() => {})
-  }, [])
+  }, [token])
 
   const fetchIocs = useCallback(() => {
+    if (!token) return
     setLoading(true)
     setError('')
     setImportResult(null)
-    fetch(`${API_URL}/misp/iocs?limit=${limit}`)
+    fetch(`${API_URL}/misp/iocs?limit=${limit}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(d => {
         if (d.detail) throw new Error(d.detail)
@@ -135,12 +139,16 @@ function MispPanel() {
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
-  }, [limit])
+  }, [limit, token])
 
   const handleImport = () => {
+    if (!token) return
     setImporting(true)
     setImportResult(null)
-    fetch(`${API_URL}/misp/import?limit=${limit}`, { method: 'POST' })
+    fetch(`${API_URL}/misp/import?limit=${limit}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then(r => r.json())
       .then(d => {
         if (d.detail) throw new Error(d.detail)
@@ -379,6 +387,7 @@ function MispPanel() {
 const SOURCES = Object.keys(SOURCE_STYLE).filter(s => !['malwarebazaar', 'urlhaus'].includes(s))
 
 export default function IntelFeed() {
+  const { token } = useAuth()
   const [tab, setTab]               = useState<'feeds' | 'misp'>('feeds')
   const [feed, setFeed]             = useState<FeedEntry[]>(STATIC_FEED)
   const [activeSource, setActiveSource] = useState('all')
@@ -386,8 +395,9 @@ export default function IntelFeed() {
   const [pulse, setPulse]           = useState(false)
 
   useEffect(() => {
-    fetch(`${API_URL}/ioc-feed`)
-      .then(r => r.json())
+    if (!token) return
+    fetch(`${API_URL}/ioc-feed`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
       .then((iocs: { id: number; ioc: string; type: string; severity: string; threat_actor: string }[]) => {
         const mapped: FeedEntry[] = iocs.map(i => ({
           id:       `ioc-${i.id}`,
@@ -404,7 +414,7 @@ export default function IntelFeed() {
         setTimeout(() => setPulse(false), 1500)
       })
       .catch(() => {})
-  }, [])
+  }, [token])
 
   const filtered = feed.filter(e =>
     (activeSource === 'all' || e.source === activeSource) &&

@@ -278,6 +278,249 @@ function ActorBar({ events }: { events: ThreatEvent[] }) {
   )
 }
 
+// ── Visibility dashboard ──────────────────────────────────────────────────────
+
+const SEV_WEIGHT: Record<string, number> = { Critical: 100, High: 72, Medium: 42, Low: 18 }
+const KILL_CHAIN_ORDER = [
+  'Reconnaissance', 'Resource Development', 'Initial Access', 'Execution', 'Persistence',
+  'Privilege Escalation', 'Defense Evasion', 'Credential Access', 'Discovery',
+  'Lateral Movement', 'Collection', 'Command and Control', 'Exfiltration', 'Impact',
+]
+
+function topCounts(values: string[], limit = 6) {
+  const counts = values.reduce<Record<string, number>>((acc, value) => {
+    if (value && value !== 'Unknown' && value !== 'N/A') acc[value] = (acc[value] ?? 0) + 1
+    return acc
+  }, {})
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, limit)
+}
+
+function eventRiskScore(event: ThreatEvent) {
+  const sev = SEV_WEIGHT[event.severity] ?? 35
+  const conf = Number(event.confidenceScore) || 50
+  const criticalAsset = /bank|financ|energy|energ|gov|gobierno|salud|health|telecom|infra/i.test(
+    `${event.victim} ${event.targetCountry} ${event.description}`,
+  ) ? 10 : 0
+  return Math.min(100, Math.round(sev * 0.66 + conf * 0.24 + criticalAsset))
+}
+
+function buildVisibility(events: ThreatEvent[], query: string) {
+  const topActors = topCounts(events.map(e => e.threatActor), 5)
+  const topTactics = topCounts(events.map(e => e.mitreTactic), 8)
+  const topTargets = topCounts(events.map(e => e.targetCountry || e.victim), 5)
+  const topSources = topCounts(events.map(e => e.sourceCountry), 5)
+  const critical = events.filter(e => e.severity === 'Critical').length
+  const high = events.filter(e => e.severity === 'High').length
+  const weighted = events.reduce((sum, event) => sum + eventRiskScore(event), 0)
+  const riskScore = events.length ? Math.round(weighted / events.length) : 0
+  const dominantActor = topActors[0]?.[0] ?? 'Sin atribución dominante'
+  const dominantTactic = topTactics[0]?.[0] ?? 'Sin táctica dominante'
+  const exposedTarget = topTargets[0]?.[0] ?? 'Objetivo mixto'
+  const sourcePressure = topSources[0]?.[0] ?? 'Origen mixto'
+  const avgConf = events.length
+    ? Math.round(events.reduce((sum, event) => sum + (Number(event.confidenceScore) || 0), 0) / events.length)
+    : 0
+
+  const timeline = KILL_CHAIN_ORDER.map((tactic, index) => {
+    const tacticEvents = events.filter(e => e.mitreTactic === tactic)
+    const score = tacticEvents.reduce((sum, event) => sum + eventRiskScore(event), 0)
+    return {
+      tactic,
+      index,
+      count: tacticEvents.length,
+      score,
+      severity: tacticEvents.some(e => e.severity === 'Critical') ? 'Critical'
+        : tacticEvents.some(e => e.severity === 'High') ? 'High'
+        : tacticEvents.length ? 'Medium' : 'Low',
+    }
+  }).filter(t => t.count > 0)
+
+  const priorities = events
+    .filter(e => e.ioc || e.threatActor || e.mitreTechniqueId)
+    .map(event => ({
+      event,
+      score: eventRiskScore(event),
+      evidence: [
+        event.threatActor,
+        event.mitreTechniqueId || event.mitreTactic,
+        event.ioc,
+        event.sourceCountry && event.targetCountry ? `${event.sourceCountry}→${event.targetCountry}` : '',
+      ].filter(Boolean).join(' · '),
+      action: event.severity === 'Critical'
+        ? 'Aislar evidencia, enriquecer IOC y activar hunting inmediato'
+        : event.severity === 'High'
+          ? 'Priorizar hunting y validación de controles'
+          : 'Monitorear correlaciones y enriquecer contexto',
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+
+  const brief = [
+    '# Brief SOC - Motor de Fusion CTI',
+    '',
+    `Consulta: ${query || 'Sin consulta'}`,
+    `Eventos analizados: ${events.length}`,
+    `Riesgo ejecutivo: ${riskScore}/100`,
+    `Actor dominante: ${dominantActor}`,
+    `Tactica dominante: ${dominantTactic}`,
+    `Objetivo mas expuesto: ${exposedTarget}`,
+    `Presion de origen: ${sourcePressure}`,
+    `Severidad: ${critical} criticos, ${high} altos`,
+    `Confianza media: ${avgConf}%`,
+    '',
+    '## Prioridades',
+    ...priorities.slice(0, 5).map((p, i) => `${i + 1}. [${p.score}/100] ${p.evidence} - ${p.action}`),
+    '',
+    '## Tacticas observadas',
+    ...topTactics.map(([tactic, count]) => `- ${tactic}: ${count} eventos`),
+    '',
+    '## Acciones SOC',
+    '- Enriquecer IOCs prioritarios con VT/AbuseIPDB/Shodan/MISP.',
+    '- Buscar TTPs dominantes en SIEM/EDR durante las ultimas 24h, 7d y 30d.',
+    '- Validar cobertura ATT&CK para tacticas criticas y altas.',
+    '- Escalar eventos con score >= 80 a respuesta de incidentes.',
+  ].join('\n')
+
+  return {
+    riskScore,
+    riskLabel: riskScore >= 78 ? 'Crítico' : riskScore >= 58 ? 'Alto' : riskScore >= 36 ? 'Medio' : 'Bajo',
+    dominantActor,
+    dominantTactic,
+    exposedTarget,
+    sourcePressure,
+    avgConf,
+    topActors,
+    topTactics,
+    timeline,
+    priorities,
+    brief,
+  }
+}
+
+function IntelVisibilityDashboard({ events, query }: { events: ThreatEvent[]; query: string }) {
+  const visibility = useMemo(() => buildVisibility(events, query), [events, query])
+  const riskColor = visibility.riskScore >= 78 ? '#ef4444'
+    : visibility.riskScore >= 58 ? '#f97316'
+      : visibility.riskScore >= 36 ? '#facc15'
+        : '#4ade80'
+
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ ...glass, border: `1px solid ${riskColor}24` }}>
+      <div className="px-4 py-3 border-b flex items-center gap-3 flex-wrap" style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.22)' }}>
+        <div>
+          <p className="text-xs font-bold text-slate-200">Intel Visibility Dashboard</p>
+          <p className="text-[9px] text-slate-600">Radar ejecutivo · Timeline ATT&CK · Ranking SOC</p>
+        </div>
+        <div className="flex-1" />
+        <button onClick={() => downloadText(`soc-brief-${Date.now()}.md`, visibility.brief, 'text/markdown;charset=utf-8')}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[10px] font-bold"
+                style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.22)' }}>
+          <Download size={10} /> Brief SOC
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 p-4">
+        <div className="rounded-lg p-4 xl:row-span-2 flex flex-col justify-between" style={{ background: `${riskColor}08`, border: `1px solid ${riskColor}24` }}>
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: riskColor }}>Riesgo ejecutivo</p>
+            <p className="text-4xl font-black mt-1" style={{ color: riskColor }}>{visibility.riskScore}</p>
+            <p className="text-xs font-bold text-slate-300">{visibility.riskLabel}</p>
+          </div>
+          <div className="space-y-2 mt-5">
+            {[
+              ['Actor', visibility.dominantActor],
+              ['Táctica', visibility.dominantTactic],
+              ['Objetivo', visibility.exposedTarget],
+              ['Origen', visibility.sourcePressure],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <p className="text-[8px] text-slate-700 uppercase font-bold">{label}</p>
+                <p className="text-[10px] text-slate-300 truncate">{value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="xl:col-span-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
+          {[
+            { label: 'Actor dominante', value: visibility.dominantActor, color: '#a78bfa' },
+            { label: 'TTP dominante', value: visibility.dominantTactic, color: '#f87171' },
+            { label: 'Objetivo expuesto', value: visibility.exposedTarget, color: '#22d3ee' },
+            { label: 'Confianza media', value: `${visibility.avgConf}%`, color: '#4ade80' },
+          ].map(item => (
+            <div key={item.label} className="rounded-lg px-3 py-2.5 min-w-0" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <p className="text-[8px] text-slate-700 uppercase font-bold">{item.label}</p>
+              <p className="text-[11px] font-bold truncate mt-1" style={{ color: item.color }}>{item.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="xl:col-span-2 rounded-lg p-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-3">Timeline ATT&CK</p>
+          <div className="flex items-end gap-2 h-28 overflow-x-auto pb-1">
+            {visibility.timeline.map(item => {
+              const color = SEV_COLOR[item.severity] ?? '#64748b'
+              const height = Math.max(16, Math.min(96, item.count * 14))
+              return (
+                <div key={item.tactic} className="flex flex-col items-center gap-1 min-w-16">
+                  <div className="w-full rounded-t" title={`${item.tactic}: ${item.count} eventos`}
+                       style={{ height, background: `${color}66`, border: `1px solid ${color}88` }} />
+                  <span className="text-[8px] text-slate-600 text-center leading-tight">{item.tactic.split(' ').slice(0, 2).join(' ')}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="xl:col-span-1 rounded-lg p-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-2">Top actores</p>
+          <div className="space-y-2">
+            {visibility.topActors.slice(0, 5).map(([actor, count]) => (
+              <div key={actor} className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-400 truncate flex-1">{actor}</span>
+                <span className="text-[9px] font-mono text-violet-400">{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="xl:col-span-1 rounded-lg p-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-2">Top TTPs</p>
+          <div className="space-y-2">
+            {visibility.topTactics.slice(0, 5).map(([tactic, count]) => (
+              <div key={tactic} className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-400 truncate flex-1">{tactic}</span>
+                <span className="text-[9px] font-mono text-red-400">{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="xl:col-span-4 rounded-lg overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <div className="px-3 py-2 border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+            <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">Ranking de prioridad CTI/SOC</p>
+          </div>
+          <div className="divide-y divide-white/[0.03]">
+            {visibility.priorities.slice(0, 6).map((p, i) => {
+              const color = p.score >= 80 ? '#ef4444' : p.score >= 60 ? '#f97316' : '#facc15'
+              return (
+                <div key={`${p.event.id}-${i}`} className="grid grid-cols-[44px_1fr_180px] gap-3 px-3 py-2 items-center">
+                  <span className="text-sm font-black" style={{ color }}>{p.score}</span>
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-slate-300 truncate">{p.evidence}</p>
+                    <p className="text-[9px] text-slate-700 truncate">{p.event.description}</p>
+                  </div>
+                  <p className="text-[9px] text-slate-500 leading-tight">{p.action}</p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Sub-analysis result renderers ──────────────────────────────────────────────
 
 function PredictivePanel({ data }: { data: Record<string, unknown> }) {
@@ -286,6 +529,15 @@ function PredictivePanel({ data }: { data: Record<string, unknown> }) {
   const attr = data.recalculatedAttribution as Record<string, unknown>
   return (
     <div className="space-y-3">
+      {data.analysisMode === 'heuristic-fallback' && (
+        <div className="rounded-lg px-3 py-2 flex items-start gap-2"
+             style={{ background: 'rgba(250,204,21,0.06)', border: '1px solid rgba(250,204,21,0.16)' }}>
+          <AlertCircle size={13} className="text-yellow-500 shrink-0 mt-0.5" />
+          <p className="text-[10px] text-yellow-200/80">
+            Modo predictivo local activo. El motor IA externo no respondió correctamente, pero el análisis se generó con los eventos disponibles.
+          </p>
+        </div>
+      )}
       {impact && (
         <div className="rounded-lg p-3 space-y-1" style={{ background: `${SEV_COLOR[String(impact.severity)] ?? '#94a3b8'}0a`, border: `1px solid ${SEV_COLOR[String(impact.severity)] ?? '#94a3b8'}25` }}>
           <div className="flex items-center gap-2">
@@ -391,6 +643,15 @@ function MLPanel({ data }: { data: Record<string, unknown> }) {
   const proposals = data.proposals as Record<string, unknown>[]
   return (
     <div className="space-y-2">
+      {data.analysisMode === 'heuristic-fallback' && (
+        <div className="rounded-lg px-3 py-2 flex items-start gap-2"
+             style={{ background: 'rgba(250,204,21,0.06)', border: '1px solid rgba(250,204,21,0.16)' }}>
+          <AlertCircle size={13} className="text-yellow-500 shrink-0 mt-0.5" />
+          <p className="text-[10px] text-yellow-200/80">
+            Propuestas ML generadas localmente porque el motor IA externo falló temporalmente.
+          </p>
+        </div>
+      )}
       <p className="text-[10px] text-slate-400">{String(data.summary ?? '')}</p>
       {proposals?.slice(0, 6).map((p, i) => (
         <div key={i} className="rounded-lg px-3 py-2.5 space-y-1" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -727,11 +988,14 @@ export default function FusionEngine() {
   const [importing, setImporting] = useState(false)
 
   useEffect(() => {
-    fetch(`${API}/ai/gemini/status`)
+    if (!token) return
+    fetch(`${API}/ai/gemini/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then(r => readApiJson<{ configured?: boolean }>(r))
       .then(d => setGeminiOk(Boolean(d.configured)))
       .catch(() => setGeminiOk(false))
-  }, [])
+  }, [token])
 
   // ── Generate events ────────────────────────────────────────────────────────
 
@@ -987,6 +1251,8 @@ export default function FusionEngine() {
               </div>
             )} catch { return null }
           })()}
+
+          <IntelVisibilityDashboard events={events} query={query} />
 
           {/* Charts */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

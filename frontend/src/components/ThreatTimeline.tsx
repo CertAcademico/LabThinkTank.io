@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -89,6 +90,7 @@ function formatEventTime(offsetMinutes: number): string {
 }
 
 export default function ThreatTimeline() {
+  const { token } = useAuth()
   const [events, setEvents] = useState<TimelineEvent[]>(STATIC_EVENTS)
   const [filter, setFilter] = useState<string>('all')
   const [selectedPhase, setSelectedPhase] = useState<string | null>(null)
@@ -97,8 +99,9 @@ export default function ThreatTimeline() {
   const [liveCount, setLiveCount] = useState(0)
 
   useEffect(() => {
-    fetch(`${API_URL}/ioas`)
-      .then(r => r.json())
+    if (!token) return
+    fetch(`${API_URL}/ioas`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
       .then((ioas: IOAItem[]) => {
         const mapped: TimelineEvent[] = ioas.map((ioa, i) => ({
           time:            formatEventTime(i * 15),
@@ -115,7 +118,7 @@ export default function ThreatTimeline() {
         setEvents(prev => [...prev, ...mapped])
       })
       .catch(() => {})
-  }, [])
+  }, [token])
 
   const filtered = events.filter(e => {
     if (filter !== 'all' && e.severity !== filter) return false

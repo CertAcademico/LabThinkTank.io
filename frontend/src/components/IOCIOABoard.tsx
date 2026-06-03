@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import RuleDepuration from './RuleDepuration'
+import { useAuth } from '../contexts/AuthContext'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -55,6 +56,7 @@ function SeverityBadge({ severity }: { severity: string }) {
 }
 
 export default function IOCIOABoard() {
+  const { token } = useAuth()
   const [tab, setTab] = useState<Tab>('ioc')
   const [iocs, setIocs] = useState<IOC[]>([])
   const [ioas, setIoas] = useState<IOA[]>([])
@@ -63,9 +65,11 @@ export default function IOCIOABoard() {
   const [severityFilter, setSeverityFilter] = useState('all')
 
   useEffect(() => {
+    if (!token) return
+    const headers = { Authorization: `Bearer ${token}` }
     Promise.all([
-      fetch(`${API_URL}/ioc-feed`).then(r => r.json()),
-      fetch(`${API_URL}/ioas`).then(r => r.json()),
+      fetch(`${API_URL}/ioc-feed`, { headers }).then(r => r.ok ? r.json() : []),
+      fetch(`${API_URL}/ioas`,     { headers }).then(r => r.ok ? r.json() : []),
     ])
       .then(([iocData, ioaData]) => {
         setIocs(iocData)
@@ -73,7 +77,7 @@ export default function IOCIOABoard() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [token])
 
   const filteredIOCs = iocs.filter(i => {
     const matchSearch = !search || i.ioc.toLowerCase().includes(search.toLowerCase()) || i.threat_actor.toLowerCase().includes(search.toLowerCase())

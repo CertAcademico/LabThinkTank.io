@@ -770,6 +770,87 @@ def admin_users(authorization: str = Header(None)):
     return [dict(r) for r in rows]
 
 
+@app.get("/admin/users/auth-audit")
+def admin_users_auth_audit(authorization: str = Header(None)):
+    _require_admin(authorization)
+    allowed_roles = {"student", "analyst", "senior_analyst", "instructor", "admin"}
+
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT id, name, email, role, created_at, password_hash, password_expires_at
+            FROM users
+            ORDER BY created_at DESC
+        """).fetchall()
+
+    items = []
+    status_counts = Counter()
+    for row in rows:
+        email = (row["email"] or "").strip()
+        role = row["role"] or ""
+        password_hash = row["password_hash"] or ""
+        expires_at = row["password_expires_at"] or ""
+        issues: list[dict[str, str]] = []
+
+        if not (row["name"] or "").strip():
+            issues.append({"severity": "error", "code": "missing_name", "detail": "El nombre está vacío."})
+        if not email:
+            issues.append({"severity": "error", "code": "missing_email", "detail": "El email está vacío."})
+        elif not re.match(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$", email):
+            issues.append({"severity": "error", "code": "invalid_email", "detail": "El formato del email no es válido."})
+        else:
+            if email != email.lower():
+                issues.append({"severity": "warning", "code": "email_not_normalized", "detail": "El email contiene mayúsculas."})
+            if email.split("@", 1)[1].lower() != "universidadean.edu.co":
+                issues.append({"severity": "error", "code": "invalid_domain", "detail": "El dominio no está permitido para login."})
+
+        if role not in allowed_roles:
+            issues.append({"severity": "error", "code": "invalid_role", "detail": "El rol no existe en la plataforma."})
+        if not password_hash:
+            issues.append({"severity": "error", "code": "missing_password_hash", "detail": "No hay hash de contraseña."})
+        elif not password_hash.startswith("$2"):
+            issues.append({"severity": "error", "code": "invalid_password_hash", "detail": "El hash no usa bcrypt."})
+        elif len(password_hash) != 60:
+            issues.append({"severity": "warning", "code": "unexpected_hash_length", "detail": "El hash bcrypt tiene longitud inesperada."})
+
+        password_status = "permanent"
+        if expires_at:
+            exp_dt = _parse_dt(expires_at)
+            if not exp_dt:
+                password_status = "invalid_expiry"
+                issues.append({"severity": "error", "code": "invalid_password_expiry", "detail": "La fecha de expiración no se puede interpretar."})
+            elif _is_due(expires_at):
+                password_status = "expired"
+                issues.append({"severity": "error", "code": "password_expired", "detail": "La contraseña temporal está vencida."})
+            else:
+                password_status = "temporary_active"
+
+        severity = "ok"
+        if any(issue["severity"] == "error" for issue in issues):
+            severity = "error"
+        elif issues:
+            severity = "warning"
+        status_counts[severity] += 1
+
+        items.append({
+            "id": row["id"],
+            "name": row["name"],
+            "email": email,
+            "role": role,
+            "created_at": row["created_at"],
+            "password_status": password_status,
+            "status": severity,
+            "issues": issues,
+        })
+
+    return {
+        "total": len(items),
+        "ok": status_counts["ok"],
+        "warnings": status_counts["warning"],
+        "errors": status_counts["error"],
+        "items": items,
+    }
+
+
 # ── Admin: Datasets ───────────────────────────────────────────────────────────
 
 @app.get("/admin/datasets")
@@ -2799,27 +2880,128 @@ def _fallback_ml_proposals(events: list[dict], reason: str = "") -> dict:
     }
 
 
-def _require_fusion_access(authorization: str | None) -> dict:
-    user = _auth_user_or_raise(authorization)
-    if not _is_privileged(user):
+def _student_fusion_daily_limit() -> int:
+    try:
+        return max(0, int(os.getenv("STUDENT_FUSION_DAILY_LIMIT", "3")))
+    except ValueError:
+        return 3
+
+
+def _fusion_usage_date() -> str:
+    return _now_bogota().date().isoformat()
+
+
+def _fusion_quota_for_user(user: dict) -> dict:
+    if _is_privileged(user):
+        return {"limited": False, "limit": None, "used": 0, "remaining": None, "usage_date": _fusion_usage_date()}
+
+    usage_date = _fusion_usage_date()
+    limit = _student_fusion_daily_limit()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT request_count FROM fusion_usage WHERE user_email = ? AND usage_date = ?",
+            (user["email"], usage_date),
+        ).fetchone()
+    used = int(row["request_count"]) if row else 0
+    return {
+        "limited": True,
+        "limit": limit,
+        "used": used,
+        "remaining": max(0, limit - used),
+        "usage_date": usage_date,
+    }
+
+
+def _consume_student_fusion_quota(user: dict, endpoint: str) -> dict:
+    if _is_privileged(user):
+        return _fusion_quota_for_user(user)
+
+    usage_date = _fusion_usage_date()
+    limit = _student_fusion_daily_limit()
+    if limit <= 0:
         raise HTTPException(
-            status_code=403,
-            detail="El Motor de Fusión completo está reservado para roles de análisis/instrucción. Los estudiantes acceden a inteligencia limitada por reto asignado.",
+            status_code=429,
+            detail={
+                "message": "El Motor de Fusión está deshabilitado para estudiantes.",
+                "limit": limit,
+                "used": 0,
+                "remaining": 0,
+                "usage_date": usage_date,
+            },
         )
+
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT request_count FROM fusion_usage WHERE user_email = ? AND usage_date = ?",
+            (user["email"], usage_date),
+        ).fetchone()
+        used = int(row["request_count"]) if row else 0
+        if used >= limit:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "message": "Límite diario de consultas del Motor de Fusión alcanzado para estudiantes.",
+                    "limit": limit,
+                    "used": used,
+                    "remaining": 0,
+                    "usage_date": usage_date,
+                },
+            )
+
+        if row:
+            conn.execute(
+                """
+                UPDATE fusion_usage
+                SET request_count = request_count + 1,
+                    last_endpoint = ?,
+                    updated_at = datetime('now')
+                WHERE user_email = ? AND usage_date = ?
+                """,
+                (endpoint, user["email"], usage_date),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO fusion_usage (user_email, usage_date, request_count, last_endpoint)
+                VALUES (?, ?, 1, ?)
+                """,
+                (user["email"], usage_date, endpoint),
+            )
+
+    used += 1
+    return {
+        "limited": True,
+        "limit": limit,
+        "used": used,
+        "remaining": max(0, limit - used),
+        "usage_date": usage_date,
+    }
+
+
+def _require_fusion_access(authorization: str | None, *, consume: bool = False, endpoint: str = "fusion") -> dict:
+    user = _auth_user_or_raise(authorization)
+    user["fusion_quota"] = _consume_student_fusion_quota(user, endpoint) if consume else _fusion_quota_for_user(user)
     return user
 
 
 @app.get("/ai/gemini/status")
 def gemini_status(authorization: str = Header(None)):
     """Check which fusion engine is active (Gemini, Claude, or none)."""
-    _require_fusion_access(authorization)
+    user = _require_fusion_access(authorization)
     engine = _fusion_engine()
     if engine == "gemini":
-        return {"configured": True, "engine": "gemini", "model_fast": os.getenv("GEMINI_MODEL_FAST", "gemini-2.0-flash")}
+        return {"configured": True, "engine": "gemini", "model_fast": os.getenv("GEMINI_MODEL_FAST", "gemini-2.0-flash"), "quota": user["fusion_quota"]}
     if engine == "claude":
         from ai.claude_fusion_engine import _MODEL as claude_model
-        return {"configured": True, "engine": "claude", "model_fast": claude_model}
-    return {"configured": False, "engine": "none", "model_fast": "—"}
+        return {"configured": True, "engine": "claude", "model_fast": claude_model, "quota": user["fusion_quota"]}
+    return {"configured": False, "engine": "none", "model_fast": "—", "quota": user["fusion_quota"]}
+
+
+@app.get("/ai/gemini/quota")
+def gemini_quota(authorization: str = Header(None)):
+    """Current Motor de Fusion quota for the authenticated user."""
+    user = _require_fusion_access(authorization)
+    return user["fusion_quota"]
 
 
 @app.post("/ai/gemini/threat-data")
@@ -2828,7 +3010,10 @@ def gemini_threat_data(payload: dict = Body(...), authorization: str = Header(No
     Generate 60 (operativo) or 500 (annual) structured threat events via Gemini.
     Body: { "topic": str, "is_annual": bool }
     """
-    _require_fusion_access(authorization)
+    user = _require_fusion_access(authorization)
+    if not _is_privileged(user) and bool(payload.get("is_annual", False)):
+        raise HTTPException(status_code=403, detail="Las consultas anuales del Motor de Fusión están reservadas para analistas e instructores.")
+    _require_fusion_access(authorization, consume=True, endpoint="threat-data")
     return _gemini_wrap(
         generate_threat_data,
         payload.get("topic", ""),
@@ -2839,7 +3024,7 @@ def gemini_threat_data(payload: dict = Body(...), authorization: str = Header(No
 @app.post("/ai/gemini/quantum")
 def gemini_quantum(payload: dict = Body(...), authorization: str = Header(None)):
     """Quantum / PQC risk analysis for a threat actor."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="quantum")
     return _gemini_wrap(
         generate_quantum_threat_analysis,
         payload.get("actor", ""),
@@ -2850,7 +3035,7 @@ def gemini_quantum(payload: dict = Body(...), authorization: str = Header(None))
 @app.post("/ai/gemini/predictive")
 def gemini_predictive(payload: dict = Body(...), authorization: str = Header(None)):
     """Predictive analysis: next tactic, attribution, multi-actor correlation."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="predictive")
     threats = payload.get("threats", [])
     query = payload.get("query", "")
     try:
@@ -2862,7 +3047,7 @@ def gemini_predictive(payload: dict = Body(...), authorization: str = Header(Non
 @app.post("/ai/gemini/fusion-report")
 def gemini_fusion_report(payload: dict = Body(...), authorization: str = Header(None)):
     """Executive intelligence fusion report with Google Search grounding."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="fusion-report")
     return _gemini_wrap(
         generate_fusion_report,
         payload.get("query", ""),
@@ -2873,7 +3058,7 @@ def gemini_fusion_report(payload: dict = Body(...), authorization: str = Header(
 @app.post("/ai/gemini/mitre-details")
 def gemini_mitre_details(payload: dict = Body(...), authorization: str = Header(None)):
     """MITRE ATT&CK technique deep-dive for a specific actor."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="mitre-details")
     return _gemini_wrap(
         generate_mitre_details,
         payload.get("actor", ""),
@@ -2884,14 +3069,14 @@ def gemini_mitre_details(payload: dict = Body(...), authorization: str = Header(
 @app.get("/ai/gemini/welcome")
 def gemini_welcome(authorization: str = Header(None)):
     """Welcome panel: 5 recent APTs + 5 CVEs + 5 LATAM incidents."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="welcome")
     return _gemini_wrap(generate_welcome_data)
 
 
 @app.post("/ai/gemini/ioc-context")
 def gemini_ioc_context(payload: dict = Body(...), authorization: str = Header(None)):
     """IOC context with Google Search grounding (actor, malware, campaigns)."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="ioc-context")
     ioc = payload.get("ioc", "").strip()
     if not ioc:
         raise HTTPException(status_code=400, detail="'ioc' field required.")
@@ -2901,7 +3086,7 @@ def gemini_ioc_context(payload: dict = Body(...), authorization: str = Header(No
 @app.post("/ai/gemini/weekly-report")
 def gemini_weekly_report(payload: dict = Body(...), authorization: str = Header(None)):
     """Weekly flash report: TTPs, IOCs, hunting queries (Sigma/KQL/Splunk/YARA/PS)."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="weekly-report")
     return _gemini_wrap(
         generate_weekly_flash_report,
         payload.get("query", ""),
@@ -2912,7 +3097,7 @@ def gemini_weekly_report(payload: dict = Body(...), authorization: str = Header(
 @app.post("/ai/gemini/extract-entities")
 def gemini_extract_entities(payload: dict = Body(...), authorization: str = Header(None)):
     """Extract IOCs, actors, malware, CVEs from unstructured text."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="extract-entities")
     text = payload.get("text", "")
     if not text:
         raise HTTPException(status_code=400, detail="'text' field required.")
@@ -2922,7 +3107,7 @@ def gemini_extract_entities(payload: dict = Body(...), authorization: str = Head
 @app.post("/ai/gemini/colombia-risk")
 def gemini_colombia_risk(payload: dict = Body(...), authorization: str = Header(None)):
     """Colombian critical infrastructure risk assessment (Decreto 338/2022)."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="colombia-risk")
     return _gemini_wrap(
         assess_colombian_risk,
         payload.get("actor", ""),
@@ -2933,7 +3118,7 @@ def gemini_colombia_risk(payload: dict = Body(...), authorization: str = Header(
 @app.post("/ai/gemini/crisis-map")
 def gemini_crisis_map(payload: dict = Body(...), authorization: str = Header(None)):
     """Cyber crisis map: attack phases + strategic responses."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="crisis-map")
     return _gemini_wrap(
         generate_crisis_map,
         payload.get("actor", ""),
@@ -2944,7 +3129,7 @@ def gemini_crisis_map(payload: dict = Body(...), authorization: str = Header(Non
 @app.post("/ai/gemini/team-scenarios")
 def gemini_team_scenarios(payload: dict = Body(...), authorization: str = Header(None)):
     """Red / Blue / Purple / White Team simulation scenarios."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="team-scenarios")
     return _gemini_wrap(
         generate_team_scenarios,
         payload.get("actor", ""),
@@ -2955,7 +3140,7 @@ def gemini_team_scenarios(payload: dict = Body(...), authorization: str = Header
 @app.post("/ai/gemini/behavioral")
 def gemini_behavioral(payload: dict = Body(...), authorization: str = Header(None)):
     """Behavioral analysis: threat behavior + historical event explanations."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="behavioral")
     return _gemini_wrap(
         generate_behavioral_analysis,
         payload.get("topic", ""),
@@ -2966,7 +3151,7 @@ def gemini_behavioral(payload: dict = Body(...), authorization: str = Header(Non
 @app.post("/ai/gemini/playbook")
 def gemini_playbook(payload: dict = Body(...), authorization: str = Header(None)):
     """Incident response playbook for a given threat."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="playbook")
     return _gemini_wrap(
         generate_playbook,
         payload.get("threat_name", ""),
@@ -2977,7 +3162,7 @@ def gemini_playbook(payload: dict = Body(...), authorization: str = Header(None)
 @app.post("/ai/gemini/ml-proposals")
 def gemini_ml_proposals(payload: dict = Body(...), authorization: str = Header(None)):
     """ML model proposals (Random Forest / LSTM / SVM / Clustering) per event."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="ml-proposals")
     events = payload.get("events", [])
     try:
         return _gemini_wrap(generate_ml_proposals, events)
@@ -2988,7 +3173,7 @@ def gemini_ml_proposals(payload: dict = Body(...), authorization: str = Header(N
 @app.post("/ai/gemini/geopolitical")
 def gemini_geopolitical(payload: dict = Body(...), authorization: str = Header(None)):
     """Geopolitical deep-dive with anticipatory threats and stability score."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="geopolitical")
     return _gemini_wrap(
         generate_geopolitical_analysis,
         payload.get("query", ""),
@@ -2998,7 +3183,7 @@ def gemini_geopolitical(payload: dict = Body(...), authorization: str = Header(N
 @app.post("/ai/gemini/threat-graph")
 def gemini_threat_graph(payload: dict = Body(...), authorization: str = Header(None)):
     """Actor → IOC → Campaign correlation graph enriched with CISA APT database."""
-    _require_fusion_access(authorization)
+    _require_fusion_access(authorization, consume=True, endpoint="threat-graph")
     return _gemini_wrap(
         generate_threat_graph,
         payload.get("events", []),

@@ -31,6 +31,14 @@ interface ThreatEvent {
 
 type SubKey = 'predictive' | 'quantum' | 'geopolitical' | 'scenarios' | 'ml' | 'weekly' | 'colombia' | 'graph'
 
+interface FusionQuota {
+  limited: boolean
+  limit: number | null
+  used: number
+  remaining: number | null
+  usage_date: string
+}
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const glass = { background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
@@ -66,6 +74,15 @@ async function readApiJson<T = Record<string, unknown>>(res: Response): Promise<
     const preview = text.replace(/\s+/g, ' ').trim().slice(0, 180)
     throw new Error(`${label}: el backend no devolvió JSON válido${preview ? ` (${preview})` : ''}`)
   }
+}
+
+function apiErrorMessage(detail: unknown, fallback: string) {
+  if (!detail) return fallback
+  if (typeof detail === 'string') return detail
+  if (typeof detail === 'object' && 'message' in detail) {
+    return String((detail as { message?: unknown }).message ?? fallback)
+  }
+  return fallback
 }
 
 function Pill({ children, color = '#94a3b8' }: { children: React.ReactNode; color?: string }) {
@@ -957,6 +974,7 @@ function ThreatGraphPanel({ data }: { data: Record<string, unknown> }) {
 export default function FusionEngine() {
   const { token, user } = useAuth()
   const isAdmin = user?.role === 'admin'
+  const isPrivileged = ['admin', 'instructor', 'senior_analyst', 'analyst'].includes(user?.role ?? '')
 
   // Query state
   const [query, setQuery] = useState('')
@@ -973,6 +991,7 @@ export default function FusionEngine() {
 
   // Gemini status
   const [geminiOk, setGeminiOk] = useState<boolean | null>(null)
+  const [quota, setQuota] = useState<FusionQuota | null>(null)
 
   // Sub-analyses
   const [subOpen, setSubOpen]     = useState<Partial<Record<SubKey, boolean>>>({})
@@ -992,9 +1011,21 @@ export default function FusionEngine() {
     fetch(`${API}/ai/gemini/status`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then(r => readApiJson<{ configured?: boolean }>(r))
-      .then(d => setGeminiOk(Boolean(d.configured)))
+      .then(r => readApiJson<{ configured?: boolean; quota?: FusionQuota }>(r))
+      .then(d => { setGeminiOk(Boolean(d.configured)); if (d.quota) setQuota(d.quota) })
       .catch(() => setGeminiOk(false))
+  }, [token])
+
+  useEffect(() => {
+    if (!isPrivileged && isAnnual) setIsAnnual(false)
+  }, [isAnnual, isPrivileged])
+
+  const refreshQuota = useCallback(() => {
+    if (!token) return
+    fetch(`${API}/ai/gemini/quota`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: FusionQuota | null) => { if (d) setQuota(d) })
+      .catch(() => {})
   }, [token])
 
   // ── Generate events ────────────────────────────────────────────────────────
@@ -1010,23 +1041,25 @@ export default function FusionEngine() {
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ topic: q, is_annual: isAnnual }),
       })
-      const data = await readApiJson<{ detail?: string; threats?: ThreatEvent[]; sector_analysis?: string }>(res)
+      const data = await readApiJson<{ detail?: unknown; threats?: ThreatEvent[]; sector_analysis?: string }>(res)
       if (res.status === 402) throw new Error(
         isAdmin
-          ? '💳 ' + (data.detail ?? 'Créditos agotados. Ve a console.anthropic.com → Plans & Billing.')
+          ? '💳 ' + apiErrorMessage(data.detail, 'Créditos agotados. Ve a console.anthropic.com → Plans & Billing.')
           : 'El motor CTI no está disponible en este momento. Contacta al administrador.'
       )
+      if (res.status === 429) throw new Error(apiErrorMessage(data.detail, 'Límite diario de consultas alcanzado.'))
       if (!res.ok) throw new Error(
-        isAdmin ? (data.detail ?? 'Error generando eventos.') : 'El motor CTI no está disponible en este momento.'
+        isAdmin ? apiErrorMessage(data.detail, 'Error generando eventos.') : apiErrorMessage(data.detail, 'El motor CTI no está disponible en este momento.')
       )
       setEvents(data.threats ?? [])
       if (data.sector_analysis) setSectorInfo(data.sector_analysis)
+      refreshQuota()
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e))
     } finally {
       setLoading(false)
     }
-  }, [query, isAnnual, token])
+  }, [query, isAnnual, token, isAdmin, refreshQuota])
 
   // ── Sub-analyses ───────────────────────────────────────────────────────────
 
@@ -1057,19 +1090,20 @@ export default function FusionEngine() {
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(body),
       })
-      const data = await readApiJson<Record<string, unknown> & { detail?: string }>(res)
+      const data = await readApiJson<Record<string, unknown> & { detail?: unknown }>(res)
       if (!res.ok) throw new Error(
         res.status === 402
-          ? (isAdmin ? '💳 ' + (data.detail ?? 'Créditos agotados.') : 'Motor CTI no disponible. Contacta al administrador.')
-          : (isAdmin ? (data.detail ?? 'Error') : 'Motor CTI no disponible en este momento.')
+          ? (isAdmin ? '💳 ' + apiErrorMessage(data.detail, 'Créditos agotados.') : 'Motor CTI no disponible. Contacta al administrador.')
+          : apiErrorMessage(data.detail, isAdmin ? 'Error' : 'Motor CTI no disponible en este momento.')
       )
       setSubData(p => ({ ...p, [key]: data }))
+      refreshQuota()
     } catch (e) {
       setSubError(p => ({ ...p, [key]: String(e instanceof Error ? e.message : e) }))
     } finally {
       setSubLoading(p => ({ ...p, [key]: false }))
     }
-  }, [events, query, token])
+  }, [events, query, token, isAdmin, subData, refreshQuota])
 
   // ── Import IOCs to CTI-Lab ─────────────────────────────────────────────────
 
@@ -1152,6 +1186,14 @@ export default function FusionEngine() {
               {geminiOk ? 'Motor CTI activo' : 'Motor CTI inactivo · configura API key'}
             </div>
           )}
+          {quota?.limited && (
+            <div className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-lg"
+                 style={(quota.remaining ?? 0) > 0
+                   ? { background: 'rgba(34,211,238,0.07)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.2)' }
+                   : { background: 'rgba(239,68,68,0.07)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
+              Consultas hoy: {quota.used}/{quota.limit}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1194,14 +1236,15 @@ export default function FusionEngine() {
         <div className="flex items-center gap-3 flex-wrap">
           {/* Annual toggle */}
           <label className="flex items-center gap-2 cursor-pointer">
-            <button onClick={() => setIsAnnual(v => !v)}
-                    className="w-8 h-4 rounded-full transition-colors relative"
+            <button onClick={() => isPrivileged && setIsAnnual(v => !v)}
+                    disabled={!isPrivileged}
+                    className="w-8 h-4 rounded-full transition-colors relative disabled:opacity-40"
                     style={{ background: isAnnual ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.1)' }}>
               <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all"
                     style={{ left: isAnnual ? '50%' : '2px' }} />
             </button>
             <span className="text-[10px] text-slate-500">
-              {isAnnual ? '500 eventos · 2020–2026 (anual)' : '60 eventos · últimos 7 días (operativo)'}
+              {!isPrivileged ? '60 eventos · modo estudiante con cupo diario' : isAnnual ? '500 eventos · 2020–2026 (anual)' : '60 eventos · últimos 7 días (operativo)'}
             </span>
           </label>
 
@@ -1215,7 +1258,7 @@ export default function FusionEngine() {
             </p>
           )}
 
-          <button onClick={generate} disabled={loading || !query.trim() || geminiOk === false}
+          <button onClick={generate} disabled={loading || !query.trim() || geminiOk === false || Boolean(quota?.limited && quota.remaining === 0)}
                   className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold disabled:opacity-40 transition-all"
                   style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }}>
             {loading ? <><Spinner color="#f87171" /> Extrayendo inteligencia...</> : <><Zap size={14} /> Iniciar fusión CTI</>}

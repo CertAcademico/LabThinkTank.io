@@ -1,21 +1,22 @@
-import { useState, useEffect } from 'react'
+import { Suspense, lazy, useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { BadgeRow, type Badge } from './components/BadgeCard'
 import IOCSearch from './components/IOCSearch'
-import AuthPage        from './components/AuthPage'
-import AdminPanel      from './components/AdminPanel'
-import GlobalOverview  from './components/GlobalOverview'
-import ThreatGraphView from './components/ThreatGraphView'
-import AICopilot       from './components/AICopilot'
-import ATTCKMatrix     from './components/ATTCKMatrix'
-import ThreatTimeline  from './components/ThreatTimeline'
-import IOCIOABoard     from './components/IOCIOABoard'
-import IntelFeed       from './components/IntelFeed'
-import SandboxLab      from './components/SandboxLab'
-import ChallengeArena  from './components/ChallengeArena'
-import CTIToolkit      from './components/CTIToolkit'
-import LogIngest       from './components/LogIngest'
-import FusionEngine    from './components/FusionEngine'
+
+const AuthPage        = lazy(() => import('./components/AuthPage'))
+const AdminPanel      = lazy(() => import('./components/AdminPanel'))
+const GlobalOverview  = lazy(() => import('./components/GlobalOverview'))
+const ThreatGraphView = lazy(() => import('./components/ThreatGraphView'))
+const AICopilot       = lazy(() => import('./components/AICopilot'))
+const ATTCKMatrix     = lazy(() => import('./components/ATTCKMatrix'))
+const ThreatTimeline  = lazy(() => import('./components/ThreatTimeline'))
+const IOCIOABoard     = lazy(() => import('./components/IOCIOABoard'))
+const IntelFeed       = lazy(() => import('./components/IntelFeed'))
+const SandboxLab      = lazy(() => import('./components/SandboxLab'))
+const ChallengeArena  = lazy(() => import('./components/ChallengeArena'))
+const CTIToolkit      = lazy(() => import('./components/CTIToolkit'))
+const LogIngest       = lazy(() => import('./components/LogIngest'))
+const FusionEngine    = lazy(() => import('./components/FusionEngine'))
 
 type ViewId = 'overview' | 'graph' | 'copilot' | 'attack' | 'timeline' | 'ioc' | 'feeds' | 'toolkit' | 'sandbox' | 'retos' | 'logs' | 'fusion'
 
@@ -58,6 +59,18 @@ function Clock() {
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
+function LoadingPanel({ label = 'Cargando módulo' }: { label?: string }) {
+  return (
+    <div className="min-h-[320px] flex items-center justify-center">
+      <div className="flex items-center gap-3 rounded-lg border px-4 py-3"
+           style={{ background: 'rgba(8,12,25,0.86)', borderColor: 'rgba(255,255,255,0.06)' }}>
+        <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs font-mono text-slate-500">{label}</span>
+      </div>
+    </div>
+  )
+}
+
 function Shell() {
   const { user, logout, token } = useAuth()
   const [view,      setView]      = useState<ViewId>('overview')
@@ -83,17 +96,18 @@ function Shell() {
   const visibleNav = NAV.filter(item =>
     isPrivileged || item.id !== 'feeds'
   )
-
-  useEffect(() => {
-    if (!visibleNav.some(item => item.id === view)) setView('overview')
-  }, [view, visibleNav])
+  const activeView = visibleNav.some(item => item.id === view) ? view : 'overview'
 
   if (isAdmin && adminMode) {
-    return <AdminPanel onExitAdmin={() => setAdminMode(false)} />
+    return (
+      <Suspense fallback={<LoadingPanel label="Cargando panel admin" />}>
+        <AdminPanel onExitAdmin={() => setAdminMode(false)} />
+      </Suspense>
+    )
   }
 
   const renderView = () => {
-    switch (view) {
+    switch (activeView) {
       case 'overview':  return <GlobalOverview />
       case 'graph':     return <ThreatGraphView />
       case 'copilot':   return <AICopilot />
@@ -138,7 +152,7 @@ function Shell() {
             <div key={group}>
               <p className="text-[9px] font-bold text-slate-700 tracking-widest px-3 py-2 uppercase">{group}</p>
               {visibleNav.filter(n => n.group === group).map(item => {
-                const active = view === item.id
+                const active = activeView === item.id
                 return (
                   <button key={item.id} onClick={() => setView(item.id)}
                           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-all group"
@@ -232,7 +246,7 @@ function Shell() {
                  style={{ background: 'rgba(8,12,25,0.85)', backdropFilter: 'blur(20px)', borderColor: 'rgba(255,255,255,0.05)' }}>
           <div>
             <p className="text-sm font-semibold text-slate-200">
-              {NAV.find(n => n.id === view)?.label}
+              {NAV.find(n => n.id === activeView)?.label}
             </p>
             <p className="text-[10px] text-slate-600 font-mono">CTI Nexus · Enterprise Cyber Intelligence</p>
           </div>
@@ -256,7 +270,9 @@ function Shell() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-5">
-          {renderView()}
+          <Suspense fallback={<LoadingPanel />}>
+            {renderView()}
+          </Suspense>
         </main>
       </div>
     </div>
@@ -272,7 +288,11 @@ function AppGate() {
       </div>
     )
   }
-  return user ? <Shell /> : <AuthPage />
+  return user ? <Shell /> : (
+    <Suspense fallback={<LoadingPanel label="Cargando acceso" />}>
+      <AuthPage />
+    </Suspense>
+  )
 }
 
 export default function App() {

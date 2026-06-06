@@ -7,7 +7,9 @@ DB_PATH = os.getenv("DB_PATH", "/data/cti.db")
 
 
 def init_db() -> None:
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     with get_conn() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS iocs (
@@ -220,9 +222,20 @@ def init_db() -> None:
                 UNIQUE(team_id, badge_id)
             );
 
+            CREATE TABLE IF NOT EXISTS fusion_usage (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_email    TEXT    NOT NULL,
+                usage_date    TEXT    NOT NULL,
+                request_count INTEGER NOT NULL DEFAULT 0,
+                last_endpoint TEXT    NOT NULL DEFAULT '',
+                updated_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(user_email, usage_date)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_iocs_ioc ON iocs(ioc);
             CREATE INDEX IF NOT EXISTS idx_iocs_source ON iocs(source);
             CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+            CREATE INDEX IF NOT EXISTS idx_fusion_usage_user_date ON fusion_usage(user_email, usage_date);
             CREATE INDEX IF NOT EXISTS idx_assign_challenge ON challenge_assignments(challenge_id);
             CREATE INDEX IF NOT EXISTS idx_assign_user ON challenge_assignments(user_email);
             CREATE INDEX IF NOT EXISTS idx_submissions_challenge ON submissions(challenge_id);

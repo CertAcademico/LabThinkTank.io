@@ -1569,6 +1569,102 @@ def student_document_status(challenge_id: int, authorization: str = Header(None)
     }
 
 
+# ── Student: raw (dirty) dataset upload ──────────────────────────────────────
+
+RAW_DATASETS_DIR = Path(os.getenv("RAW_DATASETS_DIR", "/data/raw_datasets"))
+MAX_RAW_MB = 5
+
+
+@app.post("/student/challenges/{challenge_id}/upload-raw-dataset")
+async def student_upload_raw_dataset(
+    challenge_id: int,
+    file: UploadFile = File(...),
+    authorization: str = Header(None),
+):
+    user = _require_user(authorization)
+    email = user["email"]
+
+    with get_conn() as conn:
+        if not _has_challenge_access(conn, challenge_id, email):
+            raise HTTPException(status_code=403, detail="Sin acceso a este reto.")
+
+    data = await file.read()
+    if len(data) > MAX_RAW_MB * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"El archivo supera el límite de {MAX_RAW_MB} MB.")
+
+    filename = file.filename or "dataset.csv"
+    ext = Path(filename).suffix.lower()
+    if ext not in {".csv", ".json", ".tsv", ".txt"}:
+        raise HTTPException(status_code=415, detail="Solo se aceptan archivos CSV, JSON, TSV o TXT.")
+
+    text = data.decode("utf-8-sig", errors="replace")
+    rows: list[dict] = []
+    parse_error: str | None = None
+
+    try:
+        if ext == ".json":
+            parsed = json.loads(text)
+            rows = parsed if isinstance(parsed, list) else [parsed]
+        else:
+            import csv as _csv
+            try:
+                dialect = _csv.Sniffer().sniff(text[:4096], delimiters=",;\t|")
+            except _csv.Error:
+                dialect = _csv.excel  # type: ignore[assignment]
+            reader = _csv.DictReader(io.StringIO(text), dialect=dialect)
+            rows = [dict(r) for r in reader]
+    except Exception as exc:
+        parse_error = str(exc)
+
+    if not rows:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No se pudo parsear el archivo. {parse_error or 'Archivo vacío o sin estructura tabular.'}",
+        )
+
+    safe_email = re.sub(r"[^\w@.]", "_", email)
+    dest_dir = RAW_DATASETS_DIR / str(challenge_id) / safe_email
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    (dest_dir / "raw.json").write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+    (dest_dir / "filename.txt").write_text(filename, encoding="utf-8")
+
+    columns = list(rows[0].keys()) if rows else []
+    return {
+        "ok": True,
+        "filename": filename,
+        "rows": len(rows),
+        "columns": columns,
+        "preview": rows[:5],
+        "data": rows,
+        "size_kb": round(len(data) / 1024, 1),
+    }
+
+
+@app.get("/student/challenges/{challenge_id}/raw-dataset")
+def student_get_raw_dataset(challenge_id: int, authorization: str = Header(None)):
+    user = _require_user(authorization)
+    email = user["email"]
+
+    with get_conn() as conn:
+        if not _has_challenge_access(conn, challenge_id, email):
+            raise HTTPException(status_code=403, detail="Sin acceso a este reto.")
+
+    safe_email = re.sub(r"[^\w@.]", "_", email)
+    raw_path  = RAW_DATASETS_DIR / str(challenge_id) / safe_email / "raw.json"
+    name_path = RAW_DATASETS_DIR / str(challenge_id) / safe_email / "filename.txt"
+
+    if not raw_path.exists():
+        return {"exists": False, "rows": [], "columns": [], "count": 0}
+
+    try:
+        rows    = json.loads(raw_path.read_text(encoding="utf-8"))
+        columns = list(rows[0].keys()) if rows else []
+        fname   = name_path.read_text(encoding="utf-8") if name_path.exists() else "dataset.csv"
+        return {"exists": True, "rows": rows, "columns": columns, "count": len(rows), "filename": fname}
+    except Exception:
+        return {"exists": False, "rows": [], "columns": [], "count": 0}
+
+
 def _auto_award_due_team_badges(conn) -> None:
     rows = conn.execute("""
         SELECT tca.team_id, c.id AS challenge_id, c.badge_id, c.deadline

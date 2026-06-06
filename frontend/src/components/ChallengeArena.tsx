@@ -211,6 +211,9 @@ function Arena({ challenge }: { challenge: Challenge }) {
   const [docError,   setDocError]   = useState('')
   const [submitError, setSubmitError] = useState('')
   const [schema,     setSchema]     = useState<Record<string, string>>({})
+  const [rawDs, setRawDs] = useState<{ filename: string; columns: string[]; count: number; preview: Record<string, unknown>[] } | null>(null)
+  const [rawUploading, setRawUploading] = useState(false)
+  const [rawError, setRawError] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const STARTER = `# Dataset: ${challenge.dataset_name ?? 'sin dataset'}
@@ -221,13 +224,26 @@ import pandas as pd
 import numpy as np
 import json
 
-# Tu dataset ya está cargado en la variable: challenge_df
+# Variables disponibles:
+#   challenge_df  -> dataset del reto (estructurado)
+#   uploaded_df   -> dataset turbio subido por ti (si lo cargaste)
+#   ioc_df        -> feed de IOCs del laboratorio
+
 print("=== DATASET DEL RETO ===")
 print(challenge_df.head())
 print(f"\\nShape: {challenge_df.shape}")
 print(f"Columnas: {challenge_df.columns.tolist()}")
-print(f"\\nEstadísticas:")
-print(challenge_df.describe(include='all'))
+
+# Explora el dataset turbio (si lo subiste):
+if not uploaded_df.empty:
+    print("\\n=== DATASET TURBIO SUBIDO ===")
+    print(f"Shape: {uploaded_df.shape}")
+    print(f"Columnas: {uploaded_df.columns.tolist()}")
+    print(f"\\nNulos por columna:")
+    print(uploaded_df.isnull().sum())
+    print(f"\\nDuplicados: {uploaded_df.duplicated().sum()}")
+    print(f"\\nTipos de datos:")
+    print(uploaded_df.dtypes)
 `
 
   useEffect(() => {
@@ -283,6 +299,24 @@ print(challenge_df.describe(include='all'))
           }
         }
 
+        // Always define uploaded_df; overwrite if student already uploaded a raw dataset
+        await py.runPythonAsync(`uploaded_df = pd.DataFrame()`)
+        if (challenge.id) {
+          try {
+            const rawRes = await fetch(`${API}/student/challenges/${challenge.id}/raw-dataset`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            if (rawRes.ok) {
+              const raw = await rawRes.json()
+              if (raw.exists && raw.rows?.length) {
+                setRawDs({ filename: raw.filename ?? 'dataset', columns: raw.columns, count: raw.count, preview: raw.rows.slice(0, 5) })
+                py.globals.set('_raw_json', JSON.stringify(raw.rows))
+                await py.runPythonAsync(`uploaded_df = pd.DataFrame(json.loads(_raw_json))`)
+              }
+            }
+          } catch { /* ok */ }
+        }
+
         if (!cancelled) { setPyodide(py); setInitStatus('ready') }
       } catch { if (!cancelled) setInitStatus('error') }
     }
@@ -303,6 +337,37 @@ print(challenge_df.describe(include='all'))
       try { await pyodide.runPythonAsync('import sys; sys.stdout = sys.__stdout__') } catch { /* ok */ }
       setOutput(`Error:\n${err}`)
     } finally { setRunning(false) }
+  }
+
+  const uploadRawDataset = async (file: File) => {
+    setRawError('')
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+    if (!['csv', 'json', 'tsv', 'txt'].includes(ext)) {
+      setRawError('Solo se aceptan archivos CSV, JSON, TSV o TXT.')
+      return
+    }
+    setRawUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`${API}/student/challenges/${challenge.id}/upload-raw-dataset`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail ?? 'Error al subir el dataset.')
+      setRawDs({ filename: data.filename, columns: data.columns, count: data.rows, preview: data.preview })
+      // Inject full dataset into live Pyodide session
+      if (pyodide) {
+        pyodide.globals.set('_raw_json', JSON.stringify(data.data))
+        await pyodide.runPythonAsync(`uploaded_df = pd.DataFrame(json.loads(_raw_json))`)
+      }
+    } catch (e) {
+      setRawError(String(e instanceof Error ? e.message : e))
+    } finally {
+      setRawUploading(false)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -421,6 +486,147 @@ print(challenge_df.describe(include='all'))
           <DatasetDiagram schema={schema} name={challenge.dataset_name ?? 'Dataset'} />
         </div>
       )}
+
+      {/* ── Dataset turbio ────────────────────────────────────────────────── */}
+      <div className="rounded-xl p-4 space-y-3" style={{ ...glass, border: '1px solid rgba(251,191,36,0.15)' }}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-amber-400 font-bold">Dataset Turbio</span>
+            <span className="text-[9px] px-2 py-0.5 rounded-full font-mono"
+                  style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.2)' }}>
+              CSV · JSON · TSV · máx {5} MB
+            </span>
+          </div>
+          {rawDs && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
+              ✓ {rawDs.filename} · {rawDs.count} filas · {rawDs.columns.length} cols
+            </span>
+          )}
+        </div>
+
+        <p className="text-[10px] text-slate-500 leading-relaxed">
+          Sube un archivo de datos desordenado o incompleto. Se cargará como{' '}
+          <code className="text-amber-400 font-mono">uploaded_df</code> en tu sandbox Python.
+          Tu misión: explorar, limpiar y determinar qué tipo de análisis aplicar.
+        </p>
+
+        {rawDs ? (
+          <div className="space-y-2">
+            {/* Column pills */}
+            <div className="flex flex-wrap gap-1">
+              {rawDs.columns.map(col => (
+                <span key={col} className="text-[9px] font-mono px-2 py-0.5 rounded"
+                      style={{ background: 'rgba(251,191,36,0.07)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.15)' }}>
+                  {col}
+                </span>
+              ))}
+            </div>
+            {/* Preview table */}
+            <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.05)' }}>
+              <table className="text-[9px] font-mono w-full">
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                    {rawDs.columns.map(c => (
+                      <th key={c} className="px-2 py-1 text-left text-slate-500 font-bold">{c}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rawDs.preview.map((row, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.03)' }}>
+                      {rawDs.columns.map(c => {
+                        const val = row[c]
+                        const isEmpty = val == null || val === '' || val === 'null' || val === 'NaN'
+                        return (
+                          <td key={c} className="px-2 py-1 max-w-[120px] truncate"
+                              style={{ color: isEmpty ? '#475569' : '#94a3b8' }}>
+                            {isEmpty ? '∅' : String(val)}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] cursor-pointer"
+                   style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', color: '#fbbf24' }}>
+              {rawUploading ? 'Procesando...' : 'Reemplazar dataset'}
+              <input type="file" accept=".csv,.json,.tsv,.txt" className="hidden" disabled={rawUploading}
+                     onChange={e => { const f = e.target.files?.[0]; if (f) uploadRawDataset(f) }} />
+            </label>
+          </div>
+        ) : (
+          <label className={`flex items-center justify-center gap-3 rounded-xl p-6 cursor-pointer transition-all ${rawUploading ? 'opacity-60 pointer-events-none' : ''}`}
+                 style={{ border: '2px dashed rgba(251,191,36,0.2)', background: 'rgba(251,191,36,0.03)' }}>
+            <div className="text-center space-y-1">
+              <p className="text-2xl">📂</p>
+              <p className="text-xs font-semibold text-amber-400">
+                {rawUploading ? 'Procesando dataset...' : 'Arrastra o haz clic para subir dataset turbio'}
+              </p>
+              <p className="text-[9px] text-slate-600">CSV, JSON, TSV · máx 5 MB</p>
+            </div>
+            <input type="file" accept=".csv,.json,.tsv,.txt" className="hidden" disabled={rawUploading}
+                   onChange={e => { const f = e.target.files?.[0]; if (f) uploadRawDataset(f) }} />
+          </label>
+        )}
+        {rawError && <p className="text-[10px] text-red-400">{rawError}</p>}
+      </div>
+
+      {/* ── Misión de exploración ML ────────────────────────────────────────── */}
+      <div className="rounded-xl p-4 space-y-3" style={{ ...glass, border: '1px solid rgba(167,139,250,0.15)' }}>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-violet-400 font-bold">Misión: Descubre el análisis correcto</span>
+          <span className="text-[9px] px-2 py-0.5 rounded-full font-mono"
+                style={{ background: 'rgba(167,139,250,0.1)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.2)' }}>
+            No hay una respuesta única
+          </span>
+        </div>
+        <p className="text-[10px] text-slate-500">
+          El dataset turbio <strong className="text-slate-400">no trae instrucciones</strong>. Debes explorar los datos,
+          identificar sus problemas y <strong className="text-slate-400">justificar qué tipo de análisis o modelo ML es más adecuado</strong>.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            {
+              phase: '01', color: '#22d3ee', label: 'Reconocimiento',
+              tasks: ['df.shape, df.dtypes, df.head()', 'df.describe(include="all")', 'df.isnull().sum()', 'df.duplicated().sum()'],
+            },
+            {
+              phase: '02', color: '#fbbf24', label: 'Calidad de datos',
+              tasks: ['Valores nulos → ¿imputar o eliminar?', 'Outliers → IQR o Z-score', 'Tipos incorrectos → pd.to_numeric()', 'Duplicados → df.drop_duplicates()'],
+            },
+            {
+              phase: '03', color: '#f97316', label: 'Diagnóstico ML',
+              tasks: ['¿Variable objetivo? → Supervisado', 'Sin etiquetas → Clustering (K-Means)', 'Valores raros → Detección de anomalías', '¿Serie de tiempo? → ARIMA / LSTM'],
+            },
+            {
+              phase: '04', color: '#4ade80', label: 'Análisis & resultados',
+              tasks: ['Aplica el modelo elegido', 'Muestra métricas (accuracy, silhouette…)', 'Visualiza con matplotlib/seaborn', 'Documenta tu justificación en las notas'],
+            },
+          ].map(({ phase, color, label, tasks }) => (
+            <div key={phase} className="rounded-lg p-3 space-y-1.5"
+                 style={{ background: `${color}08`, border: `1px solid ${color}22` }}>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded"
+                      style={{ background: `${color}18`, color }}>
+                  {phase}
+                </span>
+                <span className="text-[10px] font-semibold" style={{ color }}>{label}</span>
+              </div>
+              <ul className="space-y-0.5">
+                {tasks.map(t => (
+                  <li key={t} className="text-[9px] text-slate-500 flex items-start gap-1">
+                    <span style={{ color }} className="shrink-0 mt-px">·</span>
+                    <code className="font-mono leading-tight">{t}</code>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Python editor */}
       <div className="rounded-xl overflow-hidden" style={glass}>

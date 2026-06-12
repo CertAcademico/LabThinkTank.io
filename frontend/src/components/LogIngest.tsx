@@ -67,6 +67,26 @@ const EVENT_COLOR: Record<string, string> = {
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
+const JSON_EXAMPLE = JSON.stringify([
+  { "ts": "2024-06-11T10:00:01Z", "src_ip": "185.220.101.45", "dst_ip": "10.0.0.5", "action": "BLOCK", "proto": "TCP", "dst_port": 22, "user": "root" },
+  { "ts": "2024-06-11T10:00:03Z", "src_ip": "45.33.32.156", "dst_ip": "10.0.0.5", "action": "BLOCK", "proto": "TCP", "dst_port": 3389, "url": "http://malware.example.com/payload.exe" },
+  { "ts": "2024-06-11T10:00:07Z", "src_ip": "10.0.0.12", "dst_ip": "8.8.8.8", "action": "ALLOW", "proto": "UDP", "dst_port": 53, "hash": "a3f5b2c1d8e4f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4" },
+], null, 2)
+
+function detectFormatClient(text: string): string {
+  const t = text.trim()
+  if (!t) return ''
+  try { JSON.parse(t); return 'json' } catch { /* not single JSON */ }
+  if (t.split('\n').slice(0, 5).every(l => { try { JSON.parse(l.trim()); return true } catch { return false } })) return 'jsonl'
+  if (/^(\w[\w\-.]*,){2,}/.test(t.split('\n')[0])) return 'csv'
+  if (/<\d+>/.test(t.slice(0, 40)) || /\w{3}\s+\d+\s+\d{2}:\d{2}:\d{2}/.test(t.slice(0, 60))) return 'syslog'
+  if (/^CEF:/m.test(t)) return 'cef'
+  if (/^LEEF:/m.test(t)) return 'leef'
+  if (t.split('\n').slice(0, 3).every(l => /\t/.test(l))) return 'zeek'
+  if (/^\w+=.+\w+=/.test(t.split('\n')[0])) return 'kvpairs'
+  return 'text'
+}
+
 async function readApiJson<T = Record<string, unknown>>(res: Response): Promise<T> {
   const text = await res.text()
   if (!text.trim()) return {} as T
@@ -313,8 +333,12 @@ export default function LogIngest() {
   const [result, setResult] = useState<IngestResult | null>(null)
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
-  const [resultView, setResultView] = useState<'rows' | 'iocs'>('rows')
+  const [resultView, setResultView] = useState<'rows' | 'iocs' | 'ai'>('rows')
   const [copied, setCopied] = useState(false)
+  const [liveFormat, setLiveFormat] = useState('')
+  const [aiAnalysis, setAiAnalysis] = useState<{ text: string; engine: string } | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [aiError, setAiError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -342,6 +366,18 @@ export default function LogIngest() {
     es.onerror = () => { setLiveConnected(false) }
     return () => { es.close() }
   }, [token])
+
+  // ── Live format detection ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    setLiveFormat(detectFormatClient(rawText))
+  }, [rawText])
+
+  const formatJson = () => {
+    try {
+      setRawText(JSON.stringify(JSON.parse(rawText), null, 2))
+    } catch { /* not valid JSON, ignore */ }
+  }
 
   // ── File drop ───────────────────────────────────────────────────────────────
 
@@ -399,6 +435,32 @@ export default function LogIngest() {
       if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
       copyTimerRef.current = setTimeout(() => setCopied(false), 2000)
     }).catch(() => {})
+  }
+
+  const analyzeWithAI = async () => {
+    if (!result) return
+    setAiError(''); setAnalyzing(true); setResultView('ai')
+    try {
+      const res = await fetch(`${API}/logs/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          format:     result.format,
+          line_count: result.line_count,
+          schema:     result.schema,
+          iocs:       result.iocs,
+          rows:       result.rows,
+        }),
+      })
+      const data = await readApiJson<{ analysis?: string; engine?: string; detail?: string }>(res)
+      if (!res.ok) throw new Error(data.detail ?? 'Error al analizar.')
+      setAiAnalysis({ text: data.analysis ?? '', engine: data.engine ?? '' })
+    } catch (e) {
+      setAiError(String(e instanceof Error ? e.message : e))
+      setResultView('rows')
+    } finally {
+      setAnalyzing(false)
+    }
   }
 
   const cols = result ? Object.keys(result.schema) : []
@@ -473,14 +535,46 @@ export default function LogIngest() {
             </div>
 
             {/* Paste area */}
-            <textarea
-              value={rawText}
-              onChange={e => setRawText(e.target.value)}
-              placeholder="O pega los logs aquí directamente..."
-              spellCheck={false}
-              className="w-full rounded-xl p-4 font-mono text-[11px] leading-relaxed resize-none outline-none"
-              style={{ ...glass, background: '#050a14', color: '#86efac', minHeight: 200 }}
-            />
+            <div className="rounded-xl overflow-hidden" style={{ ...glass, background: '#050a14' }}>
+              {/* Toolbar */}
+              <div className="flex items-center gap-2 px-3 py-1.5 border-b"
+                   style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                {liveFormat ? (
+                  <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded"
+                        style={{ color: FORMAT_COLOR[liveFormat] ?? '#94a3b8',
+                                 background: `${FORMAT_COLOR[liveFormat] ?? '#94a3b8'}14` }}>
+                    {FORMAT_LABELS[liveFormat] ?? liveFormat}
+                  </span>
+                ) : (
+                  <span className="text-[9px] text-slate-700">sin contenido</span>
+                )}
+                <div className="flex-1" />
+                {(liveFormat === 'json' || liveFormat === 'jsonl') && (
+                  <button onClick={formatJson}
+                          className="px-2 py-0.5 rounded text-[9px] font-bold transition-colors"
+                          style={{ color: '#22d3ee', background: 'rgba(34,211,238,0.08)',
+                                   border: '1px solid rgba(34,211,238,0.2)' }}>
+                    { } Formatear JSON
+                  </button>
+                )}
+                {!rawText.trim() && (
+                  <button onClick={() => { setRawText(JSON_EXAMPLE); setFormatHint('json') }}
+                          className="px-2 py-0.5 rounded text-[9px] font-bold transition-colors"
+                          style={{ color: '#a78bfa', background: 'rgba(167,139,250,0.08)',
+                                   border: '1px solid rgba(167,139,250,0.2)' }}>
+                    Ejemplo JSON
+                  </button>
+                )}
+              </div>
+              <textarea
+                value={rawText}
+                onChange={e => setRawText(e.target.value)}
+                placeholder="Pega JSON, CSV, Syslog, CEF u otro formato aquí..."
+                spellCheck={false}
+                className="w-full p-4 font-mono text-[11px] leading-relaxed resize-none outline-none bg-transparent"
+                style={{ color: '#86efac', minHeight: 200 }}
+              />
+            </div>
 
             {/* Options row */}
             <div className="flex items-center gap-3 flex-wrap">
@@ -564,7 +658,7 @@ export default function LogIngest() {
                 </div>
 
                 {/* Result tabs */}
-                <div className="flex gap-1">
+                <div className="flex items-center gap-1 flex-wrap">
                   {(['rows', 'iocs'] as const).map(t => (
                     <button key={t} onClick={() => setResultView(t)}
                             className="px-3 py-1 rounded text-[10px] font-bold transition-colors"
@@ -574,6 +668,13 @@ export default function LogIngest() {
                       {t === 'rows' ? `Filas (${Math.min(result.rows.length, 500)})` : `IOCs (${result.iocs.length})`}
                     </button>
                   ))}
+                  <button onClick={() => setResultView('ai')}
+                          className="px-3 py-1 rounded text-[10px] font-bold transition-colors"
+                          style={resultView === 'ai'
+                            ? { background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }
+                            : { color: '#64748b' }}>
+                    {aiAnalysis ? '✦ Análisis AI' : '✦ AI'}
+                  </button>
                   {resultView === 'iocs' && result.iocs.length > 0 && (
                     <button onClick={copyIocs}
                             className="ml-auto px-2 py-1 rounded text-[9px] font-bold transition-colors"
@@ -628,6 +729,46 @@ export default function LogIngest() {
                         </div>
                       )
                     })}
+                  </div>
+                )}
+
+                {resultView === 'ai' && (
+                  <div className="rounded-xl p-4 space-y-3" style={{ ...glass, minHeight: 200 }}>
+                    {!aiAnalysis && !analyzing && (
+                      <div className="flex flex-col items-center justify-center gap-3 py-6">
+                        <p className="text-xs text-slate-500 text-center">
+                          Envía estos logs al motor de análisis inteligente para obtener un informe de amenazas.
+                        </p>
+                        {aiError && <p className="text-[11px] text-red-400">{aiError}</p>}
+                        <button onClick={analyzeWithAI}
+                                className="px-4 py-2 rounded-lg text-xs font-bold transition-colors"
+                                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
+                          ✦ Analizar con IA →
+                        </button>
+                      </div>
+                    )}
+                    {analyzing && (
+                      <div className="flex items-center gap-2 py-6 justify-center">
+                        <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-xs text-slate-400">Analizando logs con IA...</span>
+                      </div>
+                    )}
+                    {aiAnalysis && !analyzing && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Pill color="#a78bfa">✦ {aiAnalysis.engine === 'claude' ? 'Claude' : aiAnalysis.engine === 'ollama' ? 'Ollama' : 'AI'}</Pill>
+                          <button onClick={analyzeWithAI}
+                                  className="px-2 py-0.5 rounded text-[9px] font-bold"
+                                  style={{ color: '#64748b', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            Regenerar
+                          </button>
+                        </div>
+                        <div className="overflow-y-auto text-[11px] text-slate-300 leading-relaxed whitespace-pre-wrap"
+                             style={{ maxHeight: 400 }}>
+                          {aiAnalysis.text}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </>

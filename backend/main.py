@@ -2595,6 +2595,80 @@ async def logs_extract_iocs(payload: dict = Body(...), authorization: str = Head
     return {"iocs": extract_iocs(text), "format": detect_format(text)}
 
 
+@app.post("/logs/analyze")
+def logs_analyze(payload: dict = Body(...), authorization: str = Header(None)):
+    """
+    AI analysis of an ingested log batch.
+
+    Expects the same shape returned by /logs/ingest:
+      { format, line_count, schema, iocs, rows }
+
+    Returns { analysis: str, engine: "claude" | "ollama" | "unavailable" }
+    """
+    _auth_user_or_raise(authorization)
+
+    fmt        = payload.get("format", "desconocido")
+    line_count = payload.get("line_count", 0)
+    iocs       = payload.get("iocs", [])
+    schema     = payload.get("schema", {})
+    rows       = payload.get("rows", [])
+
+    ioc_lines   = "\n".join(f"  • {i['type']}: {i['ioc']}" for i in iocs[:40])
+    schema_text = ", ".join(f"{k} ({v})" for k, v in schema.items())
+    sample_json = json.dumps(rows[:8], indent=2, ensure_ascii=False)
+
+    prompt = f"""Eres un analista senior de SOC/CTI. Se acaban de ingestar los siguientes logs de seguridad.
+
+Formato detectado: {fmt}
+Total de líneas/registros: {line_count}
+Campos del schema: {schema_text or "no detectado"}
+
+IOCs extraídos ({len(iocs)} total):
+{ioc_lines if iocs else "  — ninguno detectado —"}
+
+Muestra de registros (primeros 8):
+{sample_json}
+
+Proporciona un análisis técnico estructurado:
+1. Resumen ejecutivo de la actividad observada
+2. Indicadores de compromiso más relevantes y su contexto
+3. Patrones de ataque o comportamiento anómalo detectado
+4. Técnicas MITRE ATT&CK aplicables (IDs + nombres)
+5. Recomendaciones de respuesta inmediata (prioridad alta → baja)
+
+Sé conciso y usa formato Markdown."""
+
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    if anthropic_key:
+        try:
+            client = anthropic.Anthropic(api_key=anthropic_key)
+            msg = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=2048,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return {"analysis": msg.content[0].text, "engine": "claude"}
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Claude error: {exc}") from exc
+
+    ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+    try:
+        r = requests.post(
+            f"{ollama_url}/api/generate",
+            json={"model": "llama3", "prompt": prompt, "stream": False},
+            timeout=120,
+        )
+        r.raise_for_status()
+        return {"analysis": r.json().get("response", ""), "engine": "ollama"}
+    except Exception:
+        pass
+
+    return {
+        "analysis": "No hay motor AI disponible. Configura `ANTHROPIC_API_KEY` o Ollama.",
+        "engine": "unavailable",
+    }
+
+
 # ── SSE Live Feed ─────────────────────────────────────────────────────────────
 
 @app.get("/live/feed")

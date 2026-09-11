@@ -4,8 +4,10 @@ import asyncio
 import csv
 import io
 import json
+import logging
 import os
 import re
+import time as _time
 import uuid
 import zipfile
 from collections import Counter
@@ -13,6 +15,20 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+# Load .env from project root (two levels up from backend/) — no-op if missing
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).parent.parent / ".env"
+    load_dotenv(_env_path, override=False)
+except ImportError:
+    pass
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+)
+_logger = logging.getLogger("cti")
 
 import requests
 import anthropic
@@ -35,6 +51,11 @@ from intelligence.feeds_engine import FETCH_REGISTRY, PUBLIC_FEEDS
 from intelligence.defend_engine import compute_depuration
 from intelligence.log_engine import parse_logs, extract_iocs, detect_format
 from services.live_service import live_service
+from ai.ml_engine import (
+    score_log_batch, get_model_status, retrain_model, reset_model,
+    save_fusion_events_to_corpus, get_supervised_model_status,
+    retrain_supervised_model, predict_false_positive, batch_predict_false_positives,
+)
 from ai.gemini_engine import (
     GeminiNotConfiguredError,
     generate_threat_data as _gemini_threat_data,
@@ -77,20 +98,41 @@ from ai.claude_fusion_engine import (
 )
 
 
+_ENGINE: str | None = None
+
+
 def _fusion_engine() -> str:
-    """Returns 'gemini', 'claude', or 'none' depending on which key is set."""
-    if os.getenv("GEMINI_API_KEY"):
-        return "gemini"
-    if os.getenv("ANTHROPIC_API_KEY"):
-        return "claude"
-    return "none"
+    """Returns 'gemini', 'claude', or 'none'. Result is cached after first call."""
+    global _ENGINE
+    if _ENGINE is None:
+        if os.getenv("GEMINI_API_KEY"):
+            _ENGINE = "gemini"
+        elif os.getenv("ANTHROPIC_API_KEY"):
+            _ENGINE = "claude"
+        else:
+            _ENGINE = "none"
+        _logger.info("Motor de fusión activo: %s", _ENGINE)
+    return _ENGINE
 
 
 def _fusion_fn(gemini_fn, claude_fn):
-    """Return the correct function based on configured engine."""
+    """Return the correct function. Gemini calls fall back to Claude on transient errors."""
     engine = _fusion_engine()
     if engine == "gemini":
-        return gemini_fn
+        def _gemini_with_fallback(*args, **kwargs):
+            try:
+                return gemini_fn(*args, **kwargs)
+            except GeminiNotConfiguredError:
+                raise
+            except Exception as exc:
+                if not os.getenv("ANTHROPIC_API_KEY"):
+                    raise
+                _logger.warning(
+                    "Gemini falló (%s: %s) — reintentando con Claude como fallback",
+                    type(exc).__name__, exc,
+                )
+                return claude_fn(*args, **kwargs)
+        return _gemini_with_fallback
     if engine == "claude":
         return claude_fn
     raise HTTPException(
@@ -324,7 +366,7 @@ app = FastAPI(
 
 _CORS_ORIGINS = os.environ.get(
     "CORS_ORIGINS",
-    "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173",
+    "http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:5175",
 ).split(",")
 
 app.add_middleware(
@@ -721,9 +763,10 @@ Use this context when answering. Be concise and technical."""
 
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
     if anthropic_key:
-        client = anthropic.Anthropic(api_key=anthropic_key)
-        message = client.messages.create(
-            model="claude-sonnet-4-6",
+        from ai.claude_fusion_engine import _MODEL as _CLAUDE_MODEL
+        from ai.claude_fusion_engine import _get_client as _claude_client
+        message = _claude_client().messages.create(
+            model=_CLAUDE_MODEL,
             max_tokens=1024,
             system=[{"type": "text", "text": system_context, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": prompt}],
@@ -2529,29 +2572,44 @@ async def logs_ingest(
     else:
         raise HTTPException(status_code=400, detail="Provide 'file' or 'raw_text'.")
 
-    if len(raw) > 8 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Input too large. Maximum 8 MB.")
+    if len(raw) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Input too large. Maximum 20 MB.")
 
-    result = parse_logs(raw, hint=format_hint or None)
+    result = parse_logs(raw, hint=format_hint or None, max_rows=10_000)
 
-    # Persist extracted IOCs into the iocs table
-    ioc_records = [
-        {"ioc": i["ioc"], "type": i["type"], "threat_actor": "log_ingest",
-         "severity": "medium", "mitre": "", "country": "", "source": f"log:{name}"}
-        for i in result["iocs"]
-    ]
+    # ── Correlacionar IOCs extraídos contra el feed existente ─────────────────
+    existing_feed = {i["ioc"] for i in get_threat_feed()}
+    ioc_records = []
+    ioc_matches: list[dict] = []
+    for i in result["iocs"]:
+        ioc_val = i["ioc"]
+        if ioc_val in existing_feed:
+            ioc_matches.append(ioc_val)
+        ioc_records.append({
+            "ioc":          ioc_val,
+            "type":         i["type"],
+            "threat_actor": "log_ingest",
+            "severity":     "medium",
+            "mitre":        "",
+            "country":      "",
+            "source":       f"log:{name}",
+        })
     added_iocs = add_uploaded_iocs(ioc_records) if ioc_records else []
 
-    # Optionally save as a student-accessible dataset
+    # ── Guardar como dataset (opcional) ──────────────────────────────────────
     dataset_id = None
     if save_dataset.lower() == "true" and result["rows"]:
+        vol = result["volumetry"]
+        vol_desc = (
+            f" · {vol['events_per_minute']} eventos/min" if vol.get("events_per_minute") else ""
+        )
         ds_name = (dataset_name.strip() or f"Log Ingest — {name}").strip()[:120]
         with get_conn() as conn:
             cur = conn.execute(
                 "INSERT INTO datasets (name, description, source, data_json, schema_json, created_by) VALUES (?,?,?,?,?,?)",
                 (
                     ds_name,
-                    f"Logs ingestados desde {name} · formato {result['format']} · {result['line_count']} entradas",
+                    f"Logs ingestados desde {name} · formato {result['format']} · {result['line_count']} eventos{vol_desc}",
                     f"log_ingest:{name}",
                     json.dumps(result["rows"], ensure_ascii=False),
                     json.dumps(result["schema"], ensure_ascii=False),
@@ -2560,23 +2618,53 @@ async def logs_ingest(
             )
             dataset_id = cur.lastrowid
 
-    # Broadcast to SSE clients
-    live_service.publish("log_ingested", {
-        "source": name,
-        "format": result["format"],
-        "line_count": result["line_count"],
-        "ioc_count": len(result["iocs"]),
-        "dataset_id": dataset_id,
-    })
+    vol = result["volumetry"]
+
+    # ── ML Anomaly Scoring ────────────────────────────────────────────────────
+    anomaly = score_log_batch(
+        n_rows=result["line_count"],
+        n_iocs=len(result["iocs"]),
+        n_feed_matches=len(ioc_matches),
+        events_per_minute=vol.get("events_per_minute"),
+        log_format=result["format"],
+        volumetry=vol,
+    )
+
+    # ── Broadcast a clientes SSE ──────────────────────────────────────────────
+    sse_payload = {
+        "source":            name,
+        "format":            result["format"],
+        "line_count":        result["line_count"],
+        "ioc_count":         len(result["iocs"]),
+        "ioc_matches":       len(ioc_matches),
+        "events_per_minute": vol.get("events_per_minute"),
+        "dataset_id":        dataset_id,
+        "anomaly_score":     anomaly.get("anomaly_score", 0.0),
+        "is_anomaly":        anomaly.get("is_anomaly", False),
+        "anomaly_reason":    anomaly.get("reason", ""),
+    }
+    live_service.publish("log_ingested", sse_payload)
+
+    if anomaly.get("is_anomaly"):
+        live_service.publish("anomaly_detected", {
+            "source":        name,
+            "anomaly_score": anomaly["anomaly_score"],
+            "reason":        anomaly.get("reason", ""),
+            "ioc_count":     len(result["iocs"]),
+            "feed_matches":  len(ioc_matches),
+        })
 
     return {
-        "format":     result["format"],
-        "line_count": result["line_count"],
-        "rows":       result["rows"][:500],   # first 500 rows for the response
-        "schema":     result["schema"],
-        "iocs":       result["iocs"],
-        "iocs_added": len(added_iocs),
-        "dataset_id": dataset_id,
+        "format":            result["format"],
+        "line_count":        result["line_count"],
+        "rows":              result["rows"][:2_000],
+        "schema":            result["schema"],
+        "iocs":              result["iocs"],
+        "iocs_added":        len(added_iocs),
+        "ioc_feed_matches":  ioc_matches,
+        "dataset_id":        dataset_id,
+        "volumetry":         vol,
+        "anomaly":           anomaly,
     }
 
 
@@ -2641,9 +2729,9 @@ Sé conciso y usa formato Markdown."""
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
     if anthropic_key:
         try:
-            client = anthropic.Anthropic(api_key=anthropic_key)
-            msg = client.messages.create(
-                model="claude-sonnet-4-6",
+            from ai.claude_fusion_engine import _get_client as _claude_client, _MODEL as _CLAUDE_MODEL
+            msg = _claude_client().messages.create(
+                model=_CLAUDE_MODEL,
                 max_tokens=2048,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -3154,6 +3242,105 @@ def _require_fusion_access(authorization: str | None, *, consume: bool = False, 
     return user
 
 
+@app.get("/ai/gemini/lab-context")
+def gemini_lab_context(authorization: str = Header(None)):
+    """
+    Snapshot completo del CTI Lab para el motor de fusión:
+    IOC feed, actores, campañas, IOAs, correlaciones multi-fuente, tendencia 24h.
+    No consume cuota — es una consulta de contexto, no de generación AI.
+    """
+    user = _require_fusion_access(authorization)
+    from intelligence.cti_context_collector import collect_lab_context
+    context = collect_lab_context()
+    return {**context, "fusion_quota": user["fusion_quota"]}
+
+
+@app.post("/ai/gemini/fuse-with-lab")
+def gemini_fuse_with_lab(payload: dict = Body(...), authorization: str = Header(None)):
+    """
+    Análisis de fusión anclado en los datos reales del CTI Lab.
+
+    A diferencia de los otros endpoints (que reciben eventos del frontend),
+    este endpoint recolecta automáticamente todos los IOCs, actores, campañas
+    y correlaciones del lab, luego ejecuta el análisis AI sobre datos reales.
+
+    Body:
+      {
+        "query":         str,                             # tema o actor de interés
+        "analysis_type": "fusion-report|predictive|behavioral|geopolitical|threat-graph",
+        "max_iocs":      int (default 100)                # IOCs reales a incluir
+      }
+    """
+    _require_fusion_access(authorization, consume=True, endpoint="fuse-with-lab")
+    from intelligence.cti_context_collector import collect_lab_context, iocs_to_threat_events, correlate_across_feeds
+
+    query         = (payload.get("query") or "").strip()
+    analysis_type = payload.get("analysis_type", "fusion-report")
+    max_iocs      = min(int(payload.get("max_iocs", 100)), 300)
+
+    if not query:
+        raise HTTPException(status_code=400, detail="'query' es obligatorio.")
+
+    # 1. Recolectar contexto real del lab
+    context = collect_lab_context(max_iocs=max_iocs)
+    lab_iocs = context["top_iocs_sample"]
+
+    # 2. Correlación multi-fuente (enriquece confianza)
+    correlations = correlate_across_feeds(lab_iocs)
+
+    # 3. Convertir IOCs al formato de eventos del motor
+    events = iocs_to_threat_events(lab_iocs)
+
+    # 4. Inyectar metadatos del lab en el query para anclar el análisis
+    enriched_query = (
+        f"{query} | Contexto CTI Lab: {context['summary']['total_iocs']} IOCs "
+        f"({context['summary']['multi_feed_iocs']} en múltiples fuentes), "
+        f"{context['summary']['total_actors']} actores, "
+        f"{context['summary']['recent_iocs_24h']} IOCs nuevos en 24h. "
+        f"Fuentes activas: {', '.join(list(context['ioc_stats']['by_source'].keys())[:6])}."
+    )
+
+    # 5. Ejecutar el análisis AI correspondiente
+    if analysis_type == "predictive":
+        result = _gemini_wrap(generate_predictive_analysis, events, enriched_query)
+    elif analysis_type == "behavioral":
+        result = _gemini_wrap(generate_behavioral_analysis, enriched_query, events)
+    elif analysis_type == "geopolitical":
+        result = _gemini_wrap(generate_geopolitical_analysis, enriched_query)
+    elif analysis_type == "threat-graph":
+        result = _gemini_wrap(generate_threat_graph, events, enriched_query)
+    else:  # fusion-report (default)
+        result = _gemini_wrap(generate_fusion_report, enriched_query, events)
+
+    # 6. Adjuntar metadatos del lab al resultado
+    if isinstance(result, dict):
+        result["_lab_context"] = {
+            "iocs_used":           len(events),
+            "actors_in_scope":     context["summary"]["total_actors"],
+            "campaigns_in_scope":  context["summary"]["total_campaigns"],
+            "cross_feed_iocs":     correlations["total_shared_iocs"],
+            "multi_feed_actors":   correlations["total_multi_actors"],
+            "feed_sources":        list(context["ioc_stats"]["by_source"].keys()),
+            "collected_at":        context["collected_at"],
+        }
+    return result
+
+
+@app.get("/ai/gemini/feed-correlations")
+def gemini_feed_correlations(authorization: str = Header(None)):
+    """
+    Correlaciones entre fuentes de feeds: IOCs compartidos, actores
+    vistos en múltiples feeds, técnicas MITRE por fuente.
+    No consume cuota AI — análisis puramente local sobre el feed DB.
+    """
+    user = _require_fusion_access(authorization)
+    from intelligence.threat_engine import get_threat_feed
+    from intelligence.cti_context_collector import correlate_across_feeds
+    iocs = get_threat_feed()
+    result = correlate_across_feeds(iocs)
+    return {**result, "total_iocs_analyzed": len(iocs), "fusion_quota": user["fusion_quota"]}
+
+
 @app.get("/ai/gemini/status")
 def gemini_status(authorization: str = Header(None)):
     """Check which fusion engine is active (Gemini, Claude, or none)."""
@@ -3177,18 +3364,27 @@ def gemini_quota(authorization: str = Header(None)):
 @app.post("/ai/gemini/threat-data")
 def gemini_threat_data(payload: dict = Body(...), authorization: str = Header(None)):
     """
-    Generate 60 (operativo) or 500 (annual) structured threat events via Gemini.
+    Generate 150 (operativo) or 1000 (annual) structured threat events and persist to ML corpus.
     Body: { "topic": str, "is_annual": bool }
     """
     user = _require_fusion_access(authorization)
-    if not _is_privileged(user) and bool(payload.get("is_annual", False)):
+    is_annual = bool(payload.get("is_annual", False))
+    if not _is_privileged(user) and is_annual:
         raise HTTPException(status_code=403, detail="Las consultas anuales del Motor de Fusión están reservadas para analistas e instructores.")
     _require_fusion_access(authorization, consume=True, endpoint="threat-data")
-    return _gemini_wrap(
-        generate_threat_data,
-        payload.get("topic", ""),
-        bool(payload.get("is_annual", False)),
-    )
+    topic = payload.get("topic", "")
+    result = _gemini_wrap(generate_threat_data, topic, is_annual)
+    # Persist events to ML corpus in background (non-blocking)
+    threats = result.get("threats", []) if isinstance(result, dict) else []
+    if threats:
+        try:
+            corpus_info = save_fusion_events_to_corpus(
+                threats, query=topic, created_by=user.get("email", "unknown"), is_annual=is_annual
+            )
+            result["corpus_update"] = corpus_info
+        except Exception as exc:
+            _logger.warning("No se pudo guardar corpus ML: %s", exc)
+    return result
 
 
 @app.post("/ai/gemini/quantum")
@@ -3236,11 +3432,25 @@ def gemini_mitre_details(payload: dict = Body(...), authorization: str = Header(
     )
 
 
+_welcome_cache: dict = {}
+_welcome_cache_ts: float = 0.0
+_WELCOME_CACHE_TTL = 600  # 10 minutos
+
+
 @app.get("/ai/gemini/welcome")
 def gemini_welcome(authorization: str = Header(None)):
-    """Welcome panel: 5 recent APTs + 5 CVEs + 5 LATAM incidents."""
-    _require_fusion_access(authorization, consume=True, endpoint="welcome")
-    return _gemini_wrap(generate_welcome_data)
+    """Welcome panel: 5 recent APTs + 5 CVEs + 5 LATAM incidents (cached 10 min)."""
+    global _welcome_cache, _welcome_cache_ts
+    user = _require_fusion_access(authorization)  # auth sin consumir cuota
+    if _welcome_cache and _time.monotonic() - _welcome_cache_ts < _WELCOME_CACHE_TTL:
+        _logger.debug("Welcome data servido desde caché")
+        return {**_welcome_cache, "fusion_quota": user["fusion_quota"]}
+    # Cache miss → consumir cuota y llamar al motor
+    user = _require_fusion_access(authorization, consume=True, endpoint="welcome")
+    result = _gemini_wrap(generate_welcome_data)
+    _welcome_cache = result
+    _welcome_cache_ts = _time.monotonic()
+    return result
 
 
 @app.post("/ai/gemini/ioc-context")
@@ -3359,6 +3569,135 @@ def gemini_threat_graph(payload: dict = Body(...), authorization: str = Header(N
         payload.get("events", []),
         payload.get("query", ""),
     )
+
+
+# ── ML Anomaly Detection endpoints ────────────────────────────────────────────
+
+@app.get("/ml/anomaly/status")
+def ml_anomaly_status(authorization: str = Header(None)):
+    """Returns the current state of the Isolation Forest anomaly model."""
+    _auth_user_or_raise(authorization)
+    return get_model_status()
+
+
+@app.post("/ml/anomaly/train")
+def ml_anomaly_train(authorization: str = Header(None)):
+    """Manually trigger model retraining on all collected samples."""
+    user = _auth_user_or_raise(authorization)
+    if not _is_privileged(user):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return retrain_model()
+
+
+@app.post("/ml/anomaly/reset")
+def ml_anomaly_reset(authorization: str = Header(None)):
+    """Reset model and clear all training samples. Admin only."""
+    user = _auth_user_or_raise(authorization)
+    if not _is_privileged(user):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return reset_model()
+
+
+# ── Supervised RF model endpoints (fusion events → FP classifier) ─────────────
+
+@app.get("/ml/supervised/status")
+def ml_supervised_status(authorization: str = Header(None)):
+    """
+    Estado del modelo RF supervisado: corpus acumulado, etiquetas,
+    importancia de features e indicador de entrenamiento.
+    """
+    _auth_user_or_raise(authorization)
+    return get_supervised_model_status()
+
+
+@app.post("/ml/supervised/train")
+def ml_supervised_train(authorization: str = Header(None)):
+    """
+    Reentrena el clasificador RF de falsos positivos con todo el corpus
+    acumulado. Requiere ≥50 eventos etiquetados. Admin/analista únicamente.
+    """
+    user = _auth_user_or_raise(authorization)
+    if not _is_privileged(user):
+        raise HTTPException(status_code=403, detail="Requiere rol privilegiado.")
+    return retrain_supervised_model()
+
+
+@app.post("/ml/supervised/predict")
+def ml_supervised_predict(payload: dict = Body(...), authorization: str = Header(None)):
+    """
+    Predice probabilidad de falso positivo para un evento de fusión.
+    Body: { "event": { ...campos del evento... } }
+    """
+    _auth_user_or_raise(authorization)
+    event = payload.get("event", {})
+    if not event:
+        raise HTTPException(status_code=400, detail="Se requiere 'event' en el body.")
+    return predict_false_positive(event)
+
+
+@app.post("/ml/supervised/predict-batch")
+def ml_supervised_predict_batch(payload: dict = Body(...), authorization: str = Header(None)):
+    """
+    Predice probabilidad de FP para un lote de eventos de fusión.
+    Body: { "events": [ ...lista de eventos... ] }
+    Devuelve la lista de eventos enriquecidos con el campo 'fp_prediction'.
+    """
+    _auth_user_or_raise(authorization)
+    events = payload.get("events", [])
+    if not isinstance(events, list) or not events:
+        raise HTTPException(status_code=400, detail="Se requiere 'events' (lista no vacía).")
+    predictions = batch_predict_false_positives(events)
+    enriched = [
+        {**ev, "fp_prediction": pred}
+        for ev, pred in zip(events, predictions)
+    ]
+    active = sum(1 for p in predictions if p.get("status") == "active")
+    likely_fp = sum(1 for p in predictions if p.get("is_likely_fp"))
+    return {
+        "events": enriched,
+        "summary": {
+            "total": len(enriched),
+            "model_active": active > 0,
+            "likely_false_positives": likely_fp,
+            "fp_rate": round(likely_fp / max(len(enriched), 1), 3),
+        },
+    }
+
+
+@app.get("/ml/corpus/stats")
+def ml_corpus_stats(authorization: str = Header(None)):
+    """
+    Estadísticas del corpus de fusión acumulado para entrenamiento ML.
+    Incluye distribución por actor, severidad y conteo temporal.
+    """
+    _auth_user_or_raise(authorization)
+    try:
+        import sqlite3 as _sqlite3
+        db_path = os.getenv("DB_PATH", "/data/cti.db")
+        conn = _sqlite3.connect(db_path)
+        conn.row_factory = _sqlite3.Row
+        rows = conn.execute(
+            "SELECT actor, event_count, is_annual, created_at FROM fusion_corpus ORDER BY created_at DESC"
+        ).fetchall()
+        conn.close()
+
+        total_events = sum(r["event_count"] for r in rows)
+        by_actor: dict[str, int] = {}
+        for r in rows:
+            a = r["actor"] or "Unknown"
+            by_actor[a] = by_actor.get(a, 0) + r["event_count"]
+
+        return {
+            "total_batches": len(rows),
+            "total_events": total_events,
+            "by_actor": dict(sorted(by_actor.items(), key=lambda x: x[1], reverse=True)[:20]),
+            "latest_batch": rows[0]["created_at"] if rows else None,
+            "annual_batches": sum(1 for r in rows if r["is_annual"]),
+            "operative_batches": sum(1 for r in rows if not r["is_annual"]),
+            "supervised_model": get_supervised_model_status(),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/apt-database")

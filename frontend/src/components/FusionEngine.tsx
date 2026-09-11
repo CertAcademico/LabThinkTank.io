@@ -2,6 +2,7 @@
  * RedCiber × CTI-Lab — Motor de Fusión de Amenazas
  * Powered by Google Gemini via the CTI-Lab backend proxy (/ai/gemini/*)
  */
+import { exportFusionReportPdf } from '../utils/reportPdf'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
@@ -175,53 +176,7 @@ function exportEventsJson(query: string, events: ThreatEvent[]) {
 }
 
 function exportReportPdf(query: string, events: ThreatEvent[], weekly: Record<string, unknown> | null) {
-  import('jspdf').then((mod) => {
-    // jspdf v2 exports as default or named jsPDF
-    const jsPDFClass = (mod as { default?: unknown; jsPDF?: unknown }).jsPDF ?? (mod as { default?: unknown }).default ?? mod
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const doc = new (jsPDFClass as any)()
-    const now = new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })
-    let y = 20
-
-    doc.setFontSize(16); doc.setTextColor(30, 30, 30)
-    doc.text('RedCiber × CTI-Lab — Reporte de Fusión de Amenazas', 14, y); y += 8
-    doc.setFontSize(10); doc.setTextColor(80, 80, 80)
-    doc.text(`Consulta: ${query}`, 14, y); y += 5
-    doc.text(`Fecha: ${now}  |  Eventos analizados: ${events.length}`, 14, y); y += 10
-
-    if (weekly) {
-      doc.setFontSize(13); doc.setTextColor(30, 30, 30)
-      doc.text(String(weekly.reportTitle ?? 'Informe Flash'), 14, y); y += 7
-      doc.setFontSize(9); doc.setTextColor(60, 60, 60)
-      const summary = String(weekly.executiveSummary ?? '')
-      const lines = doc.splitTextToSize(summary, 180)
-      doc.text(lines, 14, y); y += lines.length * 5 + 5
-
-      if (Array.isArray(weekly.mitigationRecommendations)) {
-        doc.setFontSize(11); doc.setTextColor(30, 30, 30)
-        doc.text('Recomendaciones', 14, y); y += 6
-        doc.setFontSize(9); doc.setTextColor(60, 60, 60)
-        ;(weekly.mitigationRecommendations as string[]).forEach((rec, i) => {
-          const recLines = doc.splitTextToSize(`${i + 1}. ${rec}`, 180)
-          if (y + recLines.length * 5 > 280) { doc.addPage(); y = 20 }
-          doc.text(recLines, 14, y); y += recLines.length * 5 + 2
-        })
-      }
-    }
-
-    // Events sample
-    y += 5
-    doc.setFontSize(11); doc.setTextColor(30, 30, 30)
-    doc.text('Muestra de eventos (20)', 14, y); y += 6
-    doc.setFontSize(7); doc.setTextColor(80, 80, 80)
-    events.slice(0, 20).forEach(ev => {
-      const line = `[${ev.severity}] ${ev.threatActor} · ${ev.mitreTactic} · ${ev.ioc || ev.malware || '—'}`
-      if (y > 280) { doc.addPage(); y = 20 }
-      doc.text(line.slice(0, 110), 14, y); y += 4
-    })
-
-    doc.save(`fusion-report-${Date.now()}.pdf`)
-  })
+  exportFusionReportPdf({ query, events, weekly }).catch(console.error)
 }
 
 // ── Charts ─────────────────────────────────────────────────────────────────────
@@ -1244,7 +1199,7 @@ export default function FusionEngine() {
                     style={{ left: isAnnual ? '50%' : '2px' }} />
             </button>
             <span className="text-[10px] text-slate-500">
-              {!isPrivileged ? '60 eventos · modo estudiante con cupo diario' : isAnnual ? '500 eventos · 2020–2026 (anual)' : '60 eventos · últimos 7 días (operativo)'}
+              {!isPrivileged ? '150 eventos · modo estudiante con cupo diario' : isAnnual ? '1000 eventos · 2020–2026 (anual)' : '150 eventos · últimos 30 días (operativo)'}
             </span>
           </label>
 

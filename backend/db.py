@@ -234,6 +234,8 @@ def init_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_iocs_ioc ON iocs(ioc);
             CREATE INDEX IF NOT EXISTS idx_iocs_source ON iocs(source);
+            CREATE INDEX IF NOT EXISTS idx_iocs_created_at ON iocs(created_at);
+            CREATE INDEX IF NOT EXISTS idx_datasets_source ON datasets(source);
             CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
             CREATE INDEX IF NOT EXISTS idx_fusion_usage_user_date ON fusion_usage(user_email, usage_date);
             CREATE INDEX IF NOT EXISTS idx_assign_challenge ON challenge_assignments(challenge_id);
@@ -279,6 +281,33 @@ def _migrate(conn) -> None:
     tm_cols = {r[1] for r in conn.execute("PRAGMA table_info(team_members)").fetchall()}
     if "role" not in tm_cols:
         conn.execute("ALTER TABLE team_members ADD COLUMN role TEXT NOT NULL DEFAULT 'analista_datos'")
+
+    # ── ML corpus table (added v1.2) ──────────────────────────────────────────
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS fusion_corpus (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            query       TEXT    NOT NULL,
+            actor       TEXT    NOT NULL DEFAULT '',
+            events_json TEXT    NOT NULL DEFAULT '[]',
+            event_count INTEGER NOT NULL DEFAULT 0,
+            is_annual   INTEGER NOT NULL DEFAULT 0,
+            created_by  TEXT    NOT NULL DEFAULT 'system',
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_corpus_actor ON fusion_corpus(actor)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_corpus_created ON fusion_corpus(created_at)"
+    )
+    # Performance indexes for date-range and LIKE queries (added v1.3)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_iocs_created_at ON iocs(created_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_datasets_source ON datasets(source)"
+    )
 
 
 # ── CTF Phase seeds ────────────────────────────────────────────────────────────

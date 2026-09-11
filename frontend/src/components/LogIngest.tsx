@@ -7,6 +7,16 @@ const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
 interface IocRow { ioc: string; type: string }
 
+interface AnomalyResult {
+  anomaly_score: number
+  is_anomaly: boolean
+  confidence: number
+  reason: string
+  status: 'active' | 'warming_up' | 'error'
+  samples_collected: number
+  samples_needed?: number
+}
+
 interface IngestResult {
   format: string
   line_count: number
@@ -15,6 +25,8 @@ interface IngestResult {
   iocs: IocRow[]
   iocs_added: number
   dataset_id: number | null
+  anomaly?: AnomalyResult
+  ioc_feed_matches?: string[]
 }
 
 interface LiveEvent {
@@ -62,8 +74,11 @@ const IOC_COLOR: Record<string, string> = {
 
 const EVENT_COLOR: Record<string, string> = {
   ioc_added: '#4ade80', log_ingested: '#22d3ee',
-  feed_synced: '#a78bfa', default: '#64748b',
+  feed_synced: '#a78bfa', anomaly_detected: '#f97316', default: '#64748b',
 }
+
+const ANOMALY_COLOR = (score: number) =>
+  score >= 0.7 ? '#ef4444' : score >= 0.4 ? '#f97316' : '#4ade80'
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -142,14 +157,64 @@ function exportLiveEvents(events: LiveEvent[], format: 'csv' | 'json') {
   )
 }
 
+// ── Anomaly panel ─────────────────────────────────────────────────────────────
+
+function AnomalyPanel({ anomaly }: { anomaly: AnomalyResult }) {
+  const color = ANOMALY_COLOR(anomaly.anomaly_score)
+  const pct = Math.round(anomaly.anomaly_score * 100)
+
+  if (anomaly.status === 'warming_up') {
+    return (
+      <div className="rounded-xl p-3 flex items-center gap-3"
+           style={{ background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.2)' }}>
+        <span className="text-slate-500 text-[18px]">⏳</span>
+        <div>
+          <p className="text-[11px] font-bold text-slate-400">ML Model — Calentando</p>
+          <p className="text-[10px] text-slate-600 mt-0.5">
+            Recopilando muestras de entrenamiento: {anomaly.samples_collected}/{(anomaly.samples_collected ?? 0) + (anomaly.samples_needed ?? 0)} batches
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl p-3 space-y-2"
+         style={{
+           background: anomaly.is_anomaly ? `${color}0d` : 'rgba(74,222,128,0.05)',
+           border: `1px solid ${color}30`,
+         }}>
+      <div className="flex items-center gap-2">
+        <span style={{ color }} className="text-[16px]">{anomaly.is_anomaly ? '⚠' : '✓'}</span>
+        <span className="text-[11px] font-bold" style={{ color }}>
+          {anomaly.is_anomaly ? 'Anomalía Detectada' : 'Tráfico Normal'}
+        </span>
+        <div className="flex-1" />
+        <div className="flex items-center gap-1.5">
+          <div className="w-24 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+            <div className="h-full rounded-full transition-all"
+                 style={{ width: `${pct}%`, background: color }} />
+          </div>
+          <span className="text-[10px] font-mono font-bold" style={{ color }}>{pct}%</span>
+        </div>
+      </div>
+      {anomaly.reason && (
+        <p className="text-[10px] text-slate-400 leading-relaxed">{anomaly.reason}</p>
+      )}
+    </div>
+  )
+}
+
 // ── Live event row ────────────────────────────────────────────────────────────
 
 function EventRow({ ev }: { ev: LiveEvent }) {
   const color = EVENT_COLOR[ev.type] ?? EVENT_COLOR.default
   const ts = new Date(ev.ts).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  const label = ev.type === 'log_ingested' ? `Logs: ${ev.source} · ${ev.line_count} líneas · ${ev.ioc_count} IOCs`
+  const label = ev.type === 'log_ingested'
+    ? `Logs: ${ev.source} · ${ev.line_count} líneas · ${ev.ioc_count} IOCs${ev.anomaly_score as number > 0.4 ? ` · ⚠ score ${Number(ev.anomaly_score).toFixed(2)}` : ''}`
     : ev.type === 'feed_synced' ? `Feed: ${ev.feed} · +${ev.added} IOCs`
-    : ev.type === 'ioc_added' ? `IOC: ${String(ev.ioc ?? '')} (${ev.type})`
+    : ev.type === 'ioc_added' ? `IOC: ${String(ev.ioc ?? '')} (${String(ev.ioc_type ?? ev.type)})`
+    : ev.type === 'anomaly_detected' ? `⚠ Anomalía: score ${Number(ev.anomaly_score).toFixed(2)} · ${String(ev.reason ?? '').slice(0, 60)}`
     : JSON.stringify(ev).slice(0, 80)
   return (
     <div className="flex items-center gap-2 text-[10px] font-mono">
@@ -644,6 +709,7 @@ export default function LogIngest() {
                       ✓ Guardado como dataset #{result.dataset_id} — visible para estudiantes
                     </p>
                   )}
+                  {result.anomaly && <AnomalyPanel anomaly={result.anomaly} />}
                   {/* Schema */}
                   {cols.length > 0 && (
                     <div className="flex flex-wrap gap-1">
@@ -862,9 +928,8 @@ export default function LogIngest() {
                 )}
                 <span className="flex items-center gap-1 text-[10px]"
                       style={{ color: liveConnected ? '#4ade80' : '#ef4444' }}>
-                  <span className="w-1.5 h-1.5 rounded-full"
-                        style={{ background: liveConnected ? '#4ade80' : '#ef4444',
-                                 animation: liveConnected ? 'pulse 2s infinite' : undefined }} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${liveConnected ? 'animate-pulse' : ''}`}
+                        style={{ background: liveConnected ? '#4ade80' : '#ef4444' }} />
                   {liveConnected ? 'En vivo' : 'Desconectado'}
                 </span>
               </div>
@@ -887,9 +952,10 @@ export default function LogIngest() {
             <div className="rounded-xl p-4 space-y-3" style={glass}>
               <h2 className="text-sm font-bold text-slate-200">Tipos de eventos</h2>
               {[
-                { type: 'log_ingested',  desc: 'Batch de logs procesado (ingest)' },
-                { type: 'feed_synced',   desc: 'Feed CTI sincronizado con nuevos IOCs' },
-                { type: 'ioc_added',     desc: 'IOC individual persistido en la BD' },
+                { type: 'log_ingested',    desc: 'Batch de logs procesado (ingest)' },
+                { type: 'feed_synced',     desc: 'Feed CTI sincronizado con nuevos IOCs' },
+                { type: 'ioc_added',       desc: 'IOC individual persistido en la BD' },
+                { type: 'anomaly_detected', desc: 'Anomalía detectada por el modelo ML' },
               ].map(e => {
                 const color = EVENT_COLOR[e.type]
                 return (

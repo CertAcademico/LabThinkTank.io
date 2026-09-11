@@ -39,10 +39,10 @@ services:
     depends_on:
       - backend
 
-  # ── Cloudflare Named Tunnel (usa CLOUDFLARE_TUNNEL_TOKEN del .env) ──────────
-  # Requiere token del Zero Trust Dashboard → Tunnels → tu tunnel → Overview
-  # El token ya incluye qué hostname → qué servicio interno.
-  # Si el dashboard apunta al servicio "http://frontend:80" ya funciona.
+  # ── Cloudflare Named Tunnel ACTIVO (dominio propio, URL estable) ───────────
+  # Usa CLOUDFLARE_TUNNEL_TOKEN del .env (Zero Trust → Networks → Tunnels → token).
+  # El ingress lo define el dashboard: Public Hostname → servicio http://frontend:80.
+  # nginx (frontend:80) sirve el SPA y proxea /api/* al backend (mismo origen).
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
@@ -52,12 +52,12 @@ services:
     depends_on:
       - frontend
 
-  # ── Quick Tunnel (sin cuenta, URL temporal *.trycloudflare.com) ───────────
-  # Para usarlo: comenta el servicio cloudflared de arriba y descomenta este.
-  # Luego: docker compose up cloudflared-quick
-  #        docker compose logs -f cloudflared-quick   ← busca la URL pública
+  # ── Quick Tunnel (sin cuenta, URL temporal *.trycloudflare.com) — DESACTIVADO
+  # Para usarlo: comenta cloudflared de arriba, descomenta esto y arranca con
+  #   TUNNEL_SVC=cloudflared-quick ./start.sh   (la URL cambia en cada reinicio)
   # cloudflared-quick:
   #   image: cloudflare/cloudflared:latest
+  #   restart: unless-stopped
   #   command: tunnel --no-autoupdate --url http://frontend:80
   #   depends_on:
   #     - frontend

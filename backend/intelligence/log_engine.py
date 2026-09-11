@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-Multi-format log parser and IOC extractor for CTI-Lab.
+Multi-format log parser, IOC extractor and volumetry analyzer for CTI-Lab.
 
 Supported input formats (auto-detected):
   - JSON / JSON Lines
@@ -27,6 +27,8 @@ import io
 import ipaddress
 import json
 import re
+from collections import Counter
+from datetime import datetime, timezone
 from typing import Any
 
 # ── IOC extraction ─────────────────────────────────────────────────────────────
@@ -338,36 +340,189 @@ _PARSERS = {
 }
 
 
+# ── Volumetry analysis ────────────────────────────────────────────────────────
+
+_TS_PATTERNS = [
+    # ISO 8601
+    re.compile(r'\b(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})'),
+    # Common log format: 01/Jan/2024:12:34:56
+    re.compile(r'(\d{2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2})'),
+    # Syslog: Jan 01 12:34:56
+    re.compile(r'(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})'),
+]
+
+_TS_FMTS = [
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S",
+    "%d/%b/%Y:%H:%M:%S",
+    "%b %d %H:%M:%S",
+    "%b  %d %H:%M:%S",
+]
+
+
+def _try_parse_ts(value: str) -> datetime | None:
+    for fmt in _TS_FMTS:
+        try:
+            return datetime.strptime(value.strip(), fmt)
+        except ValueError:
+            pass
+    return None
+
+
+def _extract_ts_from_row(row: dict) -> datetime | None:
+    """Try to find a timestamp in common log field names."""
+    for key in ("timestamp", "time", "date", "@timestamp", "datetime",
+                "event_time", "created_at", "ts", "log_time", "start_time"):
+        val = row.get(key) or row.get(key.upper())
+        if val:
+            parsed = _try_parse_ts(str(val))
+            if parsed:
+                return parsed
+    # Last resort: scan raw field
+    raw = str(row.get("raw", ""))
+    for pat in _TS_PATTERNS:
+        m = pat.search(raw)
+        if m:
+            parsed = _try_parse_ts(m.group(1))
+            if parsed:
+                return parsed
+    return None
+
+
+def compute_volumetry(rows: list[dict], raw: str = "") -> dict:
+    """
+    Compute event volumetry metrics from parsed log rows.
+
+    Returns:
+        {
+          "total_events":      int,
+          "events_with_ts":    int,
+          "timespan_seconds":  float | None,
+          "events_per_minute": float | None,
+          "events_per_hour":   float | None,
+          "by_hour":           {hour_str: count},   # e.g. "2024-01-15T14": 42
+          "by_severity":       {severity: count},
+          "by_source":         {source: count},
+          "by_type":           {type: count},
+          "by_action":         {action: count},
+          "peak_hour":         str | None,
+          "peak_count":        int,
+        }
+    """
+    total = len(rows)
+    if total == 0:
+        return {
+            "total_events": 0, "events_with_ts": 0,
+            "timespan_seconds": None, "events_per_minute": None, "events_per_hour": None,
+            "by_hour": {}, "by_severity": {}, "by_source": {}, "by_type": {},
+            "by_action": {}, "peak_hour": None, "peak_count": 0,
+        }
+
+    timestamps: list[datetime] = []
+    by_hour:     Counter = Counter()
+    by_severity: Counter = Counter()
+    by_source:   Counter = Counter()
+    by_type:     Counter = Counter()
+    by_action:   Counter = Counter()
+
+    _sev_fields  = ("severity", "level", "priority", "log_level", "sev")
+    _src_fields  = ("source", "src", "hostname", "host", "origin", "device_vendor")
+    _type_fields = ("type", "event_type", "category", "threatType", "ioc_type")
+    _act_fields  = ("action", "event_id", "signature_id", "name", "msg")
+
+    for row in rows:
+        # timestamp
+        ts = _extract_ts_from_row(row)
+        if ts:
+            timestamps.append(ts)
+            by_hour[ts.strftime("%Y-%m-%dT%H")] += 1
+
+        # categorical fields
+        for f in _sev_fields:
+            v = row.get(f) or row.get(f.upper())
+            if v:
+                by_severity[str(v).lower()[:20]] += 1
+                break
+        for f in _src_fields:
+            v = row.get(f) or row.get(f.upper())
+            if v:
+                by_source[str(v)[:40]] += 1
+                break
+        for f in _type_fields:
+            v = row.get(f) or row.get(f.upper())
+            if v:
+                by_type[str(v)[:30]] += 1
+                break
+        for f in _act_fields:
+            v = row.get(f) or row.get(f.upper())
+            if v:
+                by_action[str(v)[:40]] += 1
+                break
+
+    timespan = events_per_min = events_per_hour = None
+    if len(timestamps) >= 2:
+        ts_sorted = sorted(timestamps)
+        delta = (ts_sorted[-1] - ts_sorted[0]).total_seconds()
+        if delta > 0:
+            timespan       = round(delta, 1)
+            events_per_min = round(total / (delta / 60), 2)
+            events_per_hour = round(total / (delta / 3600), 2)
+
+    peak_hour  = by_hour.most_common(1)[0][0] if by_hour else None
+    peak_count = by_hour.most_common(1)[0][1] if by_hour else 0
+
+    return {
+        "total_events":      total,
+        "events_with_ts":    len(timestamps),
+        "timespan_seconds":  timespan,
+        "events_per_minute": events_per_min,
+        "events_per_hour":   events_per_hour,
+        "by_hour":           dict(sorted(by_hour.items())[-48:]),  # last 48h buckets
+        "by_severity":       dict(by_severity.most_common(10)),
+        "by_source":         dict(by_source.most_common(15)),
+        "by_type":           dict(by_type.most_common(15)),
+        "by_action":         dict(by_action.most_common(20)),
+        "peak_hour":         peak_hour,
+        "peak_count":        peak_count,
+    }
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
-def parse_logs(raw: str, hint: str | None = None) -> dict:
+def parse_logs(raw: str, hint: str | None = None, max_rows: int = 10_000) -> dict:
     """
-    Parse *raw* log content and extract IOC candidates.
+    Parse *raw* log content, extract IOC candidates and compute volumetry.
 
     Returns::
 
         {
-            "format":     str,          # detected/used format
-            "rows":       list[dict],   # up to 2 000 parsed rows
+            "format":     str,
+            "rows":       list[dict],   # up to max_rows parsed rows
             "iocs":       list[dict],   # [{ioc, type}, ...]
-            "schema":     dict,         # {field: python-type-name}
-            "line_count": int,
+            "schema":     dict,
+            "line_count": int,          # total parsed (may exceed max_rows)
+            "volumetry":  dict,         # event rate and breakdown metrics
             "error":      str | None,
         }
     """
     if not raw or not raw.strip():
-        return {"format": "empty", "rows": [], "iocs": [], "schema": {}, "line_count": 0, "error": None}
+        return {
+            "format": "empty", "rows": [], "iocs": [], "schema": {},
+            "line_count": 0, "volumetry": compute_volumetry([]), "error": None,
+        }
 
     fmt = hint or detect_format(raw)
     parser = _PARSERS.get(fmt, _PARSERS["text"])
 
     try:
         rows = parser(raw)
-    except Exception as exc:
+    except Exception:
         rows = [{"raw": l} for l in raw.splitlines() if l.strip()]
         fmt  = "text"
 
+    total_rows = len(rows)
     iocs = extract_iocs(raw)
+    volumetry = compute_volumetry(rows, raw)
 
     schema: dict[str, str] = {}
     for row in rows:
@@ -377,9 +532,10 @@ def parse_logs(raw: str, hint: str | None = None) -> dict:
 
     return {
         "format":     fmt,
-        "rows":       rows[:2_000],
+        "rows":       rows[:max_rows],
         "iocs":       iocs,
         "schema":     schema,
-        "line_count": len(rows),
+        "line_count": total_rows,
+        "volumetry":  volumetry,
         "error":      None,
     }

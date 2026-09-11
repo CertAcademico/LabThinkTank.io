@@ -101,16 +101,16 @@ def _arr(items: dict) -> dict:
 
 def generate_threat_data(topic: str, is_annual: bool = False) -> dict:
     """
-    Generate 60 (operational) or 500 (annual) threat events as structured data.
+    Generate 150 (operational) or 1000 (annual) threat events as structured data.
     Returns: { threats: [...], sector_analysis: str|None }
     """
     from datetime import date
     current_date = date.today().isoformat()
-    target_count = "EXACTAMENTE 500" if is_annual else "60"
+    target_count = "EXACTAMENTE 1000" if is_annual else "150"
     time_range = (
         "DESDE ENERO DE 2020 HASTA MARZO DE 2026"
         if is_annual
-        else "Últimos 7 días"
+        else "Últimos 30 días"
     )
 
     prompt = f"""
@@ -775,7 +775,6 @@ Incluye campañas recientes y su impacto en ciberseguridad global/regional.
 Proporciona análisis anticipativo de amenazas basado en estos movimientos geopolíticos.
 Responde estrictamente en JSON en español.""",
             config=types.GenerateContentConfig(
-                tools=[],  # no google_search to keep response structured
                 response_mime_type="application/json",
                 response_schema=schema,
                 temperature=0.4,
@@ -799,12 +798,68 @@ Responde estrictamente en JSON en español.""",
     return result
 
 
-# ── generate_threat_graph (shared logic via CISA database) ────────────────────
+# ── generate_threat_graph ─────────────────────────────────────────────────────
 
 def generate_threat_graph(events: list[dict], query: str) -> dict:
-    """Delegates to the Claude engine's implementation (same logic, no Gemini schema needed)."""
-    from ai.claude_fusion_engine import generate_threat_graph as _claude_graph
-    return _claude_graph(events, query)
+    """Build Actor → IOC → Campaign correlation graph enriched with CISA database."""
+    from ai.graph_builder import (
+        extract_graph_data, enrich_with_cisa,
+        build_actor_profiles, build_graph_nodes_edges,
+    )
+
+    actor_counts, ioc_counts, tactic_by_actor, top_actors, top_iocs = extract_graph_data(events)
+    cisa_enrichment = enrich_with_cisa(top_actors)
+    actor_profiles = build_actor_profiles(top_actors, actor_counts, tactic_by_actor, cisa_enrichment)
+
+    client = _get_client()
+
+    def _call():
+        from google.genai import types  # type: ignore
+        return client.models.generate_content(
+            model=_GEMINI_MODEL_FAST,
+            contents=f"""Eres un analista CTI. Construye un grafo de correlación de amenazas.
+Consulta: "{query}"
+Actores en los eventos (con datos CISA): {json.dumps(actor_profiles)}
+IOCs detectados: {json.dumps(top_iocs[:10])}
+
+Devuelve JSON con esta estructura exacta:
+{{
+  "campaigns": [
+    {{
+      "id": "camp_1",
+      "name": "<nombre campaña>",
+      "attributed_actors": ["<actor1>"],
+      "description": "<descripción 1 línea>",
+      "timeframe": "<2023-2025>",
+      "iocs_generated": ["<ioc si corresponde>"]
+    }}
+  ],
+  "cross_correlations": [
+    {{
+      "actors": ["<actor1>", "<actor2>"],
+      "relationship": "Comparten infraestructura C2|Mismos TTPs|Víctimas coincidentes|Posible colaboración",
+      "evidence": "<evidencia técnica>"
+    }}
+  ],
+  "graph_summary": "<párrafo de 2-3 oraciones sobre el panorama de amenazas>"
+}}
+Genera entre 2-5 campañas y 1-3 correlaciones cruzadas.""",
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.3,
+            ),
+        )
+
+    response = _with_retry(_call)
+    ai_data = json.loads(_extract_json(response.text))
+    campaigns = ai_data.get("campaigns", []) if isinstance(ai_data, dict) else []
+    correlations = ai_data.get("cross_correlations", []) if isinstance(ai_data, dict) else []
+    summary = ai_data.get("graph_summary", "") if isinstance(ai_data, dict) else ""
+
+    return build_graph_nodes_edges(
+        top_actors, top_iocs, campaigns, correlations, summary,
+        actor_counts, ioc_counts, tactic_by_actor, cisa_enrichment,
+    )
 
 
 # ── Public convenience dict ────────────────────────────────────────────────────

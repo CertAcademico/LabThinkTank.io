@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 52" fill="none">
+  <!-- Shield background -->
+  <path d="M8 4 L44 4 L44 28 Q26 46 8 28 Z" fill="#dc2626"/>
+  <!-- Shield inner highlight -->
+  <path d="M13 8 L39 8 L39 26 Q26 40 13 26 Z" fill="#ef4444" opacity="0.4"/>
+  <!-- RC letters -->
+  <text x="14" y="28" font-family="Arial, sans-serif" font-weight="900" font-size="17" fill="white" letter-spacing="-1">RC</text>
+  <!-- Vertical separator -->
+  <line x1="54" y1="8" x2="54" y2="44" stroke="#dc2626" stroke-width="1.5" opacity="0.4"/>
+  <!-- RedCiber wordmark -->
+  <text x="62" y="24" font-family="Arial, sans-serif" font-weight="700" font-size="16" fill="#dc2626">RedCiber</text>
+  <!-- Tagline -->
+  <text x="62" y="38" font-family="Arial, sans-serif" font-size="9.5" fill="#6b7280" letter-spacing="0.5">CYBERSECURITY RESEARCH</text>
+</svg>

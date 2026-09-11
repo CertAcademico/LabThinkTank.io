@@ -13,6 +13,7 @@ dispatch logic in main.py can swap engines transparently.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
@@ -21,6 +22,7 @@ from typing import Any
 
 _MODEL = os.getenv("CLAUDE_FUSION_MODEL", "claude-sonnet-4-6")
 _MAX_TOKENS = 4096
+_logger = logging.getLogger("cti.claude")
 
 _SYSTEM_CTI = """Eres el Motor de Fusión de Inteligencia RedCiber (Think Tank Estratégico).
 Eres un analista senior de Cyber Threat Intelligence con 15 años de experiencia en:
@@ -38,7 +40,11 @@ class ClaudeNotConfiguredError(RuntimeError):
     pass
 
 
+_client = None
+
+
 def _get_client():
+    global _client
     try:
         import anthropic  # type: ignore
     except ImportError as e:
@@ -48,22 +54,54 @@ def _get_client():
         raise ClaudeNotConfiguredError(
             "ANTHROPIC_API_KEY environment variable is not set."
         )
-    return anthropic.Anthropic(api_key=key)
+    if _client is None:
+        import anthropic as _anthropic  # type: ignore
+        globals()["_client"] = _anthropic.Anthropic(api_key=key)
+    return _client
+
+
+def _with_retry(fn, max_retries: int = 3, initial_delay: float = 2.0):
+    """Retry with exponential backoff — mirrors gemini_engine._with_retry."""
+    delay = initial_delay
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except Exception as exc:
+            if attempt == max_retries - 1:
+                raise
+            _logger.warning(
+                "Claude call failed (intento %d/%d): %s — reintentando en %.1fs",
+                attempt + 1, max_retries, exc, delay,
+            )
+            time.sleep(delay)
+            delay *= 2
 
 
 def _call(prompt: str, max_tokens: int = _MAX_TOKENS) -> str:
-    """Single call with system-level prompt caching."""
-    import anthropic  # type: ignore
-    client = _get_client()
-    response = client.messages.create(
-        model=_MODEL,
-        max_tokens=max_tokens,
-        system=[{
-            "type": "text",
-            "text": _SYSTEM_CTI,
-            "cache_control": {"type": "ephemeral"},
-        }],
-        messages=[{"role": "user", "content": prompt}],
+    """Single call with system-level prompt caching and retry."""
+    t0 = time.time()
+
+    def _invoke():
+        client = _get_client()
+        return client.messages.create(
+            model=_MODEL,
+            max_tokens=max_tokens,
+            system=[{
+                "type": "text",
+                "text": _SYSTEM_CTI,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+    response = _with_retry(_invoke)
+    elapsed = time.time() - t0
+    _logger.info(
+        "Claude ✓ %.1fs | in=%d out=%d | model=%s",
+        elapsed,
+        response.usage.input_tokens,
+        response.usage.output_tokens,
+        _MODEL,
     )
     return response.content[0].text.strip()
 
@@ -72,19 +110,22 @@ def _call_json(prompt: str, max_tokens: int = _MAX_TOKENS) -> dict | list:
     """Call Claude and parse the response as JSON."""
     full_prompt = prompt + "\n\nIMPORTANTE: Responde ÚNICAMENTE con JSON válido, sin markdown, sin bloques ```json, sin texto adicional."
     raw = _call(full_prompt, max_tokens)
-    # Strip markdown fences if model added them anyway
     raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
     raw = re.sub(r'\s*```$', '', raw, flags=re.MULTILINE)
     raw = raw.strip()
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        _logger.error("Claude devolvió JSON inválido: %s…", raw[:300])
+        raise ValueError(f"Motor Claude devolvió JSON inválido: {exc}") from exc
 
 
 # ── 1. generate_threat_data ────────────────────────────────────────────────────
 
 def generate_threat_data(topic: str, is_annual: bool = False) -> dict:
     today = date.today().isoformat()
-    count = "EXACTAMENTE 500" if is_annual else "60"
-    time_range = "DESDE ENERO DE 2020 HASTA HOY (análisis multianual)" if is_annual else "Últimos 7 días (operativo)"
+    count = "EXACTAMENTE 1000" if is_annual else "150"
+    time_range = "DESDE ENERO DE 2020 HASTA HOY (análisis multianual)" if is_annual else "Últimos 30 días (operativo)"
 
     prompt = f"""OBJETIVO: Genera {count} eventos de ciberseguridad en formato CSV delimitado por pipes (|).
 CONTEXTO: {topic}
@@ -108,7 +149,8 @@ Valores válidos:
 Al final añade exactamente: ---PREDICTIVE_INSIGHTS---
 Seguido de este JSON en una sola línea: {{"regressionTrend":"Linear","acceleration":1.2,"topPostulatedSector":"Financiero","confidenceScore":85,"multiActorCorrelation":"Colaboración detectada en infraestructura C2 compartida"}}"""
 
-    raw = _call(prompt, max_tokens=8000)
+    max_tok = 16000 if is_annual else 10000
+    raw = _call(prompt, max_tokens=max_tok)
 
     csv_data, predictive = raw, None
     if "---PREDICTIVE_INSIGHTS---" in raw:
@@ -470,49 +512,14 @@ Devuelve JSON:
 
 def generate_threat_graph(events: list[dict], query: str) -> dict:
     """Build Actor → IOC → Campaign correlation graph enriched with CISA database."""
-    from intelligence.apt_database import match_actor_to_database, CISA_APT_DATABASE
+    from ai.graph_builder import (
+        extract_graph_data, enrich_with_cisa,
+        build_actor_profiles, build_graph_nodes_edges,
+    )
 
-    # Extract unique actors, IOCs, and deduplicated data from events
-    actor_counts: dict[str, int] = {}
-    ioc_counts: dict[str, list[str]] = {}
-    tactic_by_actor: dict[str, list[str]] = {}
-
-    for ev in events:
-        actor = (ev.get("threatActor") or "").strip()
-        ioc = (ev.get("ioc") or "").strip()
-        tactic = (ev.get("mitreTactic") or "").strip()
-        if actor and actor not in ("Unknown", "N/A", ""):
-            actor_counts[actor] = actor_counts.get(actor, 0) + 1
-            if tactic:
-                tactic_by_actor.setdefault(actor, [])
-                if tactic not in tactic_by_actor[actor]:
-                    tactic_by_actor[actor].append(tactic)
-        if ioc and ioc not in ("N/A", "—", ""):
-            ioc_counts.setdefault(ioc, [])
-            if actor and actor not in ioc_counts[ioc]:
-                ioc_counts[ioc].append(actor)
-
-    top_actors = sorted(actor_counts, key=lambda a: actor_counts[a], reverse=True)[:8]
-    top_iocs = sorted(ioc_counts, key=lambda i: len(ioc_counts[i]), reverse=True)[:12]
-
-    # Match actors against CISA database
-    cisa_enrichment: dict[str, dict] = {}
-    for actor in top_actors:
-        match = match_actor_to_database(actor)
-        if match:
-            cisa_enrichment[actor] = match
-
-    # Build context for Claude: enrich + ask for campaign attribution + correlations
-    actor_profiles = []
-    for actor in top_actors:
-        cisa = cisa_enrichment.get(actor)
-        profile = {"name": actor, "events": actor_counts[actor], "tactics": tactic_by_actor.get(actor, [])}
-        if cisa:
-            profile["cisa_country"] = cisa["country"]
-            profile["cisa_risk"] = cisa["risk_level"]
-            profile["cisa_campaigns"] = cisa["known_campaigns"][:3]
-            profile["cisa_advisory"] = cisa["cisa_advisories"][:2] if cisa.get("cisa_advisories") else []
-        actor_profiles.append(profile)
+    actor_counts, ioc_counts, tactic_by_actor, top_actors, top_iocs = extract_graph_data(events)
+    cisa_enrichment = enrich_with_cisa(top_actors)
+    actor_profiles = build_actor_profiles(top_actors, actor_counts, tactic_by_actor, cisa_enrichment)
 
     prompt = f"""Eres un analista CTI. Construye un grafo de correlación de amenazas.
 Consulta: "{query}"
@@ -548,106 +555,10 @@ Genera entre 2-5 campañas y 1-3 correlaciones cruzadas basadas en los actores p
     correlations = ai_data.get("cross_correlations", []) if isinstance(ai_data, dict) else []
     summary = ai_data.get("graph_summary", "") if isinstance(ai_data, dict) else ""
 
-    # Build ReactFlow-compatible nodes and edges
-    nodes: list[dict] = []
-    edges: list[dict] = []
-    edge_counter = 0
-
-    def add_edge(src: str, tgt: str, label: str, animated: bool = False, color: str = "#475569"):
-        nonlocal edge_counter
-        edge_counter += 1
-        edges.append({
-            "id": f"e{edge_counter}",
-            "source": src,
-            "target": tgt,
-            "label": label,
-            "animated": animated,
-            "style": {"stroke": color, "strokeWidth": 1.5},
-            "labelStyle": {"fill": "#94a3b8", "fontSize": 9},
-        })
-
-    # Actor nodes (left column)
-    for i, actor in enumerate(top_actors):
-        cisa = cisa_enrichment.get(actor)
-        risk = cisa["risk_level"] if cisa else ("High" if actor_counts[actor] > 3 else "Medium")
-        risk_color = {"Critical": "#ef4444", "High": "#f97316", "Medium": "#facc15", "Low": "#4ade80"}.get(risk, "#94a3b8")
-        nodes.append({
-            "id": f"actor:{actor}",
-            "type": "actor",
-            "position": {"x": 50, "y": i * 130 + 40},
-            "data": {
-                "label": actor,
-                "nodeType": "actor",
-                "country": cisa["country"] if cisa else "Desconocido",
-                "motivation": cisa["motivation"] if cisa else "No atribuido",
-                "risk": risk,
-                "riskColor": risk_color,
-                "eventCount": actor_counts[actor],
-                "tactics": tactic_by_actor.get(actor, [])[:3],
-                "cisaMatch": bool(cisa),
-                "cisaAdvisories": cisa["cisa_advisories"][:2] if cisa else [],
-                "cisaAliases": cisa["aliases"][:3] if cisa else [],
-                "knownCampaigns": cisa["known_campaigns"][:3] if cisa else [],
-                "sponsor": cisa.get("sponsor", "") if cisa else "",
-            },
-        })
-
-    # Campaign nodes (center column)
-    for i, camp in enumerate(campaigns[:6]):
-        camp_id = f"campaign:{camp['id']}"
-        nodes.append({
-            "id": camp_id,
-            "type": "campaign",
-            "position": {"x": 400, "y": i * 110 + 40},
-            "data": {
-                "label": camp["name"],
-                "nodeType": "campaign",
-                "description": camp.get("description", ""),
-                "timeframe": camp.get("timeframe", ""),
-                "attributedActors": camp.get("attributed_actors", []),
-            },
-        })
-        # Actor → Campaign edges
-        for actor_name in camp.get("attributed_actors", []):
-            if any(n["id"] == f"actor:{actor_name}" for n in nodes):
-                add_edge(f"actor:{actor_name}", camp_id, "conducts", animated=True, color="#a78bfa")
-
-    # IOC nodes (right column)
-    for i, ioc in enumerate(top_iocs[:10]):
-        ioc_id = f"ioc:{ioc}"
-        ioc_actors = ioc_counts.get(ioc, [])
-        nodes.append({
-            "id": ioc_id,
-            "type": "ioc",
-            "position": {"x": 750, "y": i * 80 + 40},
-            "data": {
-                "label": ioc[:35] + ("…" if len(ioc) > 35 else ""),
-                "fullIoc": ioc,
-                "nodeType": "ioc",
-                "usedBy": ioc_actors,
-            },
-        })
-        # Actor → IOC edges
-        for actor_name in ioc_actors:
-            if any(n["id"] == f"actor:{actor_name}" for n in nodes):
-                add_edge(f"actor:{actor_name}", ioc_id, "usa", animated=False, color="#22d3ee")
-        # Campaign → IOC edges
-        for camp in campaigns:
-            if ioc in camp.get("iocs_generated", []):
-                camp_id = f"campaign:{camp['id']}"
-                if any(n["id"] == camp_id for n in nodes):
-                    add_edge(camp_id, ioc_id, "genera", animated=False, color="#4ade80")
-
-    return {
-        "nodes": nodes,
-        "edges": edges,
-        "crossCorrelations": correlations,
-        "summary": summary,
-        "cisaMatchCount": len(cisa_enrichment),
-        "totalActors": len(top_actors),
-        "totalIocs": len(top_iocs),
-        "totalCampaigns": len(campaigns),
-    }
+    return build_graph_nodes_edges(
+        top_actors, top_iocs, campaigns, correlations, summary,
+        actor_counts, ioc_counts, tactic_by_actor, cisa_enrichment,
+    )
 
 
 # ── Public dict (same interface as gemini_engine.HANDLERS) ───────────────────

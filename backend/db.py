@@ -282,6 +282,34 @@ def _migrate(conn) -> None:
     if "role" not in tm_cols:
         conn.execute("ALTER TABLE team_members ADD COLUMN role TEXT NOT NULL DEFAULT 'analista_datos'")
 
+    # ── Retos por color + asignación aleatoria por grupo + anuncios (v1.4) ────
+    cc = {r[1] for r in conn.execute("PRAGMA table_info(ctf_challenges)").fetchall()}
+    if "team_color" not in cc:
+        conn.execute("ALTER TABLE ctf_challenges ADD COLUMN team_color TEXT NOT NULL DEFAULT ''")
+    pc = {r[1] for r in conn.execute("PRAGMA table_info(ctf_phases)").fetchall()}
+    if "opens_at" not in pc:
+        conn.execute("ALTER TABLE ctf_phases ADD COLUMN opens_at TEXT")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS team_ctf_assignments (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            team_id      INTEGER NOT NULL REFERENCES teams(id),
+            challenge_id INTEGER NOT NULL REFERENCES ctf_challenges(id),
+            assigned_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(team_id, challenge_id)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS announcements (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            title      TEXT NOT NULL,
+            body       TEXT NOT NULL,
+            publish_at TEXT NOT NULL,
+            expires_at TEXT,
+            created_by TEXT NOT NULL DEFAULT 'system',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
     # ── ML corpus table (added v1.2) ──────────────────────────────────────────
     conn.execute("""
         CREATE TABLE IF NOT EXISTS fusion_corpus (
@@ -1336,3 +1364,36 @@ def get_conn():
 
 def row_to_dict(row: sqlite3.Row) -> dict:
     return dict(row)
+
+
+# ── Día 2: retos por color (red/blue/white/purple), puntaje nivelado ──────────
+DAY2_COLORS = {
+    "APT28 — Timeline del Ataque": "blue",
+    "LockBit — Patient Zero": "red",
+    "Clasificación de Malware con ML": "purple",
+    "Pipeline de Enriquecimiento IOC": "white",
+    "Botnet C2 — Detección": "blue",
+    "Phishing Domain — Clasificador ML": "purple",
+    "YARA — Regla Básica": "blue",
+    "Movimiento Lateral — Cadena": "red",
+    "DNS Tunneling — Detección": "red",
+    "Anomaly Detection — Isolation Forest": "purple",
+    "Informe de Inteligencia — LockBit": "white",
+    "Supply Chain Hunt — IOC Cruzado": "white",
+}
+_DIFF_DOWN = {"experto": "difícil", "difícil": "medio"}
+
+
+def balance_phase_challenges(conn, phase_id: int, points: int = 150) -> int:
+    """Asigna color por título, baja un nivel de dificultad y nivela puntos."""
+    n = 0
+    for r in conn.execute("SELECT id, title, difficulty FROM ctf_challenges WHERE phase_id = ?", (phase_id,)).fetchall():
+        color = DAY2_COLORS.get(r["title"])
+        if not color:
+            continue
+        conn.execute(
+            "UPDATE ctf_challenges SET team_color = ?, difficulty = ?, points = ? WHERE id = ?",
+            (color, _DIFF_DOWN.get(r["difficulty"], r["difficulty"]), points, r["id"]),
+        )
+        n += 1
+    return n

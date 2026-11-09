@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import CtfScoreboard, { AnnouncementBanner } from './CtfScoreboard'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -241,6 +242,9 @@ export default function GlobalOverview() {
           </div>
         </div>
       )}
+
+      <AnnouncementBanner />
+      <CtfScoreboard />
 
       {/* ── Row 2: gauge + map ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-5 gap-4">

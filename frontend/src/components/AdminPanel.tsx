@@ -35,7 +35,7 @@ interface Stats {
   live_events: number
   live_clients: number
   top_students: { name: string; email: string; submissions: number; ctf_solves: number; ctf_points: number; avg_score?: number }[]
-  team_progress: { id: number; name: string; color: string; members: number; assigned_challenges: number; badges: number }[]
+  team_progress: { id: number; name: string; color: string; members: number; assigned_challenges: number; badges: number; points: number; solves: number }[]
   recent_submissions: { user_name: string; challenge: string; submitted_at: string; score?: number }[]
 }
 
@@ -187,21 +187,22 @@ function DashboardTab({ stats }: { stats: Stats | null }) {
             <p className="px-5 py-6 text-xs text-slate-700">Sin equipos creados aún.</p>
           ) : (
             <div className="divide-y divide-white/5">
-              {stats.team_progress.slice(0, 6).map(team => (
+              {(() => { const maxPts = Math.max(...stats.team_progress.map(t => t.points), 0); return stats.team_progress.slice(0, 6).map(team => (
                 <div key={team.id} className="px-5 py-3 space-y-2">
                   <div className="flex items-center gap-3">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: team.color || CYAN }} />
                     <p className="text-xs text-slate-200 flex-1 truncate">{team.name}</p>
                     <Badge label={`${team.members} miembros`} color="#22d3ee" />
                     <Badge label={`${team.badges} insignias`} color="#facc15" />
+                    <Badge label={`${team.points} pts`} color="#4ade80" />
                   </div>
                   <div className="h-1.5 rounded-full overflow-hidden bg-white/[0.04]">
                     <div className="h-full rounded-full"
-                         style={{ width: `${Math.min(100, Math.max(8, team.assigned_challenges * 16 + team.badges * 12))}%`, background: team.color || CYAN }} />
+                         style={{ width: `${maxPts > 0 ? (team.points / maxPts) * 100 : 0}%`, background: team.color || CYAN }} />
                   </div>
-                  <p className="text-[9px] text-slate-700">{team.assigned_challenges} retos grupales asignados</p>
+                  <p className="text-[9px] text-slate-700">{team.solves} solves · {team.assigned_challenges} retos grupales asignados</p>
                 </div>
-              ))}
+              )) })()}
             </div>
           )}
         </div>

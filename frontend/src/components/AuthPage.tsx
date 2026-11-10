@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
@@ -44,6 +44,13 @@ export default function AuthPage() {
   const [error,    setError]    = useState('')
   const [loading,  setLoading]  = useState(false)
   const [success,  setSuccess]  = useState('')
+  const [groups,   setGroups]   = useState<{ id: number; name: string; members: number }[]>([])
+  const [teamId,   setTeamId]   = useState('')
+
+  useEffect(() => {
+    if (mode !== 'register') return
+    fetch(`${API_URL}/auth/open-groups`).then(r => r.ok ? r.json() : []).then(setGroups).catch(() => {})
+  }, [mode])
 
   const isEanEmail = email.trim().toLowerCase().endsWith(`@${DOMAIN}`)
 
@@ -63,7 +70,7 @@ export default function AuthPage() {
         const r = await fetch(`${API_URL}/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, password }),
+          body: JSON.stringify({ name, email, password, team_id: teamId ? Number(teamId) : undefined }),
         })
         const data = await r.json()
         if (!r.ok) throw new Error(data.detail ?? 'Error al registrarse')
@@ -212,6 +219,20 @@ export default function AuthPage() {
               {mode === 'register' && (
                 <Field label="Confirmar contraseña" type="password" value={confirm} onChange={setConfirm}
                        placeholder="Repite tu contraseña" />
+              )}
+
+              {mode === 'register' && groups.length > 0 && (
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-slate-400">Grupo</label>
+                  <select value={teamId} onChange={e => setTeamId(e.target.value)} required
+                          className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-100 outline-none"
+                          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <option value="" className="bg-slate-900">Selecciona tu grupo…</option>
+                    {groups.map(g => (
+                      <option key={g.id} value={g.id} className="bg-slate-900">{g.name} ({g.members} integrantes)</option>
+                    ))}
+                  </select>
+                </div>
               )}
 
               {error && (

@@ -286,6 +286,9 @@ def _migrate(conn) -> None:
     cc = {r[1] for r in conn.execute("PRAGMA table_info(ctf_challenges)").fetchall()}
     if "team_color" not in cc:
         conn.execute("ALTER TABLE ctf_challenges ADD COLUMN team_color TEXT NOT NULL DEFAULT ''")
+    tcols = {r[1] for r in conn.execute("PRAGMA table_info(teams)").fetchall()}
+    if "open_signup" not in tcols:
+        conn.execute("ALTER TABLE teams ADD COLUMN open_signup INTEGER NOT NULL DEFAULT 0")
     pc = {r[1] for r in conn.execute("PRAGMA table_info(ctf_phases)").fetchall()}
     if "opens_at" not in pc:
         conn.execute("ALTER TABLE ctf_phases ADD COLUMN opens_at TEXT")

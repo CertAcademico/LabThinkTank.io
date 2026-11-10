@@ -382,14 +382,42 @@ app.add_middleware(
 
 @app.post("/auth/register")
 def auth_register(payload: dict = Body(...)):
+    team_id = payload.get("team_id")
+    if team_id:
+        with get_conn() as conn:
+            if not conn.execute("SELECT 1 FROM teams WHERE id = ? AND open_signup = 1", (team_id,)).fetchone():
+                raise HTTPException(status_code=400, detail="El grupo elegido no está habilitado para registro")
     try:
-        return register(
+        user = register(
             name=payload.get("name", ""),
             email=payload.get("email", ""),
             password=payload.get("password", ""),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    if team_id:
+        with get_conn() as conn:
+            conn.execute("INSERT OR IGNORE INTO team_members (team_id, user_email) VALUES (?,?)", (team_id, user["email"]))
+    return user
+
+
+@app.get("/auth/open-groups")
+def auth_open_groups():
+    """Grupos habilitados para que estudiantes nuevos se unan al registrarse (público)."""
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT t.id, t.name, t.color,
+                   (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) AS members
+            FROM teams t WHERE t.open_signup = 1 ORDER BY t.name""").fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.patch("/admin/teams/{team_id}/open-signup")
+def admin_team_open_signup(team_id: int, payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute("UPDATE teams SET open_signup = ? WHERE id = ?", (1 if payload.get("open") else 0, team_id))
+    return {"ok": True}
 
 
 @app.post("/auth/login")
@@ -1774,7 +1802,7 @@ def admin_teams(authorization: str = Header(None)):
     _require_admin(authorization)
     with get_conn() as conn:
         teams = conn.execute(
-            "SELECT id, name, color, created_by, created_at FROM teams ORDER BY created_at"
+            "SELECT id, name, color, created_by, created_at, open_signup FROM teams ORDER BY created_at"
         ).fetchall()
         result = []
         for t in teams:
@@ -1796,8 +1824,8 @@ def admin_create_team(payload: dict = Body(...), authorization: str = Header(Non
     with get_conn() as conn:
         try:
             cur = conn.execute(
-                "INSERT INTO teams (name, color, created_by) VALUES (?,?,?)",
-                (name, payload.get("color", "#22d3ee"), admin["email"]),
+                "INSERT INTO teams (name, color, created_by, open_signup) VALUES (?,?,?,?)",
+                (name, payload.get("color", "#22d3ee"), admin["email"], 1 if payload.get("open_signup") else 0),
             )
         except Exception:
             raise HTTPException(status_code=409, detail="Ya existe un equipo con ese nombre")

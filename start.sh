@@ -7,9 +7,9 @@ cd "$ROOT_DIR"
 COMPOSE="${COMPOSE:-docker compose}"
 
 # Servicio de tunnel activo en docker-compose.yml.
-# Named tunnel (por defecto): URL estable, usa CLOUDFLARE_TUNNEL_TOKEN del .env.
-# Quick Tunnel: exporta TUNNEL_SVC=cloudflared-quick y descomenta ese servicio.
-TUNNEL_SVC="${TUNNEL_SVC:-cloudflared}"
+# Quick Tunnel (por defecto): URL temporal *.trycloudflare.com, cambia al reiniciar.
+# Named tunnel: TUNNEL_SVC=cloudflared ./start.sh (requiere Public Hostname en Zero Trust).
+TUNNEL_SVC="${TUNNEL_SVC:-cloudflared-quick}"
 
 usage() {
   cat <<'EOF'
@@ -24,8 +24,8 @@ Usage:
   ./start.sh --logs       Follow logs for backend, frontend and the tunnel
 
 Environment:
-  TUNNEL_SVC              Tunnel compose service (default: cloudflared = named).
-                          Set to cloudflared-quick for a throwaway Quick Tunnel.
+  TUNNEL_SVC              Tunnel compose service (default: cloudflared-quick).
+                          Set to cloudflared for the named tunnel.
   VITE_API_URL            Defaults to /api (same-origin through nginx).
   CLOUDFLARE_TUNNEL_TOKEN Required for the named tunnel (from Zero Trust dashboard).
 EOF
@@ -94,6 +94,31 @@ show_tunnel_url() {
     else
       printf '\nTUNNEL_URL=%s\n' "$url" >>.env
     fi
+  fi
+
+  sync_vercel "$url"
+}
+
+# Apunta frontend/vercel.json a la URL del túnel y vuelve a publicar en Vercel.
+# Solo publica si la URL cambió. Desactivar con SKIP_VERCEL=1.
+sync_vercel() {
+  local url="$1" cfg="frontend/vercel.json"
+  [[ "${SKIP_VERCEL:-0}" == "1" || ! -f "$cfg" ]] && return 0
+
+  if grep -q "\"destination\": \"$url/api/" "$cfg"; then
+    echo "Vercel ya apunta a este túnel; no hace falta publicar."
+    return 0
+  fi
+
+  local tmp; tmp="$(mktemp)"
+  sed -E "s#https://[a-z0-9.-]+\.trycloudflare\.com#$url#g" "$cfg" >"$tmp" && mv "$tmp" "$cfg"
+  echo "vercel.json actualizado → $url"
+
+  echo "Publicando frontend en Vercel..."
+  if (cd frontend && npx --yes vercel deploy --prod --yes); then
+    echo "Vercel publicado."
+  else
+    echo "Falló la publicación en Vercel. Reintenta: cd frontend && npx vercel deploy --prod" >&2
   fi
 }
 

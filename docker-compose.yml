@@ -9,6 +9,7 @@ services:
       - cti_data:/data
     environment:
       - DB_PATH=/data/cti.db
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env}
       # Ollama — if running on host machine use host.docker.internal
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
       - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY:-}
@@ -39,12 +40,15 @@ services:
     depends_on:
       - backend
 
-  # ── Cloudflare Named Tunnel ACTIVO (dominio propio, URL estable) ───────────
+  # ── Cloudflare Named Tunnel (dominio propio, URL estable) ───────────
   # Usa CLOUDFLARE_TUNNEL_TOKEN del .env (Zero Trust → Networks → Tunnels → token).
   # El ingress lo define el dashboard: Public Hostname → servicio http://frontend:80.
   # nginx (frontend:80) sirve el SPA y proxea /api/* al backend (mismo origen).
+  # Inactivo: no tiene Public Hostname configurado. Para usarlo:
+  #   TUNNEL_SVC=cloudflared ./start.sh
   cloudflared:
     image: cloudflare/cloudflared:latest
+    profiles: ["named"]
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
@@ -52,15 +56,16 @@ services:
     depends_on:
       - frontend
 
-  # ── Quick Tunnel (sin cuenta, URL temporal *.trycloudflare.com) — DESACTIVADO
-  # Para usarlo: comenta cloudflared de arriba, descomenta esto y arranca con
-  #   TUNNEL_SVC=cloudflared-quick ./start.sh   (la URL cambia en cada reinicio)
-  # cloudflared-quick:
-  #   image: cloudflare/cloudflared:latest
-  #   restart: unless-stopped
-  #   command: tunnel --no-autoupdate --url http://frontend:80
-  #   depends_on:
-  #     - frontend
+  # ── Quick Tunnel (ACTIVO, sin cuenta, URL *.trycloudflare.com) ─────────────
+  # La URL cambia en cada reinicio del túnel: después de reiniciar hay que
+  # actualizar frontend/vercel.json y volver a publicar en Vercel.
+  cloudflared-quick:
+    image: cloudflare/cloudflared:latest
+    profiles: ["quick"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://frontend:80
+    depends_on:
+      - frontend
 
 volumes:
   cti_data:

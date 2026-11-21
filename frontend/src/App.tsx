@@ -96,7 +96,7 @@ function LoadingPanel({ label = 'Cargando módulo' }: { label?: string }) {
 function Shell() {
   const { user, logout, token } = useAuth()
   const [view,      setView]      = useState<ViewId>('overview')
-  const [adminMode, setAdminMode] = useState(false)
+  const [adminMode, setAdminMode] = useState(true)   // el admin entra directo a su panel; "Salir del panel" lo lleva a la vista normal
   const [myBadges,  setMyBadges]  = useState<Badge[]>([])
   const [teamBadges, setTeamBadges] = useState<Badge[]>([])
 

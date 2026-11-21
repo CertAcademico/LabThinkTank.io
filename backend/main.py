@@ -3146,6 +3146,84 @@ def student_review(challenge_id: int, authorization: str = Header(None)):
     return json.loads(r["review_json"]) if r and r["review_json"] else None
 
 
+@app.get("/admin/case/aurora/dashboard")
+def admin_aurora_dashboard(authorization: str = Header(None)):
+    """Tablero del docente: visión de conjunto del caso (embudo por capítulo, atascados, actividad). Solo admin."""
+    _require_admin(authorization)
+    from datetime import datetime, timedelta
+    from aurora.generator import case_code
+    from aurora.chapters import PATH_TITLES
+    with get_conn() as conn:
+        chs = [dict(r) for r in conn.execute(
+            "SELECT id, case_chapter, title, status, starts_at, deadline, badge_id FROM challenges WHERE case_key = 'aurora' ORDER BY case_chapter").fetchall()]
+        ids = [c["id"] for c in chs]
+        mk = ",".join("?" * len(ids)) or "NULL"
+        students = {r["email"]: r["name"] for r in conn.execute(
+            f"SELECT DISTINCT u.email, u.name FROM challenge_assignments a JOIN users u ON u.email = a.user_email WHERE a.challenge_id IN ({mk})", ids).fetchall()}
+        subs = [dict(r) for r in conn.execute(
+            f"SELECT challenge_id, user_email, score, submitted_at FROM submissions WHERE challenge_id IN ({mk})", ids).fetchall()]
+        hints = [dict(r) for r in conn.execute(
+            f"SELECT challenge_id, user_email, level, used_at FROM hint_usage WHERE challenge_id IN ({mk})", ids).fetchall()]
+        badges = [dict(r) for r in conn.execute(
+            """SELECT ub.user_email, ub.awarded_at, b.name FROM user_badges ub JOIN badges b ON b.id = ub.badge_id
+               WHERE ub.badge_id IN (SELECT badge_id FROM challenges WHERE case_key = 'aurora' AND badge_id IS NOT NULL)""").fetchall()]
+        wall = {r["user_email"] for r in conn.execute("SELECT user_email FROM intel_reports").fetchall()}
+        from db import badge_flow_start, badge_flow_active
+        flow = {"start": badge_flow_start(conn), "active": badge_flow_active(conn)}
+    chapters = []
+    for c in chs:
+        cs = [x for x in subs if x["challenge_id"] == c["id"]]
+        ch_hints = [h for h in hints if h["challenge_id"] == c["id"]]
+        scores = [x["score"] for x in cs if x["score"] is not None]
+        chapters.append({
+            "chapter": c["case_chapter"], "title": c["title"], "status": c["status"], "starts_at": c["starts_at"], "deadline": c["deadline"],
+            "assigned": len(students), "worked": len({x["user_email"] for x in cs} | {h["user_email"] for h in ch_hints}),
+            "submitted": len({x["user_email"] for x in cs}), "passed": len({x["user_email"] for x in cs if (x["score"] or 0) >= 60}),
+            "avg_score": round(sum(scores) / len(scores)) if scores else None,
+            "dist": [sum(1 for v in scores if 0 <= v < 40), sum(1 for v in scores if 40 <= v < 60), sum(1 for v in scores if 60 <= v < 80), sum(1 for v in scores if v >= 80)],
+            "hint_students": len({h["user_email"] for h in ch_hints}), "hints_total": len(ch_hints),
+        })
+    active_ids = {c["id"]: c for c in chs if c["status"] == "active"}
+    now = datetime.utcnow()
+    stuck, rows = [], []
+    for email, name in students.items():
+        my = [x for x in subs if x["user_email"] == email]
+        passed_ids = {x["challenge_id"] for x in my if (x["score"] or 0) >= 60}
+        last = max([x["submitted_at"] for x in my if x["submitted_at"]] + [h["used_at"] for h in hints if h["user_email"] == email and h["used_at"]] + [""]) or None
+        open_chs = [c for c in chs if c["id"] in active_ids and c["id"] not in passed_ids]
+        cur = open_chs[0] if open_chs else None
+        n_hints = len([h for h in hints if h["user_email"] == email and cur and h["challenge_id"] == cur["id"]])
+        has_sub = any(x["challenge_id"] == cur["id"] for x in my) if cur else False
+        best = max([x["score"] for x in my if cur and x["challenge_id"] == cur["id"] and x["score"] is not None] + [-1]) if cur else -1
+        reason = None
+        if cur and not has_sub and n_hints >= 3:
+            reason = f"Usó {n_hints} pistas en el capítulo {cur['case_chapter']} y no ha entregado"
+        elif cur and has_sub and best < 60:
+            reason = f"Entregó el capítulo {cur['case_chapter']} pero no supera 60 (mejor nota {best})"
+        elif cur and not has_sub and not my and not any(h["user_email"] == email for h in hints):
+            reason = "Aún no ha empezado"
+        status = "sin_empezar" if not my and not any(h["user_email"] == email for h in hints) else ("completo" if not open_chs else "en_curso")
+        row = {"name": name, "email": email, "variant": case_code(email), "passed": len(passed_ids), "current": cur["case_chapter"] if cur else None,
+               "current_hints": n_hints, "best": best if best >= 0 else None, "last_activity": last, "status": status, "wall": email in wall}
+        rows.append(row)
+        if reason:
+            stuck.append({**row, "reason": reason})
+    events = []
+    for x in subs:
+        if x["submitted_at"]:
+            events.append({"t": x["submitted_at"], "who": students.get(x["user_email"], x["user_email"]), "what": f"entregó el capítulo {next((c['case_chapter'] for c in chs if c['id'] == x['challenge_id']), '?')} · nota {x['score']}"})
+    for b in badges:
+        events.append({"t": b["awarded_at"], "who": students.get(b["user_email"], b["user_email"]), "what": f"ganó la insignia «{b['name']}»"})
+    events.sort(key=lambda e: e["t"] or "", reverse=True)
+    return {
+        "kpis": {"students": len(students), "working": sum(1 for r in rows if r["status"] != "sin_empezar"), "not_started": sum(1 for r in rows if r["status"] == "sin_empezar"),
+                 "submissions": len(subs), "passed_any": sum(1 for r in rows if r["passed"] > 0), "completed": sum(1 for r in rows if r["status"] == "completo" and r["passed"] > 0),
+                 "badges": len(badges), "wall": len(wall), "hints": len(hints)},
+        "chapters": chapters, "stuck": stuck, "students": sorted(rows, key=lambda r: (-r["passed"], r["name"])), "events": events[:12], "flow": flow,
+        "server_time": datetime.utcnow().isoformat() + "Z",
+    }
+
+
 # ── Admin: Multi-dataset for challenges ──────────────────────────────────────
 
 @app.get("/admin/challenges/{challenge_id}/datasets")

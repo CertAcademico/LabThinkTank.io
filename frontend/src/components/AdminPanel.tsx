@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import IntelWall from './IntelWall'
 import CaseControl from './CaseControl'
 import CaseGuide from './CaseGuide'
+import CaseDashboard from './CaseDashboard'
 import { useAuth } from '../contexts/AuthContext'
 import { BadgeCard, TIER, type Badge } from './BadgeCard'
 
@@ -42,7 +43,7 @@ interface Stats {
   recent_submissions: { user_name: string; challenge: string; submitted_at: string; score?: number }[]
 }
 
-type Tab = 'dashboard' | 'users' | 'teams' | 'badges' | 'progreso' | 'fases' | 'datasets' | 'retos' | 'submissions' | 'fuentes' | 'muro' | 'caso' | 'guia'
+type Tab = 'dashboard' | 'users' | 'teams' | 'badges' | 'progreso' | 'fases' | 'datasets' | 'retos' | 'submissions' | 'fuentes' | 'muro' | 'caso' | 'guia' | 'tablero'
 
 interface CtfPhase {
   id: number; order_idx: number; name: string; category: string
@@ -2556,6 +2557,7 @@ const TABS: { id: Tab; label: string; icon: string; badge?: number }[] = [
   { id: 'fases',       label: 'Fases CTF',  icon: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z' },
   { id: 'datasets',    label: 'Datasets',   icon: 'M4 7h16M4 12h16M4 17h16' },
   { id: 'retos',       label: 'Retos',      icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' },
+  { id: 'tablero',     label: 'Tablero del Caso', icon: 'M3 3v18h18M7 14l4-4 3 3 5-6' },
   { id: 'guia',        label: 'Guía del Caso', icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5z' },
   { id: 'caso',        label: 'Control del Caso', icon: 'M12 2l3 6 6 .9-4.5 4.4 1 6.2L12 16.5 6.5 19.5l1-6.2L3 8.9 9 8z' },
   { id: 'muro',        label: 'Muro',       icon: 'M4 5h16v14H4zM4 10h16M10 10v9' },
@@ -2701,6 +2703,7 @@ export default function AdminPanel({ onExitAdmin }: { onExitAdmin: () => void })
           {tab === 'datasets'    && <DatasetsTab    datasets={datasets} token={tk} onRefresh={fetchAll} />}
           {tab === 'fuentes'     && <FuentesTab     token={tk} />}
           {tab === 'retos'       && <RetosTab       challenges={challenges} datasets={datasets} users={users} allBadges={allBadges} token={tk} onRefresh={fetchAll} />}
+          {tab === 'tablero'     && <CaseDashboard />}
           {tab === 'guia'        && <CaseGuide />}
           {tab === 'caso'        && <CaseControl />}
           {tab === 'muro'        && <IntelWall />}

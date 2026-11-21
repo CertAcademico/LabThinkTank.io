@@ -38,6 +38,7 @@ export default function CaseControl() {
   const [sol, setSol] = useState<Solution | null>(null)
   const [solFor, setSolFor] = useState<{ id: number; email: string } | null>(null)
   const [msg, setMsg] = useState('')
+  const [openTo, setOpenTo] = useState<number>(0)
   const [flow, setFlow] = useState<{ start: string; active: boolean; badges: { chapter: number; name: string; tier: string }[] } | null>(null)
   const [form, setForm] = useState({ title: '', body: '', publish_at: '', expires_at: '' })
 
@@ -53,6 +54,7 @@ export default function CaseControl() {
     api('/admin/announcements').then(setAnns).catch(() => {})
     api('/admin/users').then(setUsers).catch(() => {})
     api('/admin/badge-flow').then(setFlow).catch(() => {})
+    api('/admin/path-open').then(d => setOpenTo(d.open_up_to ?? 0)).catch(() => {})
   }, [api])
   useEffect(() => { load() }, [load])
 
@@ -118,6 +120,19 @@ export default function CaseControl() {
           y revisar la solución esperada de cada reto para la variante de cualquier estudiante.
         </p>
         {msg && <p className="text-[11px] text-red-400">{msg}</p>}
+      </div>
+
+      <div className="rounded-xl p-5 space-y-2" style={glass}>
+        <p className="text-xs font-bold text-cyan-300">🔓 Abrir capítulos sin requisito</p>
+        <p className="text-[10px] text-slate-500">Abre los capítulos hasta el número elegido para <strong>todos</strong> los estudiantes, sin exigir superar el anterior. 0 = desbloqueo secuencial (con 60 puntos o la insignia). Solo se abren los que estén Activos.</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select value={openTo} onChange={e => setOpenTo(Number(e.target.value))} className="rounded px-2 py-1.5 text-[11px] text-slate-200" style={inputStyle}>
+            <option value={0} className="bg-slate-900">Ninguno (secuencial)</option>
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(n => <option key={n} value={n} className="bg-slate-900">Hasta el capítulo {n}</option>)}
+          </select>
+          <button onClick={async () => { try { await api('/admin/path-open', { method: 'POST', body: JSON.stringify({ open_up_to: openTo }) }); setMsg(''); load() } catch (e) { setMsg(String(e instanceof Error ? e.message : e)) } }}
+                  className="text-[11px] px-3 py-1.5 rounded font-semibold text-cyan-300" style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)' }}>Guardar</button>
+        </div>
       </div>
 
       {flow && (

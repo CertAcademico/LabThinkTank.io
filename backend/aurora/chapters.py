@@ -162,12 +162,13 @@ CHAPTERS = [
         ],
     ),
     dict(
-        description="CAPÍTULO 8 · Informe al comité. Es el cierre. No hay que programar: usa lo que descubriste en los siete capítulos para escribir tu informe de inteligencia y publícalo en el "
-        "Muro de resultados de inteligencia. Mañana el comité decide qué hacer, y tu variante del caso (código AUR-xxxx) será la base del diálogo con tus compañeros.",
-        objective="En el campo de notas escribe un informe ejecutivo con: 1) cómo entró el atacante (vector), 2) qué hizo y por dónde se movió, 3) cuánto tardó y cuánto robó, "
-                  "4) los indicadores clave (IPs, dominios, host, cuenta), 5) tu nivel de confianza y 6) al menos tres mitigaciones priorizadas. "
-                  "Después publica el reporte en el Muro de Inteligencia.",
-        criteria="Evidencias de varios capítulos (30%) + Vector de entrada (15%) + Cifras y tiempos (10%) + Mitigaciones (20%) + Extensión y claridad (10%) + Publicado en el muro (15%)",
+        description="CAPÍTULO 8 · Informe final al comité. Es el cierre del caso. No hay que programar mucho: usa lo que descubriste en los capítulos que hiciste para escribir tu informe de inteligencia y publícalo en el "
+        "Muro de Inteligencia. Este informe incluye, resumida, la reconstrucción de la línea de tiempo del incidente (el antiguo capítulo 4): cómo entró el atacante, por dónde se movió y cuánto tardó. "
+        "Tu variante del caso (código AUR-xxxx) será la base del diálogo con tus compañeros.",
+        objective="En el campo de notas escribe un informe ejecutivo con: 1) LÍNEA DE TIEMPO RESUMIDA (obligatoria): el host por el que entró el atacante (Paciente Cero) y cómo entró, los hosts por los que se movió en orden, la cuenta que abusó y cuántos minutos pasaron desde la primera alerta del incidente hasta el cifrado. "
+                  "Para obtenerla, usa aurora_siem_events: filtra las alertas de severidad high y critical, ordénalas por fecha, mira el primer evento, la fase Lateral Movement y el evento T1486. "
+                  "2) Lo que hizo el atacante y cuánto robó (IPs, dominios, GB). 3) Tu nivel de confianza. 4) Al menos tres mitigaciones priorizadas. Después publica el reporte en el Muro de Inteligencia.",
+        criteria="Evidencias de varios capítulos (20%) + Vector de entrada (10%) + Línea de tiempo resumida: Paciente Cero, ruta, cuenta y minutos (20%) + Cifras (10%) + Mitigaciones (15%) + Extensión y claridad (10%) + Publicado en el muro (15%)",
         difficulty="avanzado",
         hints=[
             "Escribe para alguien que no es técnico: primero la conclusión, después la evidencia. Cada afirmación debe apoyarse en un dato concreto de tus capítulos (una IP, un host, una cifra).",
@@ -284,12 +285,20 @@ def rubric(chapter: int, facts: dict, ctx: dict | None = None) -> list:
     if chapter == 8:
         key = [f["c2_ip"], f["exfil_ip"], f["pz"], f["svc"], f["phish"], f["c2_domain"], f["family"], f["persistence"]]
         mins = f["minutes_to_encrypt"]
+        def timeline(sub, _r):
+            """Paciente Cero + ruta lateral + cuenta + tiempo: cada pieza vale un cuarto."""
+            pz = 1.0 if f["pz"].lower() in sub.low else 0.0
+            route = 1.0 if f["mid"].lower() in sub.low and "file-srv-02" in sub.low else 0.0
+            acct = 1.0 if f["svc"].lower() in sub.low else 0.0
+            tm = g.has_num(mins, f["minutes_from_exec"], round(mins / 60, 1), round(mins / 60, 2), round(f["minutes_from_exec"] / 60, 1), round(f["minutes_from_exec"] / 60, 2))(sub, _r)
+            return (pz + route + acct + tm) / 4
         return [
-            ("Citaste evidencias de varios capítulos", 30, g.has_terms(lambda r: key, minimum=5, where="text"), "Cita al menos 5 datos concretos: IPs, host, cuenta, dominios, familia."),
-            ("Nombraste el vector de entrada", 15, g.text_matches({"adjunto": r"adjunto|macro|excel|factura", "enlace": r"enlace|link|portal|url", "credencial": r"credencial|vpn|contrase[ñn]a|proveedor"}[f["vector"]]), "Explica cómo entró el atacante."),
-            ("Incluiste cifras de tiempo y volumen", 10, g.has_num(mins, f["minutes_from_exec"], round(mins / 60, 1), round(mins / 60), *_bytes_forms(f["exfil_bytes"])), "Incluye cuánto tardó el atacante y cuántos datos sacó."),
-            ("Propusiste mitigaciones priorizadas", 20, lambda s, r: min(1.0, sum(1 for p in (r"segment", r"mfa|multifactor|autenticaci[oó]n", r"respaldo|backup", r"credencial|contrase[ñn]a|rotar", r"parche|actualiz", r"capacita|concientiz", r"bloque|ioc|aisl") if re.search(p, s.low)) / 3), "Propón al menos 3 medidas, ordenadas por urgencia."),
-            ("Extensión y claridad del informe", 10, g.notes_min(600), "Un informe ejecutivo de al menos ~600 caracteres."),
+            ("Citaste evidencias de varios capítulos", 20, g.has_terms(lambda r: key, minimum=5, where="text"), "Cita al menos 5 datos concretos: IPs, host, cuenta, dominios, familia."),
+            ("Nombraste el vector de entrada", 10, g.text_matches({"adjunto": r"adjunto|macro|excel|factura", "enlace": r"enlace|link|portal|url", "credencial": r"credencial|vpn|contrase[ñn]a|proveedor"}[f["vector"]]), "Explica cómo entró el atacante."),
+            ("Resumiste la línea de tiempo (Paciente Cero, ruta, cuenta y minutos)", 20, timeline, "Incluye el host de entrada, los hosts por los que se movió, la cuenta abusada y los minutos hasta el cifrado (aurora_siem_events, solo alertas high y critical)."),
+            ("Incluiste cifras de volumen", 10, g.has_num(*_bytes_forms(f["exfil_bytes"])), "Incluye cuántos datos sacó el atacante (GB) hacia qué IP."),
+            ("Propusiste mitigaciones priorizadas", 15, lambda s, r: min(1.0, sum(1 for p in (r"segment", r"mfa|multifactor|autenticaci[oó]n", r"respaldo|backup", r"credencial|contrase[ñn]a|rotar", r"parche|actualiz", r"capacita|concientiz", r"bloque|ioc|aisl") if re.search(p, s.low)) / 3), "Propón al menos 3 medidas, ordenadas por urgencia."),
+            ("Extensión y claridad del informe", 10, g.notes_min(700), "Un informe ejecutivo de al menos ~700 caracteres."),
             ("Publicaste tu reporte en el Muro de Inteligencia", 15, lambda s, r: 1.0 if ctx.get("has_wall_report") else 0.0, "Ve al Muro de Inteligencia y publica tu informe."),
         ]
     raise ValueError(chapter)

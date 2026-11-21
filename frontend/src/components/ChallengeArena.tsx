@@ -235,6 +235,7 @@ function Arena({ challenge }: { challenge: Challenge }) {
   const [notes,      setNotes]      = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted,  setSubmitted]  = useState(challenge.submitted > 0)
+  const [teacherNotes, setTeacherNotes] = useState<{ id: number; challenge_id: number | null; body: string; created_at: string }[]>([])
   const [review,     setReview]     = useState<{ steps: string[]; reported: { entity: string; kind: string; facts: string[] }[]; observations: string[]; nudges: string[] } | null>(null)
   const [hintData,   setHintData]   = useState<{ total: number; revealed: { level: number; label: string; text: string }[]; next_label: string | null } | null>(null)
   const [hintBusy,   setHintBusy]   = useState(false)
@@ -297,6 +298,8 @@ if not uploaded_df.empty:
     if (saved?.notes) setNotes(saved.notes)
     draftReady.current = true
     if (!challenge.id) return
+    fetch(`${API}/student/teacher-notes`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : []).then(n => setTeacherNotes((n as typeof teacherNotes).filter(x => x.challenge_id == null || x.challenge_id === challenge.id))).catch(() => {})
     if (challenge.case_key === 'aurora' && challenge.submitted > 0) {
       fetch(`${API}/student/challenges/${challenge.id}/review`, { headers: { Authorization: `Bearer ${token}` } })
         .then(r => r.ok ? r.json() : null).then(r => { if (r) setReview(r) }).catch(() => {})
@@ -599,6 +602,13 @@ if not uploaded_df.empty:
           )}
         </div>
       </div>
+
+      {teacherNotes.length > 0 && (
+        <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(250,204,21,0.07)', border: '1px solid rgba(250,204,21,0.4)' }}>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">✉ Mensaje de tu docente</p>
+          {teacherNotes.map(n => <p key={n.id} className="text-xs text-slate-200 whitespace-pre-line leading-relaxed">{n.body}</p>)}
+        </div>
+      )}
 
       {challenge.learn && <CasePrimer learn={challenge.learn} storageKey={`cti_primer_${challenge.id}`} />}
 

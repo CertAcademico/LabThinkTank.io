@@ -30,10 +30,12 @@ export default function StudentBoard() {
   const { token } = useAuth()
   const [board, setBoard] = useState<Board | null>(null)
   const [err, setErr] = useState('')
+  const [notes, setNotes] = useState<{ id: number; body: string; created_at: string }[]>([])
   useEffect(() => {
     const load = () => fetch(`${API}/student/case/board`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : Promise.reject(new Error('No se pudo cargar tu tablero'))).then(setBoard).catch(e => setErr(String(e.message ?? e)))
-    load(); const t = setInterval(load, 30_000); return () => clearInterval(t)
+    const loadNotes = () => fetch(`${API}/student/teacher-notes`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : []).then(setNotes).catch(() => {})
+    load(); loadNotes(); const t = setInterval(() => { load(); loadNotes() }, 30_000); return () => clearInterval(t)
   }, [token])
 
   if (err) return <p className="text-xs text-red-400">{err}</p>
@@ -49,6 +51,13 @@ export default function StudentBoard() {
           tus datos son distintos a los de tus compañeros. Este tablero te ayuda a entender y explorar; las respuestas las encuentras tú.
         </p>
       </div>
+
+      {notes.length > 0 && (
+        <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(250,204,21,0.07)', border: '1px solid rgba(250,204,21,0.4)' }}>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">✉ Mensajes de tu docente</p>
+          {notes.map(n => <p key={n.id} className="text-xs text-slate-200 whitespace-pre-line leading-relaxed border-t border-white/5 pt-2">{n.body}</p>)}
+        </div>
+      )}
 
       {board.chapters.length === 0 ? (
         <div className="rounded-xl p-8 text-center" style={glass}><p className="text-sm text-slate-500">Todavía no hay capítulos activos. Tu docente los irá habilitando.</p></div>

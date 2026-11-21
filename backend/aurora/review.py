@@ -266,3 +266,24 @@ def review(chapter: int, code: str, output: str, notes: str, datasets: dict, fac
     text = output + "\n" + notes
     return {"steps": code_steps(code), "reported": reported(text, datasets),
             "observations": observations(code, output, notes, chapter), "nudges": nudges(chapter, facts, text) if facts else []}
+
+
+_ANALYTIC_ATTRS = {"groupby", "sum", "mean", "count", "size", "nunique", "max", "min", "median", "value_counts", "sort_values", "merge", "join", "concat",
+                   "isin", "query", "plot", "hist", "imshow", "scatter", "bar", "barh", "fit", "fit_predict", "fit_transform", "predict", "findall", "search",
+                   "dropna", "fillna", "drop_duplicates", "apply", "agg", "pivot_table", "crosstab", "explode", "add_edge", "str"}
+
+
+def has_analysis(code: str) -> bool:
+    """False si el código es la plantilla inicial (solo imprime el dataset) o no hace ningún cálculo propio."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return False
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in _ANALYTIC_ATTRS:
+            return True
+        if isinstance(n, ast.Compare) and _col_of(n.left) is not None:
+            return True
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and (n.func.id in _MODELS or n.func.id in ("train_test_split",)):
+            return True
+    return False

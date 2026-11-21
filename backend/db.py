@@ -338,6 +338,16 @@ def _migrate(conn) -> None:
         conn.execute("""INSERT OR IGNORE INTO hint_usage (challenge_id, user_email, level)
                         SELECT challenge_id, user_email, 5 FROM hint_usage WHERE level = 3""")
         conn.execute("INSERT INTO app_settings (key, value) VALUES ('hints_v2_migrated', '1')")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS teacher_notes (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_email   TEXT    NOT NULL,
+            challenge_id INTEGER,
+            body         TEXT    NOT NULL,
+            created_by   TEXT    NOT NULL DEFAULT 'docente',
+            created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
     sc = {r[1] for r in conn.execute("PRAGMA table_info(submissions)").fetchall()}
     if "review_json" not in sc:
         conn.execute("ALTER TABLE submissions ADD COLUMN review_json TEXT NOT NULL DEFAULT ''")
@@ -1492,7 +1502,7 @@ PATH_PASS_SCORE = 60
 def _path_challenges(conn, only_active: bool = True) -> list:
     out = []
     for t in INDIVIDUAL_PATH:
-        q = "SELECT id, title FROM challenges WHERE title = ?" + (" AND status = 'active'" if only_active else "")
+        q = "SELECT id, title, case_chapter FROM challenges WHERE title = ?" + (" AND status = 'active'" if only_active else "")
         r = conn.execute(q, (t,)).fetchone()
         if r:
             out.append(r)
@@ -1520,10 +1530,12 @@ def path_status(conn, email: str) -> dict:
     if not u or not u["onboarding_path"]:
         return {}
     chs = _path_challenges(conn)
+    w = conn.execute("SELECT value FROM app_settings WHERE key = 'path_open_up_to'").fetchone()
+    open_up_to = int(w["value"]) if w and str(w["value"]).isdigit() else 0     # el docente abre los capítulos hasta N sin requisito
     status, prev = {}, None
     for i, ch in enumerate(chs):
         locked, requires = False, None
-        if prev is not None:
+        if prev is not None and ch["case_chapter"] > open_up_to:
             sc = conn.execute("SELECT MAX(score) m FROM submissions WHERE challenge_id = ? AND user_email = ?",
                               (prev["id"], email)).fetchone()["m"]
             has_badge = conn.execute("""SELECT 1 FROM user_badges ub JOIN challenges c ON c.badge_id = ub.badge_id

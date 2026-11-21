@@ -1640,6 +1640,14 @@ def _auto_grade(conn, sub_id: int, challenge_id: int, payload: dict) -> dict | N
         lines.append(f"{mark} {it['label']} ({it['earned']}/{it['weight']})" + (f" → {it['hint']}" if it["hint"] else ""))
     conn.execute("UPDATE submissions SET score = ?, feedback = ?, auto_graded = 1 WHERE id = ?",
                  (result["score"], "\n".join(lines), sub_id))
+    if row["case_key"] == "aurora" and row["case_chapter"] != 8:
+        from aurora.review import has_analysis
+        if not has_analysis(payload.get("code", "")) and result["score"] > 20:
+            # Sin análisis propio (p. ej. solo la plantilla que imprime el dataset) los números impresos coinciden por casualidad: no es mérito.
+            result["score"] = min(result["score"], 20)
+            result["capped"] = "Tu código no hace ningún análisis propio (solo imprime datos). La nota se limita a 20 hasta que calcules tú los resultados."
+            conn.execute("UPDATE submissions SET score = ?, feedback = ? WHERE id = ?",
+                         (result["score"], "\n".join(lines) + "\n⚠ " + result["capped"], sub_id))
     if row["case_key"] == "aurora":
         from aurora.review import review as _review
         from aurora.chapters import CHAPTER_DATASET
@@ -3222,6 +3230,50 @@ def admin_aurora_dashboard(authorization: str = Header(None)):
         "chapters": chapters, "stuck": stuck, "students": sorted(rows, key=lambda r: (-r["passed"], r["name"])), "events": events[:12], "flow": flow,
         "server_time": datetime.utcnow().isoformat() + "Z",
     }
+
+
+# ── Mensajes del docente a un estudiante (ayuda personalizada) ────────────────
+
+@app.post("/admin/teacher-notes")
+def admin_add_teacher_note(payload: dict = Body(...), authorization: str = Header(None)):
+    admin = _require_admin(authorization)
+    email, body = str(payload.get("email", "")).strip().lower(), str(payload.get("body", "")).strip()
+    if not email or not body:
+        raise HTTPException(status_code=400, detail="email y body requeridos")
+    with get_conn() as conn:
+        if not conn.execute("SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
+            raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+        cur = conn.execute("INSERT INTO teacher_notes (user_email, challenge_id, body, created_by) VALUES (?,?,?,?)",
+                           (email, payload.get("challenge_id"), body[:4000], admin["email"]))
+    return {"ok": True, "id": cur.lastrowid}
+
+
+@app.get("/student/teacher-notes")
+def student_teacher_notes(authorization: str = Header(None)):
+    user = _require_user(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("SELECT id, challenge_id, body, created_at FROM teacher_notes WHERE user_email = ? ORDER BY id DESC", (user["email"],)).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/admin/path-open")
+def admin_path_open(authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        r = conn.execute("SELECT value FROM app_settings WHERE key = 'path_open_up_to'").fetchone()
+    return {"open_up_to": int(r["value"]) if r and str(r["value"]).isdigit() else 0}
+
+
+@app.post("/admin/path-open")
+def admin_set_path_open(payload: dict = Body(...), authorization: str = Header(None)):
+    """Abre los capítulos hasta el N para TODOS, sin exigir superar el anterior. 0 = vuelve al desbloqueo secuencial."""
+    _require_admin(authorization)
+    n = int(payload.get("open_up_to", 0))
+    if not 0 <= n <= 8:
+        raise HTTPException(status_code=400, detail="open_up_to debe estar entre 0 y 8")
+    with get_conn() as conn:
+        conn.execute("INSERT INTO app_settings (key, value) VALUES ('path_open_up_to', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (str(n),))
+    return {"ok": True, "open_up_to": n}
 
 
 # ── Admin: Multi-dataset for challenges ──────────────────────────────────────

@@ -37,6 +37,14 @@ export default function CaseDashboard() {
   const [d, setD] = useState<Dash | null>(null)
   const [err, setErr] = useState('')
   const [updated, setUpdated] = useState<Date | null>(null)
+  const [helpFor, setHelpFor] = useState<string | null>(null)
+  const [helpText, setHelpText] = useState('')
+  const [helpMsg, setHelpMsg] = useState('')
+  const sendHelp = async (email: string) => {
+    if (!helpText.trim()) return
+    const r = await fetch(`${API}/admin/teacher-notes`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ email, body: helpText }) })
+    setHelpMsg(r.ok ? '✓ Mensaje enviado: el estudiante lo ve en su reto y en Mi Tablero' : 'No se pudo enviar'); if (r.ok) { setHelpText(''); setHelpFor(null) }
+  }
   useEffect(() => {
     const load = () => fetch(`${API}/admin/case/aurora/dashboard`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : Promise.reject(new Error('No se pudo cargar el tablero'))).then(x => { setD(x); setUpdated(new Date()); setErr('') }).catch(e => setErr(String(e.message ?? e)))
@@ -69,12 +77,19 @@ export default function CaseDashboard() {
 
       {d.stuck.length > 0 && (
         <div className="rounded-xl overflow-hidden" style={{ ...glass, border: '1px solid rgba(248,113,113,0.3)' }}>
-          <p className="px-5 py-3 text-xs font-bold text-red-300">⚠ Requieren atención ({d.stuck.length})</p>
+          <p className="px-5 py-3 text-xs font-bold text-red-300">⚠ Requieren atención ({d.stuck.length}){helpMsg && <span className="ml-3 font-normal text-green-400">{helpMsg}</span>}</p>
           {d.stuck.map(s => (
             <div key={s.email} className="px-5 py-2.5 border-t border-white/5 flex items-center gap-3 flex-wrap">
               <div className="min-w-48 flex-1"><p className="text-xs text-slate-200">{s.name}</p><p className="text-[10px] text-slate-500">{s.reason}</p></div>
               <span className="text-[10px] font-mono text-violet-300">{s.variant}</span>
               <span className="text-[10px] text-slate-600">{ago(s.last_activity)}</span>
+              <button onClick={() => { setHelpFor(helpFor === s.email ? null : s.email); setHelpMsg('') }} className="text-[10px] px-2 py-1 rounded font-semibold text-yellow-300" style={{ border: '1px solid rgba(250,204,21,0.3)' }}>✉ Enviar ayuda</button>
+              {helpFor === s.email && (
+                <div className="w-full flex gap-2 items-end">
+                  <textarea value={helpText} onChange={e => setHelpText(e.target.value)} rows={3} placeholder={`Mensaje para ${s.name}: pasos concretos, qué revisar…`} className="flex-1 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none resize-none" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }} />
+                  <button onClick={() => sendHelp(s.email)} className="text-[11px] px-3 py-2 rounded font-semibold text-yellow-300" style={{ background: 'rgba(250,204,21,0.1)', border: '1px solid rgba(250,204,21,0.3)' }}>Enviar</button>
+                </div>
+              )}
             </div>
           ))}
         </div>

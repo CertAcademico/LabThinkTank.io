@@ -121,9 +121,13 @@ def expected(chapter: int, f: dict) -> list[str]:
                 "Las sesiones de automatización legítima NO son el atacante: " + ", ".join(f["legit_bots"]) + " (cuentas svc_, pocas acciones distintas, muy regulares)",
                 "Señales de un agente de IA: ritmo rápido, reintentos en segundos, horario de madrugada, mucha variedad de acciones y páginas"]
     if chapter == 8:
+        m, e = f["minutes_to_encrypt"], f["minutes_from_exec"]
         return [f"Cita ≥ 5 de: {f['c2_ip']}, {f['exfil_ip']}, {f['pz']}, {f['svc']}, {f['phish']}, {f['c2_domain']}, {f['family']}, {f['persistence']}",
-                f["vector_text"], f"{f['minutes_to_encrypt']} min / {_gb(f['exfil_bytes'])}", "≥ 3 medidas: bloqueo de IOC, rotación de credenciales, segmentación, respaldos fuera de línea, MFA, capacitación",
-                "≥ 600 caracteres", "Reporte publicado en el Muro"]
+                f["vector_text"],
+                f"Paciente Cero {f['pz']} · ruta {' → '.join(f['lateral_path'])} · cuenta {f['svc']} · {m} min desde la primera alerta (≈ {m / 60:.1f} h; se acepta {e} min desde la ejecución)",
+                _gb(f["exfil_bytes"]) + f" hacia {f['exfil_ip']}",
+                "≥ 3 medidas: bloqueo de IOC, rotación de credenciales, segmentación, respaldos fuera de línea, MFA, capacitación",
+                "≥ 700 caracteres", "Reporte publicado en el Muro"]
     return []
 
 

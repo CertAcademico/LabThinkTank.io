@@ -123,7 +123,7 @@ function Shell() {
   const isAdmin = user?.role === 'admin'
   const isPrivileged = ['admin', 'instructor', 'senior_analyst', 'analyst'].includes(user?.role ?? '')
   const visibleNav = NAV.filter(item =>
-    (isPrivileged || item.id !== 'feeds') && (isPrivileged || fusionOk || item.id !== 'fusion')
+    (isPrivileged || item.id !== 'feeds') && (isPrivileged || fusionOk || item.id !== 'fusion') && (isPrivileged || item.id !== 'copilot')
   )
   const activeView = visibleNav.some(item => item.id === view) ? view : 'overview'
 

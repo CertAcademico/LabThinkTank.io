@@ -206,6 +206,7 @@ function Arena({ challenge }: { challenge: Challenge }) {
   const [pyodide,    setPyodide]    = useState<PyodideInterface | null>(null)
   const [initStatus, setInitStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [code,       setCode]       = useState('')
+  const draftReady = useRef(false)
   const [output,     setOutput]     = useState('')
   const [running,    setRunning]    = useState(false)
   const [notes,      setNotes]      = useState('')
@@ -263,8 +264,14 @@ if not uploaded_df.empty:
     print(uploaded_df.dtypes)
 `
 
+  // Borrador automático: código y notas se guardan en este navegador y se recuperan si se recarga la página o se actualiza la plataforma.
+  const draftKey = `cti_draft_${user?.email ?? 'anon'}_${challenge.id}`
   useEffect(() => {
-    setCode(STARTER)
+    let saved: { code?: string; notes?: string } | null = null
+    try { saved = JSON.parse(localStorage.getItem(draftKey) ?? 'null') } catch { /* ok */ }
+    setCode(saved?.code ?? STARTER)
+    if (saved?.notes) setNotes(saved.notes)
+    draftReady.current = true
     if (!challenge.id) return
     if (challenge.hint_levels) {
       fetch(`${API}/student/challenges/${challenge.id}/hints`, { headers: { Authorization: `Bearer ${token}` } })
@@ -471,6 +478,14 @@ if not uploaded_df.empty:
     setMyDs(prev => prev.filter(x => x.name !== d.name))
     if (pyodide) await pyodide.runPythonAsync(`globals().pop('${d.var}', None); mis_datasets.pop('${d.name}', None)`).catch(() => {})
   }
+
+  useEffect(() => {
+    if (!draftReady.current) return
+    const t = setTimeout(() => {
+      try { localStorage.setItem(draftKey, JSON.stringify({ code, notes, saved_at: Date.now() })) } catch { /* ok */ }
+    }, 600)
+    return () => clearTimeout(t)
+  }, [code, notes, draftKey])
 
   const askHint = async () => {
     setHintBusy(true)
@@ -763,7 +778,7 @@ if not uploaded_df.empty:
                  style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.3)' }}>
               <span className="text-[10px] font-mono text-slate-700">reto_{challenge.id}.py</span>
               <div className="flex items-center gap-2">
-                <button onClick={() => { setCode(STARTER); setOutput('') }}
+                <button onClick={() => { if (confirm('¿Volver al código inicial? Se perderá lo que escribiste en este reto.')) { setCode(STARTER); setOutput('') } }}
                         className="text-[10px] text-slate-600 hover:text-slate-400 px-2 py-1 rounded">
                   Resetear
                 </button>

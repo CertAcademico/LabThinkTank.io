@@ -27,7 +27,7 @@ function parsearPistas(objetivo: string): string[] {
     .slice(0, 6)
 }
 
-export default function HelpBot({
+function HelpBotInner({
   currentCode, lessonTitle, challengeTitle,
   challengeDesc, challengeObj, challengeCrit, challengeHints,
 }: Props) {
@@ -355,4 +355,12 @@ REGLAS:
       )}
     </>
   )
+}
+
+// El asistente de IA no se muestra a los estudiantes en este curso: aprenden con pistas graduales, glosario y tablero.
+const STAFF_ROLES = ['admin', 'instructor', 'senior_analyst', 'analyst']
+export default function HelpBot(props: Props) {
+  const { user } = useAuth()
+  if (!STAFF_ROLES.includes(user?.role ?? '')) return null
+  return <HelpBotInner {...props} />
 }

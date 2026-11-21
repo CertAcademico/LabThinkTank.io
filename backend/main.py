@@ -801,23 +801,40 @@ Use this context when answering. Be concise and technical."""
 
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
     if anthropic_key:
-        from ai.claude_fusion_engine import _MODEL as _CLAUDE_MODEL
-        from ai.claude_fusion_engine import _get_client as _claude_client
-        message = _claude_client().messages.create(
-            model=_CLAUDE_MODEL,
-            max_tokens=1024,
-            system=[{"type": "text", "text": system_context, "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return {"response": message.content[0].text}
+        try:
+            from ai.claude_fusion_engine import _MODEL as _CLAUDE_MODEL
+            from ai.claude_fusion_engine import _get_client as _claude_client
+            message = _claude_client().messages.create(
+                model=_CLAUDE_MODEL,
+                max_tokens=1024,
+                system=[{"type": "text", "text": system_context, "cache_control": {"type": "ephemeral"}}],
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return {"response": message.content[0].text}
+        except Exception as exc:                       # saldo agotado, límite de uso o caída del proveedor
+            logging.getLogger("ai.chat").warning("Asistente de IA no disponible: %s", str(exc)[:200])
+            return {"response": _AI_UNAVAILABLE, "degraded": True}
 
     ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-    response = requests.post(
-        f"{ollama_url}/api/generate",
-        json={"model": "llama3", "prompt": f"{system_context}\n\nUser query: {prompt}\n\nProvide a technical cybersecurity response.", "stream": False},
-        timeout=60,
-    )
-    return {"response": response.json()["response"]}
+    try:
+        response = requests.post(
+            f"{ollama_url}/api/generate",
+            json={"model": "llama3", "prompt": f"{system_context}\n\nUser query: {prompt}\n\nProvide a technical cybersecurity response.", "stream": False},
+            timeout=8,
+        )
+        return {"response": response.json()["response"]}
+    except Exception:
+        return {"response": _AI_UNAVAILABLE, "degraded": True}
+
+
+_AI_UNAVAILABLE = (
+    "El asistente de IA no está disponible en este momento. No es un error tuyo ni de tu código.\n\n"
+    "Mientras se restablece puedes avanzar así:\n"
+    "1) Usa las pistas graduales del reto (botón «Pedir pista»): van de lo general a lo concreto.\n"
+    "2) Abre «Antes de empezar» y el glosario del capítulo.\n"
+    "3) Mira «Mi Tablero» para explorar tus datos y ver qué datasets se pueden cruzar.\n"
+    "4) Si sigues atascado, escribe tu duda puntual al docente."
+)
 
 
 # ── Admin helpers ─────────────────────────────────────────────────────────────

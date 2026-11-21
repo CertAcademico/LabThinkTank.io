@@ -1482,6 +1482,8 @@ def student_challenges(authorization: str = Header(None)):
             from aurora.chapters import CHAPTER_DATASET
             d["case_code"] = case_code(user["email"])
             d["no_code"] = d["case_chapter"] == 7
+            from aurora.learn import LEARN, CICLO
+            d["learn"] = {**LEARN.get(d["case_chapter"], {}), "ciclo": CICLO}
             k = CHAPTER_DATASET[d["case_chapter"] - 1]
             d["dataset_name"] = DATASETS[k] if k else "todos los datasets del caso"
         if hints_mod.levels_for(d["title"]):
@@ -1493,6 +1495,7 @@ def student_challenges(authorization: str = Header(None)):
                      locked_by=st["requires"], path_pass_score=PATH_PASS_SCORE)
             if st["locked"]:      # no filtrar enunciado, pistas ni dataset de un reto aún cerrado
                 d.update(objective="", criteria="", hints_json="[]", schema_json=None, dataset_name=None)
+                d.pop("learn", None)
         out.append(d)
     out.sort(key=lambda d: (d.get("path_order") is None, d.get("path_order") or 0))
     return out
@@ -3031,6 +3034,44 @@ def admin_student_datasets(email: str, authorization: str = Header(None)):
         j = json.loads(f.read_text(encoding="utf-8"))
         out.append({"name": f.stem, "filename": j.get("filename"), "rows": len(j["rows"]), "preview": j["rows"][:5]})
     return out
+
+
+@app.get("/student/case/board")
+def student_case_board(authorization: str = Header(None)):
+    """Tablero del estudiante: su progreso en el caso, el perfil de SUS datos y los cruces posibles (sin dar respuestas)."""
+    user = _require_user(authorization)
+    from aurora.generator import build_case, DATASETS
+    from aurora.chapters import CHAPTER_DATASET
+    from aurora.board import profile, relations
+    from db import path_status
+    email = user["email"]
+    with get_conn() as conn:
+        pstat = path_status(conn, email)
+        rows = conn.execute("""
+            SELECT c.id, c.case_chapter, c.title, c.status, c.starts_at, c.deadline,
+                   (SELECT score FROM submissions s WHERE s.challenge_id = c.id AND s.user_email = ?) AS score,
+                   (SELECT feedback FROM submissions s WHERE s.challenge_id = c.id AND s.user_email = ?) AS feedback,
+                   (SELECT COUNT(*) FROM hint_usage h WHERE h.challenge_id = c.id AND h.user_email = ?) AS hints_used
+            FROM challenges c JOIN challenge_assignments a ON a.challenge_id = c.id
+            WHERE a.user_email = ? AND c.case_key = 'aurora' AND c.status != 'draft' ORDER BY c.case_chapter""",
+            (email, email, email, email)).fetchall()
+    chapters, unlocked = [], 0
+    for r in rows:
+        if not _is_started(r["starts_at"]):
+            continue
+        st = pstat.get(r["id"])
+        locked = bool(st and st["locked"])
+        if not locked:
+            unlocked = max(unlocked, r["case_chapter"])
+        lines = [l for l in (r["feedback"] or "").splitlines()[1:]] if r["score"] is not None else []
+        chapters.append({"chapter": r["case_chapter"], "title": r["title"], "status": r["status"], "locked": locked,
+                         "locked_by": st["requires"] if st else None, "score": r["score"], "hints_used": r["hints_used"],
+                         "deadline": r["deadline"], "checks": lines if not locked else []})
+    case = build_case(email)
+    keys = [k for k in CHAPTER_DATASET[:unlocked] if k]
+    data = {DATASETS[k]: case["datasets"][k] for k in keys}
+    return {"variant": case["code"], "chapters": chapters,
+            "datasets": [{"name": n, **profile(v)} for n, v in data.items()], "relations": relations(data)}
 
 
 # ── Admin: Multi-dataset for challenges ──────────────────────────────────────

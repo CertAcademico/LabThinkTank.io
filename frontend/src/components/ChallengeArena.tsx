@@ -3,6 +3,8 @@ import { useAuth } from '../contexts/AuthContext'
 import HelpBot from './HelpBot'
 import type { PyodideInterface } from '../types/pyodide'
 
+import CasePrimer, { type Learn } from './CasePrimer'
+
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -16,7 +18,7 @@ interface Challenge {
   badge_earned?: number
   submitted: number; my_score?: number
   hint_levels?: number
-  case_key?: string; case_chapter?: number; case_code?: string; no_code?: boolean
+  case_key?: string; case_chapter?: number; case_code?: string; no_code?: boolean; learn?: Learn
   path_order?: number; path_total?: number; locked?: boolean; locked_by?: string; path_pass_score?: number
 }
 
@@ -548,6 +550,8 @@ if not uploaded_df.empty:
           )}
         </div>
       </div>
+
+      {challenge.learn && <CasePrimer learn={challenge.learn} storageKey={`cti_primer_${challenge.id}`} />}
 
       {/* Dataset diagram */}
       {Object.keys(schema).length > 0 && (

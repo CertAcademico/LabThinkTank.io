@@ -2849,6 +2849,70 @@ def admin_intel_wall_export(authorization: str = Header(None)):
                     headers={"Content-Disposition": "attachment; filename=muro_inteligencia.csv"})
 
 
+# ── Guía del docente: el Caso Aurora completo + avance de los estudiantes (solo admin) ──
+
+@app.get("/admin/case/aurora/guide")
+def admin_aurora_guide(email: str = "", authorization: str = Header(None)):
+    """Todo el caso para el docente: expediente, datos de la variante, pistas, rúbrica con respuesta esperada y solución."""
+    admin = _require_admin(authorization)
+    from aurora.generator import build_case, DATASETS
+    from aurora.chapters import CHAPTERS, PATH_TITLES, CHAPTER_DATASET, rubric as aurora_rubric
+    from aurora import solutions as sol
+    who = (email or admin["email"]).strip().lower()
+    case = build_case(who)
+    f = case["facts"]
+    cycle = {1: "Recolección", 2: "Procesamiento", 3: "Análisis", 4: "Análisis", 5: "Procesamiento", 6: "Análisis predictivo", 7: "Diseminación"}
+    with get_conn() as conn:
+        status = {r["case_chapter"]: dict(r) for r in conn.execute(
+            "SELECT case_chapter, id, status, starts_at, deadline FROM challenges WHERE case_key = 'aurora'").fetchall()}
+    chapters = []
+    for i, (title, ch) in enumerate(zip(PATH_TITLES, CHAPTERS), start=1):
+        key = CHAPTER_DATASET[i - 1]
+        rub = aurora_rubric(i, f, {"has_wall_report": True})
+        exp = sol.expected(i, f)
+        rows = case["datasets"][key] if key else []
+        chapters.append({
+            "chapter": i, "title": title, "cycle": cycle[i], "difficulty": ch["difficulty"],
+            "challenge": status.get(i), "briefing": ch["description"], "objective": ch["objective"], "criteria_text": ch["criteria"],
+            "hints": ch["hints"], "dataset": ({"name": DATASETS[key], "rows": len(rows), "columns": list(rows[0].keys()) if rows else [], "preview": rows[:8]} if key else None),
+            "rubric": [{"label": r[0], "weight": r[1], "hint": r[3], "expected": exp[j] if j < len(exp) else ""} for j, r in enumerate(rub)],
+            "reference_code": sol.reference_note(f) if i == 7 else sol.REFERENCE_CODE.get(i, ""),
+        })
+    truth = [{"timestamp": r["timestamp"], "host": r["host"], "usuario": r["usuario"], "fase": r["fase"], "detalle": r["detalle"]}
+             for r in case["datasets"]["siem"] if r["severidad"] in ("high", "critical")]
+    facts_view = {k: v for k, v in f.items() if k not in ("legit_candidates",)}
+    return {"variant": case["code"], "variant_email": who, "facts": facts_view, "truth": truth, "chapters": chapters}
+
+
+@app.get("/admin/case/aurora/progress")
+def admin_aurora_progress(authorization: str = Header(None)):
+    """Matriz de avance: cada estudiante del caso, su variante y su resultado en cada capítulo."""
+    _require_admin(authorization)
+    from aurora.generator import case_code
+    with get_conn() as conn:
+        chs = [dict(r) for r in conn.execute(
+            "SELECT id, case_chapter, title, status, starts_at, deadline FROM challenges WHERE case_key = 'aurora' ORDER BY case_chapter").fetchall()]
+        ids = [c["id"] for c in chs]
+        marks = ",".join("?" * len(ids)) or "NULL"
+        users = conn.execute(f"""SELECT DISTINCT u.email, u.name FROM challenge_assignments a JOIN users u ON u.email = a.user_email
+                                 WHERE a.challenge_id IN ({marks}) ORDER BY u.name""", ids).fetchall()
+        subs = {(r["user_email"], r["challenge_id"]): dict(r) for r in conn.execute(
+            f"SELECT user_email, challenge_id, score, submitted_at, auto_graded FROM submissions WHERE challenge_id IN ({marks})", ids).fetchall()}
+        hints = {(r["user_email"], r["challenge_id"]): r["n"] for r in conn.execute(
+            f"SELECT user_email, challenge_id, COUNT(*) n FROM hint_usage WHERE challenge_id IN ({marks}) GROUP BY user_email, challenge_id", ids).fetchall()}
+        wall = {r["user_email"] for r in conn.execute("SELECT user_email FROM intel_reports").fetchall()}
+    rows = []
+    for u in users:
+        per = []
+        for c in chs:
+            sb = subs.get((u["email"], c["id"]))
+            per.append({"chapter": c["case_chapter"], "score": sb["score"] if sb else None, "submitted_at": sb["submitted_at"] if sb else None,
+                        "hints_used": hints.get((u["email"], c["id"]), 0)})
+        rows.append({"name": u["name"], "email": u["email"], "variant": case_code(u["email"]), "chapters": per, "wall": u["email"] in wall,
+                     "passed": sum(1 for p in per if p["score"] is not None and p["score"] >= 60)})
+    return {"chapters": [{"chapter": c["case_chapter"], "title": c["title"], "status": c["status"], "starts_at": c["starts_at"], "deadline": c["deadline"]} for c in chs], "students": rows}
+
+
 # ── Admin: Multi-dataset for challenges ──────────────────────────────────────
 
 @app.get("/admin/challenges/{challenge_id}/datasets")

@@ -289,6 +289,10 @@ def _migrate(conn) -> None:
     tcols = {r[1] for r in conn.execute("PRAGMA table_info(teams)").fetchall()}
     if "open_signup" not in tcols:
         conn.execute("ALTER TABLE teams ADD COLUMN open_signup INTEGER NOT NULL DEFAULT 0")
+    sc = {r[1] for r in conn.execute("PRAGMA table_info(submissions)").fetchall()}
+    if "auto_graded" not in sc:
+        conn.execute("ALTER TABLE submissions ADD COLUMN auto_graded INTEGER NOT NULL DEFAULT 0")
+    fix_demo_challenge_datasets(conn)
     pc = {r[1] for r in conn.execute("PRAGMA table_info(ctf_phases)").fetchall()}
     if "opens_at" not in pc:
         conn.execute("ALTER TABLE ctf_phases ADD COLUMN opens_at TEXT")
@@ -557,6 +561,29 @@ _CHALLENGE_SEEDS = [
 ]
 
 
+# Dataset correcto de cada reto individual. Antes se asignaba por posición y los
+# retos 2, 3 y 4 quedaban con el dataset de otro reto.
+DEMO_CHALLENGE_DATASETS = {
+    "Caza de IOCs — APT28 Fancy Bear": "Logs de Red — APT28 Fancy Bear",
+    "Análisis de Campaña Ransomware LockBit 3.0": "Campaña Ransomware — LockBit 3.0",
+    "Detección de Phishing con Machine Learning": "Campaña Phishing — Credential Harvesting FIN7",
+    "Enriquecimiento y Priorización de IOC Feed": "Feed IOC Enriquecido — CTI-Lab",
+    "Perfilado de Malware con Pandas — AgentTesla & Emotet": "Análisis Malware — AgentTesla & Emotet",
+}
+
+
+def fix_demo_challenge_datasets(conn) -> int:
+    """Corrige (idempotente) el dataset de los retos demo si quedó mal asignado."""
+    fixed = 0
+    for title, ds_name in DEMO_CHALLENGE_DATASETS.items():
+        ch = conn.execute("SELECT id, dataset_id FROM challenges WHERE title = ? AND created_by = 'system@cti-lab'", (title,)).fetchone()
+        ds = conn.execute("SELECT id FROM datasets WHERE name = ?", (ds_name,)).fetchone()
+        if ch and ds and ch["dataset_id"] != ds["id"]:
+            conn.execute("UPDATE challenges SET dataset_id = ? WHERE id = ?", (ds["id"], ch["id"]))
+            fixed += 1
+    return fixed
+
+
 def _seed_demo_datasets(conn) -> None:
     if conn.execute("SELECT COUNT(*) FROM datasets WHERE source LIKE 'CTI-Lab%'").fetchone()[0]:
         return
@@ -575,11 +602,11 @@ def _seed_demo_datasets(conn) -> None:
 def _seed_demo_challenges(conn) -> None:
     if conn.execute("SELECT COUNT(*) FROM challenges WHERE created_by = 'system@cti-lab'").fetchone()[0]:
         return
-    dataset_names = [r[0] for r in conn.execute("SELECT name FROM datasets WHERE source LIKE 'CTI-Lab%' ORDER BY id").fetchall()]
-    for i, ch in enumerate(_CHALLENGE_SEEDS):
+    for ch in _CHALLENGE_SEEDS:
         dataset_id = None
-        if i < len(dataset_names):
-            row = conn.execute("SELECT id FROM datasets WHERE name = ?", (dataset_names[i],)).fetchone()
+        ds_name = DEMO_CHALLENGE_DATASETS.get(ch["title"])
+        if ds_name:
+            row = conn.execute("SELECT id FROM datasets WHERE name = ?", (ds_name,)).fetchone()
             if row:
                 dataset_id = row[0]
         badge_row = conn.execute("SELECT id FROM badges WHERE name = ?", (ch["badge_name"],)).fetchone()

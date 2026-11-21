@@ -38,6 +38,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from db import init_db, get_conn
 from auth import register, login, verify_token
+import grading
 from intelligence.threat_engine import get_threat_feed, add_uploaded_iocs
 from intelligence.actor_engine import get_threat_actors
 from intelligence.campaign_engine import get_campaigns
@@ -1208,7 +1209,7 @@ def admin_score(submission_id: int, payload: dict = Body(...), authorization: st
     badge_awarded = None
     with get_conn() as conn:
         conn.execute(
-            "UPDATE submissions SET score = ?, feedback = ? WHERE id = ?",
+            "UPDATE submissions SET score = ?, feedback = ?, auto_graded = 0 WHERE id = ?",
             (score, feedback, submission_id),
         )
         if score is not None:
@@ -1472,13 +1473,45 @@ def student_submit(challenge_id: int, payload: dict = Body(...), authorization: 
                 "UPDATE submissions SET code=?, output=?, plots_json=?, notes=?, submitted_at=datetime('now') WHERE id=?",
                 (payload.get("code",""), payload.get("output",""), plots, payload.get("notes",""), existing["id"]),
             )
-            return {"id": existing["id"], "updated": True}
-        cur = conn.execute(
-            "INSERT INTO submissions (challenge_id, user_email, user_name, code, output, plots_json, notes) VALUES (?,?,?,?,?,?,?)",
-            (challenge_id, user["email"], user.get("name",""),
-             payload.get("code",""), payload.get("output",""), plots, payload.get("notes","")),
-        )
-    return {"id": cur.lastrowid, "created": True}
+            sub_id, created = existing["id"], False
+        else:
+            cur = conn.execute(
+                "INSERT INTO submissions (challenge_id, user_email, user_name, code, output, plots_json, notes) VALUES (?,?,?,?,?,?,?)",
+                (challenge_id, user["email"], user.get("name",""),
+                 payload.get("code",""), payload.get("output",""), plots, payload.get("notes","")),
+            )
+            sub_id, created = cur.lastrowid, True
+        result = _auto_grade(conn, sub_id, challenge_id, payload)
+    out = {"id": sub_id, "created": created, "updated": not created}
+    if result:
+        out["grading"] = result
+        out["score"] = result["score"]
+    return out
+
+
+def _auto_grade(conn, sub_id: int, challenge_id: int, payload: dict) -> dict | None:
+    """Califica con la rúbrica del reto. No pisa una nota puesta a mano por el docente."""
+    row = conn.execute(
+        "SELECT c.title, d.data_json FROM challenges c LEFT JOIN datasets d ON d.id = c.dataset_id WHERE c.id = ?",
+        (challenge_id,)).fetchone()
+    if not row:
+        return None
+    result = grading.grade(row["title"], grading.rows_of(row["data_json"]),
+                           payload.get("code", ""), payload.get("output", ""),
+                           payload.get("notes", ""), payload.get("plots", []))
+    if not result:
+        return None
+    manual = conn.execute("SELECT score, auto_graded FROM submissions WHERE id = ?", (sub_id,)).fetchone()
+    if manual["score"] is not None and not manual["auto_graded"]:
+        result["manual_override"] = True      # el docente ya calificó: se conserva su nota
+        return result
+    lines = ["Calificación automática (provisional; el docente puede ajustarla)"]
+    for it in result["items"]:
+        mark = "✓" if it["ok"] else ("◐" if it["partial"] else "✗")
+        lines.append(f"{mark} {it['label']} ({it['earned']}/{it['weight']})" + (f" → {it['hint']}" if it["hint"] else ""))
+    conn.execute("UPDATE submissions SET score = ?, feedback = ?, auto_graded = 1 WHERE id = ?",
+                 (result["score"], "\n".join(lines), sub_id))
+    return result
 
 
 def _has_challenge_access(conn, challenge_id: int, user_email: str):

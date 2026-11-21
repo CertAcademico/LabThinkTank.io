@@ -205,6 +205,7 @@ function Arena({ challenge }: { challenge: Challenge }) {
   const [notes,      setNotes]      = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted,  setSubmitted]  = useState(challenge.submitted > 0)
+  const [grading,    setGrading]    = useState<{ score: number; manual_override?: boolean; items: { label: string; weight: number; earned: number; ok: boolean; partial: boolean; hint: string }[] } | null>(null)
   const [docFile,    setDocFile]    = useState<File | null>(null)
   const [docStatus,  setDocStatus]  = useState<{ uploaded: boolean; filename?: string; pages?: number } | null>(null)
   const [docUploading, setDocUploading] = useState(false)
@@ -417,11 +418,14 @@ if not uploaded_df.empty:
     const parts = parseOutput(output)
     const plots = parts.filter(p => p.type === 'plot').map(p => p.content)
     try {
-      await fetch(`${API}/student/challenges/${challenge.id}/submit`, {
+      const res = await fetch(`${API}/student/challenges/${challenge.id}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ code, output, plots, notes }),
       })
+      if (!res.ok) throw new Error('submit')
+      const data = await res.json().catch(() => ({}))
+      setGrading(data.grading ?? null)
       setSubmitted(true)
     } catch { setSubmitError('Error al entregar. Intenta de nuevo.') }
     finally { setSubmitting(false) }
@@ -686,7 +690,7 @@ if not uploaded_df.empty:
       {/* Submit section */}
       <div className="rounded-xl p-4 space-y-3" style={{ ...glass, border: `1px solid rgba(74,222,128,${submitted ? '0.25' : '0.1'})` }}>
         <p className="text-[10px] font-bold text-green-700 uppercase tracking-wider">
-          {submitted ? '✓ Entrega registrada' : 'Entregar análisis'}
+          {submitted ? '✓ Entrega registrada — puedes mejorar y volver a entregar' : 'Entregar análisis'}
         </p>
         {/* Document upload — siempre visible */}
         <div className="rounded-lg p-3 space-y-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
@@ -727,7 +731,7 @@ if not uploaded_df.empty:
           {docError && <p className="text-[10px] text-red-400">{docError}</p>}
         </div>
 
-        {!submitted && (
+        {(
           <>
             <textarea value={notes} onChange={e => setNotes(e.target.value)}
                       placeholder="Notas para el docente: metodología usada, hallazgos principales, conclusiones..."
@@ -743,7 +747,7 @@ if not uploaded_df.empty:
               <button onClick={submit} disabled={submitting}
                       className="px-5 py-2 rounded-lg text-xs font-bold disabled:opacity-40 shrink-0"
                       style={{ background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.4)', color: '#4ade80' }}>
-                {submitting ? 'Enviando...' : `Entregar → (${user?.name})`}
+                {submitting ? 'Evaluando...' : submitted ? 'Volver a entregar →' : `Entregar → (${user?.name})`}
               </button>
             </div>
             {submitError && (
@@ -751,7 +755,29 @@ if not uploaded_df.empty:
             )}
           </>
         )}
-        {submitted && challenge.my_score != null && (
+        {grading && (
+          <div className="rounded-lg p-3 space-y-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex-1">Resultado de tu entrega</p>
+              <span className="text-sm font-bold" style={{ color: grading.score >= 70 ? '#4ade80' : grading.score >= 40 ? '#facc15' : '#f87171' }}>{grading.score}/100</span>
+            </div>
+            {grading.manual_override && (
+              <p className="text-[10px] text-yellow-400">Tu docente ya calificó este reto; su nota se conserva.</p>
+            )}
+            {grading.items.map(it => (
+              <div key={it.label} className="text-[11px]">
+                <div className="flex items-start gap-2">
+                  <span style={{ color: it.ok ? '#4ade80' : it.partial ? '#facc15' : '#f87171' }}>{it.ok ? '✓' : it.partial ? '◐' : '✗'}</span>
+                  <span className="flex-1 text-slate-300">{it.label}</span>
+                  <span className="text-slate-600">{it.earned}/{it.weight}</span>
+                </div>
+                {it.hint && <p className="ml-5 text-[10px] text-slate-500">{it.hint}</p>}
+              </div>
+            ))}
+            <p className="text-[9px] text-slate-700">Calificación automática provisional. Corrige lo que falta y vuelve a entregar.</p>
+          </div>
+        )}
+        {submitted && !grading && challenge.my_score != null && (
           <p className="text-xs text-slate-400">
             Calificación: <span className="text-green-400 font-bold">{challenge.my_score}/100</span>
           </p>

@@ -179,6 +179,12 @@ def _now_bogota():
     return datetime.now(BOGOTA_TZ)
 
 
+def _is_started_until(deadline: str | None) -> bool:
+    """True si el plazo AÚN no ha vencido (o no hay plazo)."""
+    dt = _parse_dt(deadline)
+    return not dt or _now_bogota() < dt
+
+
 def _is_started(value: str | None) -> bool:
     dt = _parse_dt(value)
     return not dt or _now_bogota() >= dt
@@ -1550,6 +1556,9 @@ def student_submit(challenge_id: int, payload: dict = Body(...), authorization: 
         ok = _has_challenge_access(conn, challenge_id, user["email"])
         if not ok:
             raise HTTPException(status_code=403)
+        ch = conn.execute("SELECT case_key, deadline FROM challenges WHERE id = ?", (challenge_id,)).fetchone()
+        if ch and ch["case_key"] == "aurora" and ch["deadline"] and not _is_started_until(ch["deadline"]):
+            raise HTTPException(status_code=403, detail="El plazo de este capítulo ya terminó.")
         existing = conn.execute(
             "SELECT id FROM submissions WHERE challenge_id = ? AND user_email = ?",
             (challenge_id, user["email"]),
@@ -1665,9 +1674,11 @@ def admin_hint_usage(authorization: str = Header(None)):
 
 def _has_challenge_access(conn, challenge_id: int, user_email: str):
     from db import path_status
-    st0 = conn.execute("SELECT status FROM challenges WHERE id = ?", (challenge_id,)).fetchone()
+    st0 = conn.execute("SELECT status, starts_at FROM challenges WHERE id = ?", (challenge_id,)).fetchone()
     if st0 and st0["status"] == "draft":
         return None                           # borrador: solo el admin decide cuándo se activa
+    if st0 and not _is_started(st0["starts_at"]):
+        return None                           # programado: no se puede usar antes de su hora de inicio
     st = path_status(conn, user_email).get(challenge_id)
     if st and st["locked"]:
         return None

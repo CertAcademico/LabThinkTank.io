@@ -1659,9 +1659,12 @@ def _auto_grade(conn, sub_id: int, challenge_id: int, payload: dict) -> dict | N
         else:
             minimum = _has_an(code_txt) and bool(out_txt.strip()) and not crashed
             why = "código con análisis propio, que se ejecuta sin errores e imprime resultados"
-        if minimum and result["score"] < BASE_SCORE:
-            result["score"] = BASE_SCORE
-            result["base_applied"] = f"Reconocemos tu entrega: cumpliste los requisitos mínimos ({why}). Tu nota parte de {BASE_SCORE}; suma criterios para subirla."
+        if minimum:
+            raw = result["score"]
+            result["raw_score"] = raw
+            result["score"] = round(BASE_SCORE + (100 - BASE_SCORE) * raw / 100)       # parte de 50 y suma por cada criterio logrado
+            result["base_applied"] = (f"Reconocemos tu entrega: cumpliste los requisitos mínimos ({why}). Tu nota parte de {BASE_SCORE} "
+                                      f"y suma por cada criterio que logres (criterios logrados: {raw}/100).")
             conn.execute("UPDATE submissions SET score = ?, feedback = ? WHERE id = ?",
                          (result["score"], "\n".join(lines) + "\n✓ " + result["base_applied"], sub_id))
     if row["case_key"] == "aurora":
@@ -1669,6 +1672,11 @@ def _auto_grade(conn, sub_id: int, challenge_id: int, payload: dict) -> dict | N
         from aurora.chapters import CHAPTER_DATASET
         data = {k: case_["datasets"][k] for k in CHAPTER_DATASET[:row["case_chapter"]] if k}
         result["review"] = _review(row["case_chapter"], payload.get("code", ""), payload.get("output", ""), payload.get("notes", ""), data, facts)
+        scale = (100 - BASE_SCORE) / 100 if "raw_score" in result else 1.0           # cuánto sube la nota real por cada punto de criterio
+        missing = sorted(({"label": it["label"], "points": round((it["weight"] - it["earned"]) * scale), "tip": it["hint"], "partial": it["partial"]}
+                          for it in result["items"] if not it["ok"]), key=lambda x: -x["points"])[:3]
+        result["review"]["improve"] = missing
+        result["review"]["max_gain"] = max(0, 100 - result["score"])
         conn.execute("UPDATE submissions SET review_json = ? WHERE id = ?", (json.dumps(result["review"], ensure_ascii=False), sub_id))
         from db import badge_flow_active, award_chapter_badge, _path_challenges, PATH_PASS_SCORE
         result["pass_score"] = PATH_PASS_SCORE
@@ -2837,9 +2845,18 @@ def admin_delete_announcement(ann_id: int, authorization: str = Header(None)):
 # Cada estudiante redacta su reporte final. Mientras el admin no abra el muro,
 # cada quien ve solo el suyo (evita copiar); al abrirlo, todos ven todos.
 
+def _wall_opens_at(conn) -> str | None:
+    r = conn.execute("SELECT value FROM app_settings WHERE key = 'wall_open_at'").fetchone()
+    return r["value"] if r and r["value"] else None
+
+
 def _wall_open(conn) -> bool:
+    """Abierto si el admin lo abrió a mano o si ya llegó la hora programada."""
     r = conn.execute("SELECT value FROM app_settings WHERE key = 'intel_wall_open'").fetchone()
-    return bool(r and r["value"] == "1")
+    if r and r["value"] == "1":
+        return True
+    at = _parse_iso(_wall_opens_at(conn))
+    return bool(at and datetime.now(timezone.utc) >= at)
 
 
 _WALL_LIMITS = {"title": 140, "summary": 1500, "evidence": 3000, "recommendations": 2000}
@@ -2851,13 +2868,14 @@ def intel_wall(authorization: str = Header(None)):
     admin = user.get("role") == "admin"
     with get_conn() as conn:
         is_open = _wall_open(conn)
+        opens_at = _wall_opens_at(conn)
         rows = conn.execute("""SELECT id, user_email, user_name, title, summary, evidence, confidence,
                                       recommendations, pinned, updated_at FROM intel_reports
                                ORDER BY pinned DESC, updated_at DESC""").fetchall()
     reports = [dict(r) for r in rows]
     mine = next((r for r in reports if r["user_email"] == user["email"]), None)
     visible = reports if (is_open or admin) else ([mine] if mine else [])
-    return {"open": is_open, "mine": mine, "reports": visible, "total": len(reports)}
+    return {"open": is_open, "opens_at": opens_at, "mine": mine, "reports": visible, "total": len(reports)}
 
 
 @app.put("/intel-wall/mine")
@@ -3171,6 +3189,24 @@ def student_review(challenge_id: int, authorization: str = Header(None)):
     return json.loads(r["review_json"]) if r and r["review_json"] else None
 
 
+def _weak_by_challenge(fb_rows: list[dict]) -> dict:
+    """Por capítulo, los criterios que menos estudiantes logran (a partir del feedback guardado: ✓ logrado, ◐ parcial, ✗ por mejorar)."""
+    import re as _re
+    agg: dict[int, dict[str, list[int]]] = {}
+    for r in fb_rows:
+        for line in (r["feedback"] or "").splitlines():
+            m = _re.match(r"^([✓◐✗])\s+(.*?)\s+\((\d+)/(\d+)\)", line.strip())
+            if not m:
+                continue
+            a = agg.setdefault(r["challenge_id"], {}).setdefault(m.group(2), [0, 0, 0])
+            a[0 if m.group(1) == "✓" else 1 if m.group(1) == "◐" else 2] += 1
+    out = {}
+    for cid, d in agg.items():
+        rows = [{"label": k, "ok": v[0], "partial": v[1], "missed": v[2], "n": sum(v)} for k, v in d.items()]
+        out[cid] = sorted((r for r in rows if r["missed"] + r["partial"] > 0), key=lambda r: (-(r["missed"] + 0.5 * r["partial"]) / r["n"], r["label"]))[:3]
+    return out
+
+
 def _PASS() -> int:
     from db import PATH_PASS_SCORE
     return PATH_PASS_SCORE
@@ -3198,9 +3234,11 @@ def admin_aurora_dashboard(authorization: str = Header(None)):
             """SELECT ub.user_email, ub.awarded_at, b.name FROM user_badges ub JOIN badges b ON b.id = ub.badge_id
                WHERE ub.badge_id IN (SELECT badge_id FROM challenges WHERE case_key = 'aurora' AND badge_id IS NOT NULL)""").fetchall()]
         wall = {r["user_email"] for r in conn.execute("SELECT user_email FROM intel_reports").fetchall()}
+        fb_rows = [dict(r) for r in conn.execute(f"SELECT challenge_id, feedback FROM submissions WHERE auto_graded = 1 AND challenge_id IN ({mk})", ids).fetchall()]
         from db import badge_flow_start, badge_flow_active
         flow = {"start": badge_flow_start(conn), "active": badge_flow_active(conn)}
     chapters = []
+    weak = _weak_by_challenge(fb_rows)
     for c in chs:
         cs = [x for x in subs if x["challenge_id"] == c["id"]]
         ch_hints = [h for h in hints if h["challenge_id"] == c["id"]]
@@ -3212,6 +3250,7 @@ def admin_aurora_dashboard(authorization: str = Header(None)):
             "avg_score": round(sum(scores) / len(scores)) if scores else None,
             "dist": [sum(1 for v in scores if 0 <= v < 40), sum(1 for v in scores if 40 <= v < _PASS()), sum(1 for v in scores if _PASS() <= v < 80), sum(1 for v in scores if v >= 80)],
             "hint_students": len({h["user_email"] for h in ch_hints}), "hints_total": len(ch_hints),
+            "weak": weak.get(c["id"], []),
         })
     active_ids = {c["id"]: c for c in chs if c["status"] == "active"}
     now = datetime.utcnow()
@@ -3323,6 +3362,47 @@ def admin_aurora_regrade(authorization: str = Header(None)):
         for email in {r["user_email"] for r in rows}:
             sync_chapter_badges(conn, email)
     return {"ok": True, "pass_score": _PASS(), "changes": changes}
+
+
+# ── Hito con reloj para los estudiantes (p. ej. «validación del Muro a las 3:30 pm») ──
+
+@app.get("/student/milestone")
+def student_milestone(authorization: str = Header(None)):
+    _require_user(authorization)
+    with get_conn() as conn:
+        r = conn.execute("SELECT value FROM app_settings WHERE key = 'milestone_json'").fetchone()
+        wall_at = _wall_opens_at(conn)
+        wall_open = _wall_open(conn)
+    ms = None
+    try:
+        ms = json.loads(r["value"]) if r and r["value"] else None
+    except Exception:
+        ms = None
+    return {"milestone": ms, "wall_open_at": wall_at, "wall_open": wall_open, "server_time": datetime.now(timezone.utc).isoformat()}
+
+
+@app.post("/admin/milestone")
+def admin_set_milestone(payload: dict = Body(...), authorization: str = Header(None)):
+    """{at, title, message} muestra un reloj con cuenta regresiva a todos; {} lo quita."""
+    _require_admin(authorization)
+    if payload.get("at") and not _parse_iso(payload["at"]):
+        raise HTTPException(status_code=400, detail="at debe ser ISO 8601 con zona horaria")
+    value = json.dumps({"at": payload["at"], "title": str(payload.get("title", ""))[:140], "message": str(payload.get("message", ""))[:600]}, ensure_ascii=False) if payload.get("at") else ""
+    with get_conn() as conn:
+        conn.execute("INSERT INTO app_settings (key, value) VALUES ('milestone_json', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (value,))
+    return {"ok": True}
+
+
+@app.post("/admin/intel-wall/schedule")
+def admin_wall_schedule(payload: dict = Body(...), authorization: str = Header(None)):
+    """Programa la hora en que el Muro se abre solo para todos. open_at nulo la cancela."""
+    _require_admin(authorization)
+    at = payload.get("open_at")
+    if at and not _parse_iso(at):
+        raise HTTPException(status_code=400, detail="open_at debe ser ISO 8601 con zona horaria")
+    with get_conn() as conn:
+        conn.execute("INSERT INTO app_settings (key, value) VALUES ('wall_open_at', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (at or "",))
+    return {"ok": True, "open_at": at}
 
 
 # ── Admin: Multi-dataset for challenges ──────────────────────────────────────

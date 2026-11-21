@@ -8,7 +8,7 @@ interface Report {
   id: number; user_email: string; user_name: string; title: string; summary: string
   evidence: string; confidence: string; recommendations: string; pinned: number; updated_at: string
 }
-interface Wall { open: boolean; mine: Report | null; reports: Report[]; total: number }
+interface Wall { opens_at?: string | null; open: boolean; mine: Report | null; reports: Report[]; total: number }
 
 const CONF: Record<string, string> = { baja: '#f87171', media: '#facc15', alta: '#4ade80' }
 const inputCls = 'w-full rounded-lg px-3 py-2 text-xs text-slate-100 outline-none resize-none'
@@ -56,7 +56,7 @@ export default function IntelWall() {
         <h2 className="text-base font-bold text-slate-100">Muro de resultados de inteligencia</h2>
         <p className="text-[11px] text-slate-500">
           Redacta tu reporte final de inteligencia: qué encontraste, con qué datos lo sustentas y qué recomiendas.
-          {wall && !wall.open && !isAdmin && ' Tu reporte es privado hasta que el docente abra el muro para el diálogo.'}
+          {wall && !wall.open && !isAdmin && (wall.opens_at ? ` Tu reporte es privado hasta las ${new Date(wall.opens_at).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: 'numeric', minute: '2-digit', hour12: true })}, cuando el Muro se abre para todos y hacemos el diálogo.` : ' Tu reporte es privado hasta que el docente abra el muro para el diálogo.')}
         </p>
         {isAdmin && wall && (
           <div className="flex items-center gap-2 pt-2 flex-wrap">

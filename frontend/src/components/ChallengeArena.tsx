@@ -236,7 +236,7 @@ function Arena({ challenge }: { challenge: Challenge }) {
   const [submitting, setSubmitting] = useState(false)
   const [submitted,  setSubmitted]  = useState(challenge.submitted > 0)
   const [teacherNotes, setTeacherNotes] = useState<{ id: number; challenge_id: number | null; body: string; created_at: string }[]>([])
-  const [review,     setReview]     = useState<{ steps: string[]; reported: { entity: string; kind: string; facts: string[] }[]; observations: string[]; nudges: string[] } | null>(null)
+  const [review,     setReview]     = useState<{ steps: string[]; reported: { entity: string; kind: string; facts: string[] }[]; observations: string[]; nudges: string[]; improve?: { label: string; points: number; tip: string; partial: boolean }[]; max_gain?: number } | null>(null)
   const [hintData,   setHintData]   = useState<{ total: number; revealed: { level: number; label: string; text: string }[]; next_label: string | null } | null>(null)
   const [hintBusy,   setHintBusy]   = useState(false)
   const [myDs,       setMyDs]       = useState<{ name: string; var: string; filename: string; rows: number; columns: string[] }[]>([])
@@ -1017,6 +1017,15 @@ if not uploaded_df.empty:
                     {r.facts.length === 0 && <p className="ml-4 text-slate-600">↳ No encontré esto en los datos de tu caso.</p>}
                   </div>
                 ))}
+              </div>
+            )}
+            {review.improve && review.improve.length > 0 && (
+              <div className="space-y-1.5 rounded-lg p-2.5" style={{ background: 'rgba(74,222,128,0.05)', border: '1px solid rgba(74,222,128,0.18)' }}>
+                <p className="text-[9px] uppercase tracking-wider text-green-500">Para subir tu nota{review.max_gain ? ` (aún puedes ganar hasta +${review.max_gain})` : ''}</p>
+                {review.improve.map((m, i) => (
+                  <p key={i} className="text-[11px] text-slate-300"><strong className="text-green-400">+{m.points}</strong> {m.label}<span className="block ml-5 text-slate-500">→ {m.tip}</span></p>
+                ))}
+                <p className="text-[10px] text-slate-600">Puedes repetir este capítulo las veces que quieras: corrige, ejecuta y vuelve a entregar.</p>
               </div>
             )}
             {review.nudges.length > 0 && (
@@ -1814,7 +1823,7 @@ export default function ChallengeArena() {
                 <div className="h-1.5 rounded-full overflow-hidden bg-white/[0.05]">
                   <div className="h-full rounded-full bg-cyan-400" style={{ width: `${(done / path.length) * 100}%` }} />
                 </div>
-                <p className="text-[10px] text-slate-500">Cada reto se desbloquea al sacar al menos {pass}/100 en el anterior. Puedes reentregar para mejorar tu nota.</p>
+                <p className="text-[10px] text-slate-500">Cada reto se desbloquea al sacar al menos {pass}/100 en el anterior. Puedes repetir cualquier capítulo las veces que quieras hasta el cierre del curso para mejorar tu nota.</p>
               </div>
             )
           })()}

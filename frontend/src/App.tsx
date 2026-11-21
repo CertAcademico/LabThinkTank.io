@@ -35,6 +35,7 @@ const ChallengeArena  = lazyRetry(() => import('./components/ChallengeArena'))
 const CTIToolkit      = lazyRetry(() => import('./components/CTIToolkit'))
 const LogIngest       = lazyRetry(() => import('./components/LogIngest'))
 const FusionEngine    = lazyRetry(() => import('./components/FusionEngine'))
+const MilestoneBar    = lazyRetry(() => import('./components/MilestoneBar'))
 const IntelWall       = lazyRetry(() => import('./components/IntelWall'))
 const StudentBoard    = lazyRetry(() => import('./components/StudentBoard'))
 
@@ -299,6 +300,8 @@ function Shell() {
             <Clock />
           </div>
         </header>
+
+        <Suspense fallback={null}><MilestoneBar /></Suspense>
 
         <main className="flex-1 overflow-y-auto p-5">
           <Suspense fallback={<LoadingPanel />}>

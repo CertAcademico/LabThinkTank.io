@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 const glass = { background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
 
-interface Chapter { chapter: number; title: string; status: string; starts_at?: string | null; deadline?: string | null; assigned: number; worked: number; submitted: number; passed: number; avg_score: number | null; dist: number[]; hint_students: number; hints_total: number }
+interface Chapter { chapter: number; title: string; status: string; starts_at?: string | null; deadline?: string | null; assigned: number; worked: number; submitted: number; passed: number; avg_score: number | null; dist: number[]; hint_students: number; hints_total: number; weak?: { label: string; ok: number; partial: number; missed: number; n: number }[] }
 interface Row { name: string; email: string; variant: string; passed: number; current: number | null; current_hints: number; best: number | null; last_activity: string | null; status: string; wall: boolean; reason?: string }
 interface Dash {
   kpis: Record<string, number>; chapters: Chapter[]; stuck: Row[]; students: Row[]; events: { t: string; who: string; what: string }[]
@@ -111,6 +111,12 @@ export default function CaseDashboard() {
                 {([['Trabajaron', c.worked, '#22d3ee'], ['Entregaron', c.submitted, '#facc15'], [`Superaron (≥${d.pass_score})`, c.passed, '#4ade80']] as [string, number, string][]).map(([l, v, col]) => (
                   <div key={l}><div className="flex justify-between text-slate-500 mb-0.5"><span>{l}</span><span className="text-slate-300">{v}/{maxAssigned}</span></div><Bar pct={(v / maxAssigned) * 100} color={col} /></div>
                 ))}
+              </div>
+            )}
+            {c.weak && c.weak.length > 0 && (
+              <div className="rounded-lg px-3 py-2 space-y-0.5" style={{ background: 'rgba(250,204,21,0.05)', border: '1px solid rgba(250,204,21,0.15)' }}>
+                <p className="text-[9px] uppercase tracking-wider text-yellow-600">Calidad: criterios más flojos del grupo (para el diálogo)</p>
+                {c.weak.map(w => <p key={w.label} className="text-[11px] text-slate-300">{w.label} <span className="text-slate-500">· lo logró {w.ok} de {w.n}{w.partial ? `, parcial ${w.partial}` : ''}</span></p>)}
               </div>
             )}
             {c.submitted > 0 && (

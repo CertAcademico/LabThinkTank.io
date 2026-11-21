@@ -39,6 +39,8 @@ export default function CaseControl() {
   const [solFor, setSolFor] = useState<{ id: number; email: string } | null>(null)
   const [msg, setMsg] = useState('')
   const [openTo, setOpenTo] = useState<number>(0)
+  const [ms, setMs] = useState({ at: '', title: '', message: '' })
+  const [wallAt, setWallAt] = useState('')
   const [flow, setFlow] = useState<{ start: string; active: boolean; badges: { chapter: number; name: string; tier: string }[] } | null>(null)
   const [form, setForm] = useState({ title: '', body: '', publish_at: '', expires_at: '' })
 
@@ -55,6 +57,7 @@ export default function CaseControl() {
     api('/admin/users').then(setUsers).catch(() => {})
     api('/admin/badge-flow').then(setFlow).catch(() => {})
     api('/admin/path-open').then(d => setOpenTo(d.open_up_to ?? 0)).catch(() => {})
+    api('/student/milestone').then(d => { if (d.milestone) setMs({ at: toInput(d.milestone.at), title: d.milestone.title, message: d.milestone.message }); setWallAt(toInput(d.wall_open_at)) }).catch(() => {})
   }, [api])
   useEffect(() => { load() }, [load])
 
@@ -119,7 +122,26 @@ export default function CaseControl() {
           Solo tú activas los retos. Un reto en <strong>Borrador</strong> no lo ve ni lo puede usar ningún estudiante. Puedes programar inicio y cierre,
           y revisar la solución esperada de cada reto para la variante de cualquier estudiante.
         </p>
-        {msg && <p className="text-[11px] text-red-400">{msg}</p>}
+        {msg && <p className="text-[11px]" style={{ color: msg.startsWith('✓') || msg.startsWith('Reloj') || msg.startsWith('Apertura') ? '#4ade80' : '#f87171' }}>{msg}</p>}
+      </div>
+
+      <div className="rounded-xl p-5 space-y-3" style={glass}>
+        <p className="text-xs font-bold text-orange-300">⏰ Reloj y mensaje para los estudiantes</p>
+        <p className="text-[10px] text-slate-500">Muestra a todos una barra con cuenta regresiva y tu mensaje, y programa la hora en que el Muro de Inteligencia se abre solo para todos.</p>
+        <input value={ms.title} onChange={e => setMs({ ...ms, title: e.target.value })} placeholder="Título del hito (ej. Validación del Muro de resultados finales)" className="w-full rounded-lg px-3 py-2 text-xs text-slate-100 outline-none" style={inputStyle} />
+        <textarea value={ms.message} onChange={e => setMs({ ...ms, message: e.target.value })} rows={2} placeholder="Mensaje para los estudiantes" className="w-full rounded-lg px-3 py-2 text-xs text-slate-100 outline-none resize-none" style={inputStyle} />
+        <div className="flex items-end gap-3 flex-wrap">
+          <label className="text-[10px] text-slate-500">Hora del hito (Bogotá)<input type="datetime-local" value={ms.at} onChange={e => setMs({ ...ms, at: e.target.value })} className="block mt-1 rounded px-2 py-1 text-[11px] text-slate-300" style={inputStyle} /></label>
+          <button disabled={!ms.at} onClick={async () => { try { await api('/admin/milestone', { method: 'POST', body: JSON.stringify({ at: fromInput(ms.at), title: ms.title, message: ms.message }) }); setMsg('✓ Reloj publicado') } catch (e) { setMsg(String(e instanceof Error ? e.message : e)) } }}
+                  className="text-[11px] px-3 py-1.5 rounded font-semibold text-orange-300 disabled:opacity-40" style={{ background: 'rgba(251,146,60,0.1)', border: '1px solid rgba(251,146,60,0.3)' }}>Publicar reloj</button>
+          <button onClick={async () => { await api('/admin/milestone', { method: 'POST', body: JSON.stringify({}) }); setMs({ at: '', title: '', message: '' }); setMsg('Reloj retirado') }}
+                  className="text-[11px] px-3 py-1.5 rounded text-slate-400" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>Quitar</button>
+        </div>
+        <div className="flex items-end gap-3 flex-wrap pt-2 border-t border-white/5">
+          <label className="text-[10px] text-slate-500">El Muro se abre solo a las (Bogotá)<input type="datetime-local" value={wallAt} onChange={e => setWallAt(e.target.value)} className="block mt-1 rounded px-2 py-1 text-[11px] text-slate-300" style={inputStyle} /></label>
+          <button onClick={async () => { try { await api('/admin/intel-wall/schedule', { method: 'POST', body: JSON.stringify({ open_at: fromInput(wallAt) }) }); setMsg(wallAt ? '✓ Apertura del Muro programada' : 'Apertura programada cancelada') } catch (e) { setMsg(String(e instanceof Error ? e.message : e)) } }}
+                  className="text-[11px] px-3 py-1.5 rounded font-semibold text-green-300" style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)' }}>Programar apertura</button>
+        </div>
       </div>
 
       <div className="rounded-xl p-5 space-y-2" style={glass}>

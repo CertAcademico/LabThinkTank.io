@@ -301,6 +301,13 @@ def _migrate(conn) -> None:
             UNIQUE(challenge_id, user_email, level)
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS fusion_access (
+            user_email TEXT PRIMARY KEY,
+            granted_by TEXT NOT NULL DEFAULT 'system',
+            granted_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
     sc = {r[1] for r in conn.execute("PRAGMA table_info(submissions)").fetchall()}
     if "auto_graded" not in sc:
         conn.execute("ALTER TABLE submissions ADD COLUMN auto_graded INTEGER NOT NULL DEFAULT 0")

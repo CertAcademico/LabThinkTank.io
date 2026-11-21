@@ -3467,6 +3467,14 @@ def _fusion_usage_date() -> str:
     return _now_bogota().date().isoformat()
 
 
+def _fusion_allowed(user: dict) -> bool:
+    """El Motor de Fusión lo habilita el admin: roles privilegiados siempre; estudiantes solo si fueron autorizados."""
+    if _is_privileged(user):
+        return True
+    with get_conn() as conn:
+        return bool(conn.execute("SELECT 1 FROM fusion_access WHERE user_email = ?", (user["email"],)).fetchone())
+
+
 def _fusion_quota_for_user(user: dict) -> dict:
     if _is_privileged(user):
         return {"limited": False, "limit": None, "used": 0, "remaining": None, "usage_date": _fusion_usage_date()}
@@ -3556,8 +3564,43 @@ def _consume_student_fusion_quota(user: dict, endpoint: str) -> dict:
 
 def _require_fusion_access(authorization: str | None, *, consume: bool = False, endpoint: str = "fusion") -> dict:
     user = _auth_user_or_raise(authorization)
+    if not _fusion_allowed(user):
+        raise HTTPException(status_code=403, detail={
+            "message": "El Motor de Fusión no está habilitado para tu cuenta. Lo activa el administrador.",
+            "enabled": False,
+        })
     user["fusion_quota"] = _consume_student_fusion_quota(user, endpoint) if consume else _fusion_quota_for_user(user)
     return user
+
+
+@app.get("/student/fusion-access")
+def student_fusion_access(authorization: str = Header(None)):
+    user = _require_user(authorization)
+    return {"enabled": _fusion_allowed(user)}
+
+
+@app.get("/admin/fusion-access")
+def admin_fusion_access(authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        return {"emails": [r["user_email"] for r in conn.execute("SELECT user_email FROM fusion_access").fetchall()]}
+
+
+@app.post("/admin/fusion-access")
+def admin_set_fusion_access(payload: dict = Body(...), authorization: str = Header(None)):
+    """{emails:[...], enabled:bool} o {all_students:true, enabled:bool}."""
+    admin = _require_admin(authorization)
+    enabled = bool(payload.get("enabled"))
+    with get_conn() as conn:
+        emails = payload.get("emails") or []
+        if payload.get("all_students"):
+            emails = [r["email"] for r in conn.execute("SELECT email FROM users WHERE role = 'student'").fetchall()]
+        for e in emails:
+            if enabled:
+                conn.execute("INSERT OR IGNORE INTO fusion_access (user_email, granted_by) VALUES (?,?)", (e, admin["email"]))
+            else:
+                conn.execute("DELETE FROM fusion_access WHERE user_email = ?", (e,))
+    return {"ok": True, "count": len(emails)}
 
 
 @app.get("/ai/gemini/lab-context")

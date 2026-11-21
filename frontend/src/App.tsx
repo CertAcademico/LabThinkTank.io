@@ -78,6 +78,13 @@ function Shell() {
   const [myBadges,  setMyBadges]  = useState<Badge[]>([])
   const [teamBadges, setTeamBadges] = useState<Badge[]>([])
 
+  const [fusionOk, setFusionOk] = useState(false)
+  useEffect(() => {
+    if (!token) return
+    fetch(`${API_URL}/student/fusion-access`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { enabled: false }).then(d => setFusionOk(Boolean(d.enabled))).catch(() => {})
+  }, [token])
+
   useEffect(() => {
     if (!token || user?.role === 'admin') return
     fetch(`${API_URL}/student/badges`, { headers: { Authorization: `Bearer ${token}` } })
@@ -94,7 +101,7 @@ function Shell() {
   const isAdmin = user?.role === 'admin'
   const isPrivileged = ['admin', 'instructor', 'senior_analyst', 'analyst'].includes(user?.role ?? '')
   const visibleNav = NAV.filter(item =>
-    isPrivileged || item.id !== 'feeds'
+    (isPrivileged || item.id !== 'feeds') && (isPrivileged || fusionOk || item.id !== 'fusion')
   )
   const activeView = visibleNav.some(item => item.id === view) ? view : 'overview'
 

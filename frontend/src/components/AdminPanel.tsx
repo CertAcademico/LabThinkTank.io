@@ -255,6 +255,12 @@ function UsersTab({ users, challenges, allBadges, token, onRefresh }: {
   const [expanded,  setExpanded]  = useState<string | null>(null)
   const [roleSel,   setRoleSel]   = useState<Record<string, string>>({})
   const [badgeSel,  setBadgeSel]  = useState<Record<string, number | ''>>({})
+  const [fusionOn,  setFusionOn]  = useState<string[]>([])
+  const loadFusion = () => apiFetch('/admin/fusion-access', token).then(d => setFusionOn(d.emails ?? [])).catch(() => {})
+  useEffect(() => { loadFusion() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const setFusion = async (body: { emails?: string[]; all_students?: boolean; enabled: boolean }) => {
+    try { await apiFetch('/admin/fusion-access', token, { method: 'POST', body: JSON.stringify(body) }); loadFusion() } catch (e) { alert(e) }
+  }
 
   const nonAdmin = users.filter(u => u.role !== 'admin')
 
@@ -327,6 +333,18 @@ function UsersTab({ users, challenges, allBadges, token, onRefresh }: {
         </button>
       </div>
 
+      <div className="rounded-xl px-5 py-3 flex items-center gap-3 flex-wrap" style={glass}>
+        <p className="text-xs text-slate-300 flex-1 min-w-48">
+          <span className="font-bold text-red-400">Motor de Fusión</span> — apagado para estudiantes por defecto. Habilitado: {fusionOn.length}.
+        </p>
+        <button onClick={() => setFusion({ all_students: true, enabled: true })}
+                className="text-[11px] px-3 py-1.5 rounded font-semibold text-green-400"
+                style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)' }}>Habilitar a todos los estudiantes</button>
+        <button onClick={() => setFusion({ all_students: true, enabled: false })}
+                className="text-[11px] px-3 py-1.5 rounded font-semibold text-slate-400"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>Deshabilitar a todos</button>
+      </div>
+
       {/* Users list */}
       <div className="rounded-xl overflow-hidden" style={glass}>
         <div className="px-5 py-3 border-b grid grid-cols-5 text-[10px] font-bold text-slate-600 uppercase tracking-wider"
@@ -368,6 +386,20 @@ function UsersTab({ users, challenges, allBadges, token, onRefresh }: {
                 {isOpen && (
                   <div className="px-5 py-4 border-t space-y-4"
                        style={{ borderColor: 'rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.015)' }}>
+                    {/* Motor de Fusión */}
+                    {u.role === 'student' && (
+                      <div className="flex items-center gap-3">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider w-32">Motor de Fusión</p>
+                        <button onClick={() => setFusion({ emails: [u.email], enabled: !fusionOn.includes(u.email) })}
+                                className="text-[11px] px-3 py-1 rounded font-semibold"
+                                style={fusionOn.includes(u.email)
+                                  ? { background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', color: '#4ade80' }
+                                  : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#64748b' }}>
+                          {fusionOn.includes(u.email) ? 'Habilitado — clic para quitar' : 'Deshabilitado — clic para habilitar'}
+                        </button>
+                      </div>
+                    )}
+
                     {/* Change role */}
                     <div className="flex items-center gap-3 flex-wrap">
                       <p className="text-[10px] text-slate-600 font-bold uppercase tracking-wider shrink-0">Cambiar rol:</p>

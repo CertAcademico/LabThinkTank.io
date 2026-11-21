@@ -257,6 +257,7 @@ def init_db() -> None:
         _seed_ctf_challenges(conn)
         _seed_team_challenge_assignments(conn)
         _seed_ml_training_datasets(conn)
+        seed_aurora_challenges(conn)
 
 
 def _migrate(conn) -> None:
@@ -278,6 +279,10 @@ def _migrate(conn) -> None:
         conn.execute("ALTER TABLE challenges ADD COLUMN starts_at TEXT")
     if "stage" not in cols:
         conn.execute("ALTER TABLE challenges ADD COLUMN stage TEXT NOT NULL DEFAULT 'individual'")
+    if "case_key" not in cols:
+        conn.execute("ALTER TABLE challenges ADD COLUMN case_key TEXT NOT NULL DEFAULT ''")
+    if "case_chapter" not in cols:
+        conn.execute("ALTER TABLE challenges ADD COLUMN case_chapter INTEGER NOT NULL DEFAULT 0")
     tm_cols = {r[1] for r in conn.execute("PRAGMA table_info(team_members)").fetchall()}
     if "role" not in tm_cols:
         conn.execute("ALTER TABLE team_members ADD COLUMN role TEXT NOT NULL DEFAULT 'analista_datos'")
@@ -1467,14 +1472,9 @@ def balance_phase_challenges(conn, phase_id: int, points: int = 150) -> int:
 # ── Ruta individual para estudiantes nuevos ───────────────────────────────────
 # Solo aplica a usuarios con onboarding_path = 1 (los que se registran desde
 # ahora). Los estudiantes existentes no cambian: conservan sus retos y su acceso.
-INDIVIDUAL_PATH = [
-    "Caza de IOCs — APT28 Fancy Bear",
-    "Enriquecimiento y Priorización de IOC Feed",
-    "Perfilado de Malware con Pandas — AgentTesla & Emotet",
-    "Análisis de Campaña Ransomware LockBit 3.0",
-    "Extracción de Entidades CTI — NLP sobre Texto de Amenaza",
-    "Detección de Phishing con Machine Learning",
-]
+# Las cuentas nuevas empiezan por el Caso Aurora; los 6 retos anteriores quedan como práctica
+# (asignables por el admin). El orden de aparición define el orden de desbloqueo.
+from aurora.chapters import PATH_TITLES as INDIVIDUAL_PATH
 PATH_PASS_SCORE = 60
 
 
@@ -1516,3 +1516,24 @@ def path_status(conn, email: str) -> dict:
         status[ch["id"]] = {"order": i + 1, "total": len(chs), "locked": locked, "requires": requires}
         prev = ch
     return status
+
+
+def seed_aurora_challenges(conn) -> int:
+    """Crea/actualiza los 7 capítulos del Caso Aurora (los datos se generan por estudiante, no se guardan)."""
+    from aurora.chapters import CHAPTERS, PATH_TITLES
+    n = 0
+    for i, (title, ch) in enumerate(zip(PATH_TITLES, CHAPTERS), start=1):
+        row = conn.execute("SELECT id FROM challenges WHERE title = ?", (title,)).fetchone()
+        vals = (ch["description"], ch["objective"], ch["criteria"], ch["difficulty"])
+        if row:
+            conn.execute("UPDATE challenges SET description=?, objective=?, criteria=?, difficulty=?, case_key='aurora', case_chapter=?, stage='caso-aurora' WHERE id=?",
+                         (*vals, i, row["id"]))
+        else:
+            conn.execute(
+                """INSERT INTO challenges (title, description, objective, dataset_id, criteria, status, min_score_badge, difficulty,
+                                           created_by, stage, hints_json, case_key, case_chapter)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (title, ch["description"], ch["objective"], None, ch["criteria"], "active", 70, ch["difficulty"],
+                 "system@cti-lab-aurora", "caso-aurora", "[]", "aurora", i))
+            n += 1
+    return n

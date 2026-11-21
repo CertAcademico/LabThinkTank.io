@@ -16,6 +16,7 @@ interface Challenge {
   badge_earned?: number
   submitted: number; my_score?: number
   hint_levels?: number
+  case_key?: string; case_chapter?: number; case_code?: string; no_code?: boolean
   path_order?: number; path_total?: number; locked?: boolean; locked_by?: string; path_pass_score?: number
 }
 
@@ -229,7 +230,11 @@ import pandas as pd
 import numpy as np
 import json
 
-# Variables disponibles:
+${challenge.case_key === 'aurora' ? `# CASO AURORA — tu variante: ${challenge.case_code ?? ''}
+# Tus datos son solo tuyos. Los dataframes del caso se llaman aurora_netflow, aurora_ioc_feed,
+# aurora_malware_lab, aurora_siem_events, aurora_reportes_texto, aurora_dominios (según el capítulo).
+# Puedes cruzarlos entre sí. Lista los que tienes con: print([n for n in dir() if n.startswith('aurora_')])
+` : ''}# Variables disponibles:
 #   challenge_df  -> dataset del reto (estructurado)
 #   uploaded_df   -> dataset turbio subido por ti (si lo cargaste)
 #   ioc_df        -> feed de IOCs del laboratorio
@@ -305,6 +310,12 @@ if not uploaded_df.empty:
             const ds = await dsRes.json()
             py.globals.set('_challenge_json', ds.data_json)
             await py.runPythonAsync(`challenge_df = pd.DataFrame(json.loads(_challenge_json))`)
+            // Caso Aurora: datasets de este capítulo y de los anteriores, para cruzarlos
+            for (const [name, rows] of Object.entries(ds.extras ?? {})) {
+              if (!/^aurora_[a-z_]+$/.test(name)) continue
+              py.globals.set('_ex_json', JSON.stringify(rows))
+              await py.runPythonAsync(`${name} = pd.DataFrame(json.loads(_ex_json))`)
+            }
           }
         }
 
@@ -430,7 +441,7 @@ if not uploaded_df.empty:
   }
 
   const submit = async () => {
-    if (!output) { setSubmitError('Ejecuta tu código primero para generar output.'); return }
+    if (!output && !challenge.no_code) { setSubmitError('Ejecuta tu código primero para generar output.'); return }
     setSubmitError('')
     setSubmitting(true)
     const parts = parseOutput(output)
@@ -459,6 +470,12 @@ if not uploaded_df.empty:
           <div>
             <div className="flex items-center gap-2 mb-1">
               <h3 className="text-base font-bold text-slate-100">{challenge.title}</h3>
+              {challenge.case_code && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded"
+                      style={{ background: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)' }}>
+                  Variante {challenge.case_code}
+                </span>
+              )}
               {submitted && (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded"
                       style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
@@ -705,6 +722,13 @@ if not uploaded_df.empty:
         </div>
       )}
 
+      {challenge.no_code && (
+        <div className="rounded-xl p-4" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.2)' }}>
+          <p className="text-xs text-cyan-300 font-semibold">Este capítulo no requiere código</p>
+          <p className="text-[11px] text-slate-400 mt-1">Redacta tu informe ejecutivo en las notas de abajo y publícalo también en el <strong>Muro de Inteligencia</strong> (menú lateral): ese paso suma a tu nota.</p>
+        </div>
+      )}
+
       {/* Pistas graduales */}
       {hintData && hintData.total > 0 && (
         <div className="rounded-xl p-4 space-y-3" style={{ ...glass, border: '1px solid rgba(250,204,21,0.18)' }}>
@@ -787,7 +811,7 @@ if not uploaded_df.empty:
             <div className="flex items-center gap-3">
               <p className="text-[10px] text-slate-600 flex-1">
                 Se entregará: tu código, el output y {parseOutput(output).filter(p => p.type === 'plot').length} gráficas.
-                {!output && ' ⚠ Ejecuta el código primero.'}
+                {!output && !challenge.no_code && ' ⚠ Ejecuta el código primero.'}
                 {docStatus?.uploaded && ' · 📄 Documento adjunto.'}
               </p>
               <button onClick={submit} disabled={submitting}

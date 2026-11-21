@@ -131,7 +131,13 @@ Estructura fija, pensada para que el docente solo atienda preguntas puntuales:
 
 **Fuera del alcance de esta primera entrega** (siguiente etapa, ya conversada): la biblioteca de datasets por estudiante, las herramientas del admin para enriquecer datasets y la relación formal entre datasets en la interfaz.
 
-## 9. Decisiones que necesito de ti
+## 9. Decisiones (estado)
+
+**Confirmadas por el docente:** los 6 retos actuales quedan como práctica; las cuentas nuevas empiezan por el Caso Aurora; los textos van en español. Nombre del banco y del atacante: se asumen aprobados.
+
+**Construido:** generador de datos por estudiante, 7 capítulos con expediente, pistas en 3 niveles y autocalificación, datasets cruzables en el sandbox, desbloqueo secuencial y Muro de Inteligencia.
+
+### Preguntas originales (referencia)
 
 1. **Nombre y sector:** ¿"Aurora Financiera" y banca están bien?
 2. **Atacante ficticio:** ¿"Marea Gris" te sirve o prefieres otro nombre?

@@ -1406,6 +1406,7 @@ def student_challenges(authorization: str = Header(None)):
         rows = conn.execute("""
             SELECT c.id, c.title, c.description, c.objective, c.criteria, c.hints_json,
                    c.starts_at, c.deadline, c.stage, c.status, c.difficulty,
+                   c.case_key, c.case_chapter,
                    c.badge_id, c.min_score_badge,
                    b.name AS badge_name, b.org AS badge_org, b.tier AS badge_tier, b.icon AS badge_icon,
                    d.name AS dataset_name, d.schema_json,
@@ -1430,6 +1431,13 @@ def student_challenges(authorization: str = Header(None)):
         if not _is_started(r["starts_at"]):
             continue
         d = dict(r)
+        if d.get("case_key") == "aurora":
+            from aurora.generator import case_code, DATASETS
+            from aurora.chapters import CHAPTER_DATASET
+            d["case_code"] = case_code(user["email"])
+            d["no_code"] = d["case_chapter"] == 7
+            k = CHAPTER_DATASET[d["case_chapter"] - 1]
+            d["dataset_name"] = DATASETS[k] if k else "todos los datasets del caso"
         if hints_mod.levels_for(d["title"]):
             d["hints_json"] = "[]"            # las pistas se piden de a una vía /hints
             d["hint_levels"] = len(hints_mod.levels_for(d["title"]))
@@ -1467,6 +1475,9 @@ def student_challenge_dataset(challenge_id: int, authorization: str = Header(Non
         ok = _has_challenge_access(conn, challenge_id, user["email"])
         if not ok:
             raise HTTPException(status_code=403, detail="No tienes acceso a este reto")
+        case = conn.execute("SELECT case_key, case_chapter FROM challenges WHERE id = ?", (challenge_id,)).fetchone()
+        if case and case["case_key"] == "aurora":
+            return _aurora_dataset_payload(user, case["case_chapter"])
         row = conn.execute("""
             SELECT d.name, d.description, d.data_json, d.schema_json, d.source
             FROM challenges c JOIN datasets d ON c.dataset_id = d.id
@@ -1475,6 +1486,21 @@ def student_challenge_dataset(challenge_id: int, authorization: str = Header(Non
     if not row:
         raise HTTPException(status_code=404, detail="Dataset no encontrado")
     return dict(row)
+
+
+def _aurora_dataset_payload(user: dict, chapter: int) -> dict:
+    """Datos del Caso Aurora de ESTE estudiante: dataset del capítulo + los de capítulos anteriores para cruzar."""
+    from aurora.generator import build_case, DATASETS
+    from aurora.chapters import CHAPTER_DATASET
+    case = build_case(user["email"])
+    keys = [k for k in CHAPTER_DATASET[:chapter] if k]
+    main_key = CHAPTER_DATASET[chapter - 1] or keys[-1]
+    rows = case["datasets"][main_key]
+    return {"name": DATASETS[main_key], "description": f"Caso Aurora · tu variante {case['code']}", "source": "Caso Aurora (ficticio)",
+            "data_json": json.dumps(rows, ensure_ascii=False),
+            "schema_json": json.dumps({k: type(v).__name__ for k, v in rows[0].items()}),
+            "case_code": case["code"],
+            "extras": {DATASETS[k]: case["datasets"][k] for k in keys}}
 
 
 @app.post("/student/challenges/{challenge_id}/submit")
@@ -1513,13 +1539,23 @@ def student_submit(challenge_id: int, payload: dict = Body(...), authorization: 
 def _auto_grade(conn, sub_id: int, challenge_id: int, payload: dict) -> dict | None:
     """Califica con la rúbrica del reto. No pisa una nota puesta a mano por el docente."""
     row = conn.execute(
-        "SELECT c.title, d.data_json FROM challenges c LEFT JOIN datasets d ON d.id = c.dataset_id WHERE c.id = ?",
+        "SELECT c.title, c.case_key, c.case_chapter, d.data_json FROM challenges c LEFT JOIN datasets d ON d.id = c.dataset_id WHERE c.id = ?",
         (challenge_id,)).fetchone()
     if not row:
         return None
-    result = grading.grade(row["title"], grading.rows_of(row["data_json"]),
-                           payload.get("code", ""), payload.get("output", ""),
-                           payload.get("notes", ""), payload.get("plots", []))
+    if row["case_key"] == "aurora":
+        from aurora.generator import build_case
+        from aurora.chapters import rubric as aurora_rubric
+        email = conn.execute("SELECT user_email FROM submissions WHERE id = ?", (sub_id,)).fetchone()["user_email"]
+        has_wall = bool(conn.execute("SELECT 1 FROM intel_reports WHERE user_email = ? AND length(title) > 0", (email,)).fetchone())
+        facts = build_case(email)["facts"]
+        result = grading.grade(row["title"], [], payload.get("code", ""), payload.get("output", ""),
+                               payload.get("notes", ""), payload.get("plots", []),
+                               rubric=aurora_rubric(row["case_chapter"], facts, {"has_wall_report": has_wall}))
+    else:
+        result = grading.grade(row["title"], grading.rows_of(row["data_json"]),
+                               payload.get("code", ""), payload.get("output", ""),
+                               payload.get("notes", ""), payload.get("plots", []))
     if not result:
         return None
     manual = conn.execute("SELECT score, auto_graded FROM submissions WHERE id = ?", (sub_id,)).fetchone()

@@ -132,4 +132,9 @@ HINTS: dict[str, list[str]] = {
 
 
 def levels_for(title: str) -> list[str]:
-    return HINTS.get(title, [])
+    if title in HINTS:
+        return HINTS[title]
+    from aurora.chapters import CHAPTERS, PATH_TITLES
+    if title in PATH_TITLES:
+        return CHAPTERS[PATH_TITLES.index(title)]["hints"]
+    return []

@@ -222,9 +222,9 @@ def _mean_sizes(s: Sub, rows: Rows) -> float:
     return min(1.0, hit / max(1, len(vals) // 2 + 1))
 
 
-def grade(title: str, dataset_rows: Rows, code: str, output: str, notes: str, plots: list) -> dict | None:
+def grade(title: str, dataset_rows: Rows, code: str, output: str, notes: str, plots: list, rubric: list | None = None) -> dict | None:
     """Devuelve {score, items:[{label, weight, earned, ok, hint}]} o None si el reto no tiene rúbrica."""
-    rubric = rubric_for(title)
+    rubric = rubric or rubric_for(title)
     if not rubric:
         return None
     sub = Sub(code, output, notes, plots)

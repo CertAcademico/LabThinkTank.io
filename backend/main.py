@@ -39,6 +39,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from db import init_db, get_conn
 from auth import register, login, verify_token
 import grading
+import hints as hints_mod
 from intelligence.threat_engine import get_threat_feed, add_uploaded_iocs
 from intelligence.actor_engine import get_threat_actors
 from intelligence.campaign_engine import get_campaigns
@@ -1429,6 +1430,9 @@ def student_challenges(authorization: str = Header(None)):
         if not _is_started(r["starts_at"]):
             continue
         d = dict(r)
+        if hints_mod.levels_for(d["title"]):
+            d["hints_json"] = "[]"            # las pistas se piden de a una vía /hints
+            d["hint_levels"] = len(hints_mod.levels_for(d["title"]))
         st = pstat.get(d["id"])
         if st:
             d.update(path_order=st["order"], path_total=st["total"], locked=st["locked"],
@@ -1529,6 +1533,58 @@ def _auto_grade(conn, sub_id: int, challenge_id: int, payload: dict) -> dict | N
     conn.execute("UPDATE submissions SET score = ?, feedback = ?, auto_graded = 1 WHERE id = ?",
                  (result["score"], "\n".join(lines), sub_id))
     return result
+
+
+def _hint_payload(conn, challenge_id: int, email: str, title: str) -> dict:
+    levels = hints_mod.levels_for(title)
+    used = {r["level"] for r in conn.execute(
+        "SELECT level FROM hint_usage WHERE challenge_id = ? AND user_email = ?", (challenge_id, email)).fetchall()}
+    revealed = [{"level": i, "label": hints_mod.LEVEL_LABELS.get(i, f"Pista {i}"), "text": levels[i - 1]}
+                for i in range(1, len(levels) + 1) if i in used]
+    nxt = len(revealed) + 1
+    return {"total": len(levels), "revealed": revealed,
+            "next_label": hints_mod.LEVEL_LABELS.get(nxt) if nxt <= len(levels) else None}
+
+
+@app.get("/student/challenges/{challenge_id}/hints")
+def student_hints(challenge_id: int, authorization: str = Header(None)):
+    user = _require_user(authorization)
+    with get_conn() as conn:
+        if not _has_challenge_access(conn, challenge_id, user["email"]):
+            raise HTTPException(status_code=403, detail="No tienes acceso a este reto")
+        ch = conn.execute("SELECT title FROM challenges WHERE id = ?", (challenge_id,)).fetchone()
+        if not ch:
+            raise HTTPException(status_code=404)
+        return _hint_payload(conn, challenge_id, user["email"], ch["title"])
+
+
+@app.post("/student/challenges/{challenge_id}/hints/next")
+def student_hint_next(challenge_id: int, authorization: str = Header(None)):
+    """Revela la siguiente pista (orden fijo, una por llamada)."""
+    user = _require_user(authorization)
+    with get_conn() as conn:
+        if not _has_challenge_access(conn, challenge_id, user["email"]):
+            raise HTTPException(status_code=403, detail="No tienes acceso a este reto")
+        ch = conn.execute("SELECT title FROM challenges WHERE id = ?", (challenge_id,)).fetchone()
+        if not ch or not hints_mod.levels_for(ch["title"]):
+            raise HTTPException(status_code=404, detail="Este reto no tiene pistas")
+        cur = _hint_payload(conn, challenge_id, user["email"], ch["title"])
+        if cur["next_label"]:
+            conn.execute("INSERT OR IGNORE INTO hint_usage (challenge_id, user_email, level) VALUES (?,?,?)",
+                         (challenge_id, user["email"], len(cur["revealed"]) + 1))
+            cur = _hint_payload(conn, challenge_id, user["email"], ch["title"])
+        return cur
+
+
+@app.get("/admin/hint-usage")
+def admin_hint_usage(authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT c.id AS challenge_id, c.title, COUNT(DISTINCT h.user_email) AS students, COUNT(*) AS hints_revealed,
+                   SUM(h.level = 3) AS reached_skeleton
+            FROM hint_usage h JOIN challenges c ON c.id = h.challenge_id GROUP BY c.id ORDER BY c.id""").fetchall()
+    return [dict(r) for r in rows]
 
 
 def _has_challenge_access(conn, challenge_id: int, user_email: str):

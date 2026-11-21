@@ -15,6 +15,7 @@ interface Challenge {
   badge_tier?: string; badge_icon?: string; min_score_badge?: number
   badge_earned?: number
   submitted: number; my_score?: number
+  hint_levels?: number
   path_order?: number; path_total?: number; locked?: boolean; locked_by?: string; path_pass_score?: number
 }
 
@@ -206,6 +207,8 @@ function Arena({ challenge }: { challenge: Challenge }) {
   const [notes,      setNotes]      = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted,  setSubmitted]  = useState(challenge.submitted > 0)
+  const [hintData,   setHintData]   = useState<{ total: number; revealed: { level: number; label: string; text: string }[]; next_label: string | null } | null>(null)
+  const [hintBusy,   setHintBusy]   = useState(false)
   const [grading,    setGrading]    = useState<{ score: number; manual_override?: boolean; items: { label: string; weight: number; earned: number; ok: boolean; partial: boolean; hint: string }[] } | null>(null)
   const [docFile,    setDocFile]    = useState<File | null>(null)
   const [docStatus,  setDocStatus]  = useState<{ uploaded: boolean; filename?: string; pages?: number } | null>(null)
@@ -251,6 +254,10 @@ if not uploaded_df.empty:
   useEffect(() => {
     setCode(STARTER)
     if (!challenge.id) return
+    if (challenge.hint_levels) {
+      fetch(`${API}/student/challenges/${challenge.id}/hints`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null).then(setHintData).catch(() => {})
+    }
     fetch(`${API}/student/challenges/${challenge.id}/dataset`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -410,6 +417,16 @@ if not uploaded_df.empty:
     } finally {
       setDocUploading(false)
     }
+  }
+
+  const askHint = async () => {
+    setHintBusy(true)
+    try {
+      const r = await fetch(`${API}/student/challenges/${challenge.id}/hints/next`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` },
+      })
+      if (r.ok) setHintData(await r.json())
+    } finally { setHintBusy(false) }
   }
 
   const submit = async () => {
@@ -685,6 +702,34 @@ if not uploaded_df.empty:
                 : <span key={i} className="whitespace-pre-wrap block">{p.content}</span>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Pistas graduales */}
+      {hintData && hintData.total > 0 && (
+        <div className="rounded-xl p-4 space-y-3" style={{ ...glass, border: '1px solid rgba(250,204,21,0.18)' }}>
+          <div className="flex items-center gap-2">
+            <p className="text-[10px] font-bold text-yellow-500 uppercase tracking-wider flex-1">💡 Pistas ({hintData.revealed.length}/{hintData.total})</p>
+            {hintData.next_label && (
+              <button onClick={askHint} disabled={hintBusy}
+                      className="text-[11px] font-semibold px-3 py-1 rounded disabled:opacity-40"
+                      style={{ background: 'rgba(250,204,21,0.1)', border: '1px solid rgba(250,204,21,0.3)', color: '#facc15' }}>
+                {hintBusy ? '...' : `Pedir pista: ${hintData.next_label}`}
+              </button>
+            )}
+          </div>
+          {hintData.revealed.length === 0 && (
+            <p className="text-[11px] text-slate-600">Inténtalo primero. Si te atascas, pide una pista: van de la más general a la más concreta.</p>
+          )}
+          {hintData.revealed.map(h => (
+            <div key={h.level} className="rounded-lg p-3" style={{ background: 'rgba(250,204,21,0.04)', border: '1px solid rgba(250,204,21,0.12)' }}>
+              <p className="text-[9px] font-bold text-yellow-600 uppercase tracking-wider mb-1">{h.level}. {h.label}</p>
+              {h.label === 'Esqueleto de código'
+                ? <pre className="text-[11px] text-green-300 whitespace-pre-wrap font-mono">{h.text}</pre>
+                : <p className="text-[11px] text-slate-300 leading-relaxed">{h.text}</p>}
+            </div>
+          ))}
+          {!hintData.next_label && <p className="text-[10px] text-slate-600">Ya viste todas las pistas. Completa los ___ del esqueleto y ejecútalo.</p>}
         </div>
       )}
 

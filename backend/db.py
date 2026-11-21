@@ -291,6 +291,16 @@ def _migrate(conn) -> None:
         conn.execute("ALTER TABLE teams ADD COLUMN open_signup INTEGER NOT NULL DEFAULT 0")
     if "onboarding_path" not in {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}:
         conn.execute("ALTER TABLE users ADD COLUMN onboarding_path INTEGER NOT NULL DEFAULT 0")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS hint_usage (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            challenge_id INTEGER NOT NULL,
+            user_email   TEXT    NOT NULL,
+            level        INTEGER NOT NULL,
+            used_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(challenge_id, user_email, level)
+        )
+    """)
     sc = {r[1] for r in conn.execute("PRAGMA table_info(submissions)").fetchall()}
     if "auto_graded" not in sc:
         conn.execute("ALTER TABLE submissions ADD COLUMN auto_graded INTEGER NOT NULL DEFAULT 0")

@@ -5,15 +5,25 @@ el siguiente). No dan los valores finales: orientan, indican el método y, al
 final, un esqueleto de código con huecos (___) por completar.
 Clave = título exacto del reto.
 """
+from functools import lru_cache
+
 LEVEL_LABELS = {1: "Orientación", 2: "Método", 3: "Esqueleto de código"}          # compatibilidad (3 niveles)
 LABELS_5 = ["Orientación", "Método", "Cuidado con…", "Cómo verificar tu resultado", "Esqueleto de código"]
 
 
 def label_for(level: int, total: int) -> str:
-    """Etiqueta del nivel según cuántos niveles tiene el reto."""
-    if total == 5:
-        return LABELS_5[level - 1]
+    """Etiqueta del nivel según cuántos niveles tiene el reto (compatibilidad)."""
+    if total in (5, 7):
+        return (LABELS_5 + ["Lo mínimo para pasar", "Solución de referencia"])[level - 1]
     return LEVEL_LABELS.get(level, f"Pista {level}")
+
+
+def labels_for(title: str) -> list[str]:
+    n = len(levels_for(title))
+    labs = [label_for(i, n) for i in range(1, n + 1)]
+    if title.startswith("Caso Aurora 8") and n == 7:
+        labs[6] = "Plantilla de informe"
+    return labs
 
 
 # Dos niveles intermedios por reto: el error típico y cómo comprobar el propio resultado (sin dar la respuesta).
@@ -195,5 +205,34 @@ def levels_for(title: str) -> list[str]:
     if title in PATH_TITLES:
         i = PATH_TITLES.index(title)
         b = CHAPTERS[i]["hints"]
-        return b[:2] + list(EXTRA_AURORA[i + 1]) + b[2:]
+        return b[:2] + list(EXTRA_AURORA[i + 1]) + b[2:] + _rescue_levels(i + 1)
     return HINTS.get(title, [])
+
+
+_REPORT_TEMPLATE = """PLANTILLA DE INFORME (reemplaza lo que está entre corchetes con TUS datos; no copies sin revisar):
+
+Resumen: El atacante entró por [vector de entrada] en el equipo [host Paciente Cero] y permaneció [minutos / horas] hasta cifrar los archivos.
+Línea de tiempo: 1) Entrada en [host] ([fecha/hora]). 2) Conexión a [IP del C2]. 3) Movimiento lateral: [host 1] → [host 2] → [host 3] con la cuenta [cuenta abusada]. 4) Exfiltración de [GB] hacia [IP de exfiltración]. 5) Cifrado de archivos en [host].
+Indicadores clave: IPs [..], dominios [..], familia de malware [..], persistencia [..].
+Nivel de confianza: [baja / media / alta], porque [razón].
+Recomendaciones (por urgencia): 1) Bloquear los indicadores y aislar los equipos afectados. 2) Rotar credenciales y la cuenta de servicio abusada. 3) Segmentar la red para frenar el movimiento lateral. 4) Respaldos fuera de línea. 5) MFA y capacitación contra phishing."""
+
+
+@lru_cache(maxsize=16)
+def _rescue_levels(chapter: int) -> list:
+    """Dos niveles finales: qué es lo mínimo para pasar y la solución (genérica, sin los valores del estudiante)."""
+    from aurora.chapters import rubric
+    from aurora.generator import build_case
+    from aurora.solutions import REFERENCE_CODE
+    import db
+    rub = rubric(chapter, build_case("plantilla@ejemplo.edu")["facts"], {})
+    crit = "\n".join(f"  • {r[0]} ({r[1]} pts)" for r in rub)
+    if chapter == 8:
+        minimo = (f"Para superar el informe ({db.PATH_PASS_SCORE} puntos) lo mínimo es que redactes en las notas un informe propio de al menos ~250 caracteres: "
+                  "cómo entró el atacante, por dónde se movió y qué recomiendas. Para subir hacia 100 suma estos criterios:\n" + crit)
+        return [minimo, _REPORT_TEMPLATE]
+    minimo = (f"Para superar este capítulo ({db.PATH_PASS_SCORE} puntos) tu entrega necesita como mínimo: 1) un análisis propio en tu código (filtrar, agrupar, calcular…, no solo mostrar el dataset), "
+              "2) que imprimas tus resultados con print() y que el código corra sin errores. Si cumples eso, la entrega se reconoce desde "
+              f"{db.BASE_SCORE}. Para subir hacia 100 suma estos criterios:\n" + crit)
+    code = "# SOLUCIÓN DE REFERENCIA. Ejecútala, entiende cada paso y adáptala a tu análisis.\n# Después, en tus notas, explica con tus palabras qué significan los resultados.\n" + REFERENCE_CODE[chapter]
+    return [minimo, code]

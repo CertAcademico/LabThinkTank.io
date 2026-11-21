@@ -242,7 +242,7 @@ function Arena({ challenge }: { challenge: Challenge }) {
   const [myDs,       setMyDs]       = useState<{ name: string; var: string; filename: string; rows: number; columns: string[] }[]>([])
   const [myDsBusy,   setMyDsBusy]   = useState(false)
   const [myDsError,  setMyDsError]  = useState('')
-  const [grading,    setGrading]    = useState<{ score: number; manual_override?: boolean; passed?: boolean; pass_score?: number; next_chapter?: string; badge?: { name: string; description: string; tier: string }; items: { label: string; weight: number; earned: number; ok: boolean; partial: boolean; hint: string }[] } | null>(null)
+  const [grading,    setGrading]    = useState<{ score: number; manual_override?: boolean; passed?: boolean; pass_score?: number; base_applied?: string; capped?: string; next_chapter?: string; badge?: { name: string; description: string; tier: string }; items: { label: string; weight: number; earned: number; ok: boolean; partial: boolean; hint: string }[] } | null>(null)
   const [docFile,    setDocFile]    = useState<File | null>(null)
   const [docStatus,  setDocStatus]  = useState<{ uploaded: boolean; filename?: string; pages?: number } | null>(null)
   const [docUploading, setDocUploading] = useState(false)
@@ -885,7 +885,7 @@ if not uploaded_df.empty:
           {hintData.revealed.map(h => (
             <div key={h.level} className="rounded-lg p-3" style={{ background: 'rgba(250,204,21,0.04)', border: '1px solid rgba(250,204,21,0.12)' }}>
               <p className="text-[9px] font-bold text-yellow-600 uppercase tracking-wider mb-1">{h.level}. {h.label}</p>
-              {h.label === 'Esqueleto de código'
+              {['Esqueleto de código', 'Solución de referencia', 'Plantilla de informe', 'Lo mínimo para pasar'].includes(h.label)
                 ? <pre className="text-[11px] text-green-300 whitespace-pre-wrap font-mono">{h.text}</pre>
                 : <p className="text-[11px] text-slate-300 leading-relaxed">{h.text}</p>}
             </div>
@@ -977,8 +977,10 @@ if not uploaded_df.empty:
                 {grading.next_chapter && <p className="text-[11px] text-green-300 pt-1">✔ Se habilitó el siguiente capítulo: <strong>{grading.next_chapter.replace(/^Caso Aurora \d — /, '')}</strong></p>}
               </div>) })()}
             {grading.passed && !grading.badge && (
-              <p className="text-[11px] text-green-300">✔ ¡Superaste este capítulo ({grading.pass_score ?? 60}+)! {grading.next_chapter ? 'Ya tienes su insignia.' : 'Tu insignia y el siguiente capítulo se habilitan a partir de las 2 pm, o ya los tienes si los desbloqueaste antes.'}</p>
+              <p className="text-[11px] text-green-300">✔ ¡Superaste este capítulo ({grading.pass_score ?? 50}+)! {grading.next_chapter ? 'Ya tienes su insignia.' : 'Tu insignia y el siguiente capítulo se habilitan a partir de las 2 pm, o ya los tienes si los desbloqueaste antes.'}</p>
             )}
+            {grading.base_applied && <p className="text-[11px] text-green-300">✓ {grading.base_applied}</p>}
+            {grading.capped && <p className="text-[11px] text-yellow-300">⚠ {grading.capped}</p>}
             {grading.manual_override && (
               <p className="text-[10px] text-yellow-400">Tu docente ya calificó este reto; su nota se conserva.</p>
             )}
@@ -1801,7 +1803,7 @@ export default function ChallengeArena() {
         <div className="grid gap-3">
           {challenges.some(c => c.path_order) && (() => {
             const path = challenges.filter(c => c.path_order)
-            const pass = path[0]?.path_pass_score ?? 60
+            const pass = path[0]?.path_pass_score ?? 50
             const done = path.filter(c => c.my_score != null && c.my_score >= pass).length
             return (
               <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.2)' }}>
@@ -1888,7 +1890,7 @@ export default function ChallengeArena() {
 
                     {c.locked && (
                       <p className="text-[10px] text-cyan-500/80 mb-2">
-                        🔒 Se desbloquea al sacar al menos {c.path_pass_score ?? 60}/100 en «{c.locked_by}».
+                        🔒 Se desbloquea al sacar al menos {c.path_pass_score ?? 50}/100 en «{c.locked_by}».
                       </p>
                     )}
                     {c.description && (

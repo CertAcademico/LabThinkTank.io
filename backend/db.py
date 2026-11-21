@@ -1496,7 +1496,8 @@ def balance_phase_challenges(conn, phase_id: int, points: int = 150) -> int:
 # Las cuentas nuevas empiezan por el Caso Aurora; los 6 retos anteriores quedan como práctica
 # (asignables por el admin). El orden de aparición define el orden de desbloqueo.
 from aurora.chapters import PATH_TITLES as INDIVIDUAL_PATH
-PATH_PASS_SCORE = 60
+PATH_PASS_SCORE = 50   # umbral para superar un capítulo (el docente pidió ser menos estricto)
+BASE_SCORE = 50        # nota mínima de una entrega que cumple los requisitos mínimos (código propio + salida)
 
 
 def _path_challenges(conn, only_active: bool = True) -> list:

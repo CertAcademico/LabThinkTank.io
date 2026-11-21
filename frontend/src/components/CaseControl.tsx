@@ -124,7 +124,7 @@ export default function CaseControl() {
 
       <div className="rounded-xl p-5 space-y-2" style={glass}>
         <p className="text-xs font-bold text-cyan-300">🔓 Abrir capítulos sin requisito</p>
-        <p className="text-[10px] text-slate-500">Abre los capítulos hasta el número elegido para <strong>todos</strong> los estudiantes, sin exigir superar el anterior. 0 = desbloqueo secuencial (con 60 puntos o la insignia). Solo se abren los que estén Activos.</p>
+        <p className="text-[10px] text-slate-500">Abre los capítulos hasta el número elegido para <strong>todos</strong> los estudiantes, sin exigir superar el anterior. 0 = desbloqueo secuencial (con 50 puntos o la insignia). Solo se abren los que estén Activos.</p>
         <div className="flex items-center gap-2 flex-wrap">
           <select value={openTo} onChange={e => setOpenTo(Number(e.target.value))} className="rounded px-2 py-1.5 text-[11px] text-slate-200" style={inputStyle}>
             <option value={0} className="bg-slate-900">Ninguno (secuencial)</option>
@@ -153,7 +153,7 @@ export default function CaseControl() {
           <div className="flex gap-1.5 flex-wrap">
             {flow.badges.map(b => <span key={b.chapter} className="text-[10px] px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#94a3b8' }}>Cap {b.chapter} · {b.name}</span>)}
           </div>
-          <p className="text-[10px] text-slate-600">Antes de esa hora los capítulos siguen desbloqueándose con 60 puntos, pero la insignia no se otorga. A la hora indicada, quien ya había superado un capítulo la recibe al abrir sus retos.</p>
+          <p className="text-[10px] text-slate-600">Antes de esa hora los capítulos siguen desbloqueándose con 50 puntos, pero la insignia no se otorga. A la hora indicada, quien ya había superado un capítulo la recibe al abrir sus retos.</p>
         </div>
       )}
 

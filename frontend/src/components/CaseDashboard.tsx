@@ -8,7 +8,7 @@ interface Chapter { chapter: number; title: string; status: string; starts_at?: 
 interface Row { name: string; email: string; variant: string; passed: number; current: number | null; current_hints: number; best: number | null; last_activity: string | null; status: string; wall: boolean; reason?: string }
 interface Dash {
   kpis: Record<string, number>; chapters: Chapter[]; stuck: Row[]; students: Row[]; events: { t: string; who: string; what: string }[]
-  flow: { start: string; active: boolean }; server_time: string
+  flow: { start: string; active: boolean }; server_time: string; pass_score: number
 }
 const STATUS_COLOR: Record<string, string> = { draft: '#64748b', active: '#4ade80', closed: '#f87171' }
 const STATUS_LABEL: Record<string, string> = { draft: 'Borrador', active: 'Activo', closed: 'Cerrado' }
@@ -108,7 +108,7 @@ export default function CaseDashboard() {
             </div>
             {c.status !== 'draft' && (
               <div className="grid grid-cols-3 gap-3 text-[10px]">
-                {([['Trabajaron', c.worked, '#22d3ee'], ['Entregaron', c.submitted, '#facc15'], ['Superaron (≥60)', c.passed, '#4ade80']] as [string, number, string][]).map(([l, v, col]) => (
+                {([['Trabajaron', c.worked, '#22d3ee'], ['Entregaron', c.submitted, '#facc15'], [`Superaron (≥${d.pass_score})`, c.passed, '#4ade80']] as [string, number, string][]).map(([l, v, col]) => (
                   <div key={l}><div className="flex justify-between text-slate-500 mb-0.5"><span>{l}</span><span className="text-slate-300">{v}/{maxAssigned}</span></div><Bar pct={(v / maxAssigned) * 100} color={col} /></div>
                 ))}
               </div>
@@ -116,7 +116,7 @@ export default function CaseDashboard() {
             {c.submitted > 0 && (
               <div className="flex items-center gap-2 text-[9px] text-slate-600">
                 <span>Notas:</span>
-                {['0–39', '40–59', '60–79', '80–100'].map((l, i) => <span key={l} className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)', color: i >= 2 ? '#4ade80' : '#94a3b8' }}>{l}: {c.dist[i]}</span>)}
+                {['0–39', `40–${d.pass_score - 1}`, `${d.pass_score}–79`, '80–100'].map((l, i) => <span key={l} className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)', color: i >= 2 ? '#4ade80' : '#94a3b8' }}>{l}: {c.dist[i]}</span>)}
                 <span className="ml-auto">💡 {c.hints_total} pistas · {c.hint_students} estudiantes</span>
               </div>
             )}

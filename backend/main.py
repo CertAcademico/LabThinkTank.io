@@ -1649,6 +1649,22 @@ def _auto_grade(conn, sub_id: int, challenge_id: int, payload: dict) -> dict | N
             conn.execute("UPDATE submissions SET score = ?, feedback = ? WHERE id = ?",
                          (result["score"], "\n".join(lines) + "\n⚠ " + result["capped"], sub_id))
     if row["case_key"] == "aurora":
+        from db import BASE_SCORE
+        from aurora.review import has_analysis as _has_an
+        out_txt, code_txt, notes_txt = payload.get("output", ""), payload.get("code", ""), payload.get("notes", "")
+        crashed = out_txt.startswith("Error:") or "Traceback" in out_txt
+        if row["case_chapter"] == 8:
+            minimum = len(notes_txt.strip()) >= 250
+            why = "un informe propio de al menos ~250 caracteres"
+        else:
+            minimum = _has_an(code_txt) and bool(out_txt.strip()) and not crashed
+            why = "código con análisis propio, que se ejecuta sin errores e imprime resultados"
+        if minimum and result["score"] < BASE_SCORE:
+            result["score"] = BASE_SCORE
+            result["base_applied"] = f"Reconocemos tu entrega: cumpliste los requisitos mínimos ({why}). Tu nota parte de {BASE_SCORE}; suma criterios para subirla."
+            conn.execute("UPDATE submissions SET score = ?, feedback = ? WHERE id = ?",
+                         (result["score"], "\n".join(lines) + "\n✓ " + result["base_applied"], sub_id))
+    if row["case_key"] == "aurora":
         from aurora.review import review as _review
         from aurora.chapters import CHAPTER_DATASET
         data = {k: case_["datasets"][k] for k in CHAPTER_DATASET[:row["case_chapter"]] if k}
@@ -1675,11 +1691,12 @@ def _hint_payload(conn, challenge_id: int, email: str, title: str) -> dict:
     used = {r["level"] for r in conn.execute(
         "SELECT level FROM hint_usage WHERE challenge_id = ? AND user_email = ?", (challenge_id, email)).fetchall()}
     n = len(levels)
-    revealed = [{"level": i, "label": hints_mod.label_for(i, n), "text": levels[i - 1]}
+    labels = hints_mod.labels_for(title)
+    revealed = [{"level": i, "label": labels[i - 1], "text": levels[i - 1]}
                 for i in range(1, n + 1) if i in used]
     nxt = len(revealed) + 1
     return {"total": n, "revealed": revealed,
-            "next_label": hints_mod.label_for(nxt, n) if nxt <= n else None}
+            "next_label": labels[nxt - 1] if nxt <= n else None}
 
 
 @app.get("/student/challenges/{challenge_id}/hints")
@@ -2929,7 +2946,7 @@ def admin_aurora_guide(email: str = "", authorization: str = Header(None)):
         chapters.append({
             "chapter": i, "title": title, "cycle": cycle[i], "difficulty": ch["difficulty"],
             "challenge": status.get(i), "briefing": ch["description"], "objective": ch["objective"], "criteria_text": ch["criteria"],
-            "hints": hints_mod.levels_for(title), "hint_labels": [hints_mod.label_for(k, len(hints_mod.levels_for(title))) for k in range(1, len(hints_mod.levels_for(title)) + 1)], "dataset": ({"name": DATASETS[key], "rows": len(rows), "columns": list(rows[0].keys()) if rows else [], "preview": rows[:8]} if key else None),
+            "hints": hints_mod.levels_for(title), "hint_labels": hints_mod.labels_for(title), "dataset": ({"name": DATASETS[key], "rows": len(rows), "columns": list(rows[0].keys()) if rows else [], "preview": rows[:8]} if key else None),
             "rubric": [{"label": r[0], "weight": r[1], "hint": r[3], "expected": exp[j] if j < len(exp) else ""} for j, r in enumerate(rub)],
             "reference_code": sol.reference_note(f) if i == 8 else sol.REFERENCE_CODE.get(i, ""),
         })
@@ -2964,8 +2981,8 @@ def admin_aurora_progress(authorization: str = Header(None)):
             per.append({"chapter": c["case_chapter"], "score": sb["score"] if sb else None, "submitted_at": sb["submitted_at"] if sb else None,
                         "hints_used": hints.get((u["email"], c["id"]), 0)})
         rows.append({"name": u["name"], "email": u["email"], "variant": case_code(u["email"]), "chapters": per, "wall": u["email"] in wall,
-                     "passed": sum(1 for p in per if p["score"] is not None and p["score"] >= 60)})
-    return {"chapters": [{"chapter": c["case_chapter"], "title": c["title"], "status": c["status"], "starts_at": c["starts_at"], "deadline": c["deadline"]} for c in chs], "students": rows}
+                     "passed": sum(1 for p in per if p["score"] is not None and p["score"] >= _PASS())})
+    return {"pass_score": _PASS(), "chapters": [{"chapter": c["case_chapter"], "title": c["title"], "status": c["status"], "starts_at": c["starts_at"], "deadline": c["deadline"]} for c in chs], "students": rows}
 
 
 # ── Mis datasets: biblioteca personal del estudiante, disponible en todos los capítulos ──
@@ -3120,7 +3137,7 @@ def student_case_board(authorization: str = Header(None)):
     case = build_case(email)
     keys = [k for k in CHAPTER_DATASET[:unlocked] if k]
     data = {DATASETS[k]: case["datasets"][k] for k in keys}
-    return {"variant": case["code"], "chapters": chapters,
+    return {"variant": case["code"], "pass_score": _PASS(), "chapters": chapters,
             "datasets": [{"name": n, **profile(v)} for n, v in data.items()], "relations": relations(data)}
 
 
@@ -3152,6 +3169,11 @@ def student_review(challenge_id: int, authorization: str = Header(None)):
     with get_conn() as conn:
         r = conn.execute("SELECT review_json FROM submissions WHERE challenge_id = ? AND user_email = ?", (challenge_id, user["email"])).fetchone()
     return json.loads(r["review_json"]) if r and r["review_json"] else None
+
+
+def _PASS() -> int:
+    from db import PATH_PASS_SCORE
+    return PATH_PASS_SCORE
 
 
 @app.get("/admin/case/aurora/dashboard")
@@ -3186,9 +3208,9 @@ def admin_aurora_dashboard(authorization: str = Header(None)):
         chapters.append({
             "chapter": c["case_chapter"], "title": c["title"], "status": c["status"], "starts_at": c["starts_at"], "deadline": c["deadline"],
             "assigned": len(students), "worked": len({x["user_email"] for x in cs} | {h["user_email"] for h in ch_hints}),
-            "submitted": len({x["user_email"] for x in cs}), "passed": len({x["user_email"] for x in cs if (x["score"] or 0) >= 60}),
+            "submitted": len({x["user_email"] for x in cs}), "passed": len({x["user_email"] for x in cs if (x["score"] or 0) >= _PASS()}),
             "avg_score": round(sum(scores) / len(scores)) if scores else None,
-            "dist": [sum(1 for v in scores if 0 <= v < 40), sum(1 for v in scores if 40 <= v < 60), sum(1 for v in scores if 60 <= v < 80), sum(1 for v in scores if v >= 80)],
+            "dist": [sum(1 for v in scores if 0 <= v < 40), sum(1 for v in scores if 40 <= v < _PASS()), sum(1 for v in scores if _PASS() <= v < 80), sum(1 for v in scores if v >= 80)],
             "hint_students": len({h["user_email"] for h in ch_hints}), "hints_total": len(ch_hints),
         })
     active_ids = {c["id"]: c for c in chs if c["status"] == "active"}
@@ -3196,7 +3218,7 @@ def admin_aurora_dashboard(authorization: str = Header(None)):
     stuck, rows = [], []
     for email, name in students.items():
         my = [x for x in subs if x["user_email"] == email]
-        passed_ids = {x["challenge_id"] for x in my if (x["score"] or 0) >= 60}
+        passed_ids = {x["challenge_id"] for x in my if (x["score"] or 0) >= _PASS()}
         last = max([x["submitted_at"] for x in my if x["submitted_at"]] + [h["used_at"] for h in hints if h["user_email"] == email and h["used_at"]] + [""]) or None
         open_chs = [c for c in chs if c["id"] in active_ids and c["id"] not in passed_ids]
         cur = open_chs[0] if open_chs else None
@@ -3206,8 +3228,8 @@ def admin_aurora_dashboard(authorization: str = Header(None)):
         reason = None
         if cur and not has_sub and n_hints >= 3:
             reason = f"Usó {n_hints} pistas en el capítulo {cur['case_chapter']} y no ha entregado"
-        elif cur and has_sub and best < 60:
-            reason = f"Entregó el capítulo {cur['case_chapter']} pero no supera 60 (mejor nota {best})"
+        elif cur and has_sub and best < _PASS():
+            reason = f"Entregó el capítulo {cur['case_chapter']} pero no supera {_PASS()} (mejor nota {best})"
         elif cur and not has_sub and not my and not any(h["user_email"] == email for h in hints):
             reason = "Aún no ha empezado"
         status = "sin_empezar" if not my and not any(h["user_email"] == email for h in hints) else ("completo" if not open_chs else "en_curso")
@@ -3227,7 +3249,7 @@ def admin_aurora_dashboard(authorization: str = Header(None)):
         "kpis": {"students": len(students), "working": sum(1 for r in rows if r["status"] != "sin_empezar"), "not_started": sum(1 for r in rows if r["status"] == "sin_empezar"),
                  "submissions": len(subs), "passed_any": sum(1 for r in rows if r["passed"] > 0), "completed": sum(1 for r in rows if r["status"] == "completo" and r["passed"] > 0),
                  "badges": len(badges), "wall": len(wall), "hints": len(hints)},
-        "chapters": chapters, "stuck": stuck, "students": sorted(rows, key=lambda r: (-r["passed"], r["name"])), "events": events[:12], "flow": flow,
+        "pass_score": _PASS(), "chapters": chapters, "stuck": stuck, "students": sorted(rows, key=lambda r: (-r["passed"], r["name"])), "events": events[:12], "flow": flow,
         "server_time": datetime.utcnow().isoformat() + "Z",
     }
 
@@ -3274,6 +3296,33 @@ def admin_set_path_open(payload: dict = Body(...), authorization: str = Header(N
     with get_conn() as conn:
         conn.execute("INSERT INTO app_settings (key, value) VALUES ('path_open_up_to', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (str(n),))
     return {"ok": True, "open_up_to": n}
+
+
+@app.post("/admin/case/aurora/regrade")
+def admin_aurora_regrade(authorization: str = Header(None)):
+    """Vuelve a calificar las entregas automáticas del caso con las reglas actuales (umbral y piso). No toca las notas puestas a mano."""
+    _require_admin(authorization)
+    changes = []
+    with get_conn() as conn:
+        rows = conn.execute("""SELECT s.id, s.challenge_id, s.user_email, s.code, s.output, s.notes, s.plots_json, s.score, s.auto_graded, u.name, c.case_chapter
+                               FROM submissions s JOIN challenges c ON c.id = s.challenge_id JOIN users u ON u.email = s.user_email
+                               WHERE c.case_key = 'aurora'""").fetchall()
+        for r in rows:
+            if r["score"] is not None and not r["auto_graded"]:
+                changes.append({"name": r["name"], "chapter": r["case_chapter"], "before": r["score"], "after": r["score"], "kept": "nota del docente"})
+                continue
+            try:
+                plots = json.loads(r["plots_json"] or "[]")
+            except Exception:
+                plots = []
+            res = _auto_grade(conn, r["id"], r["challenge_id"], {"code": r["code"], "output": r["output"], "notes": r["notes"], "plots": plots})
+            after = conn.execute("SELECT score FROM submissions WHERE id = ?", (r["id"],)).fetchone()["score"]
+            changes.append({"name": r["name"], "chapter": r["case_chapter"], "before": r["score"], "after": after,
+                            "badge": (res or {}).get("badge", {}).get("name") if res else None})
+        from db import sync_chapter_badges
+        for email in {r["user_email"] for r in rows}:
+            sync_chapter_badges(conn, email)
+    return {"ok": True, "pass_score": _PASS(), "changes": changes}
 
 
 # ── Admin: Multi-dataset for challenges ──────────────────────────────────────

@@ -9,7 +9,7 @@ interface Col { name: string; kind: 'num' | 'time' | 'text'; nulls: number; dist
 interface Ds { name: string; rows: number; duplicates: number; columns: Col[] }
 interface Rel { a: string; col_a: string; b: string; col_b: string; shared: number; how: string }
 interface Chap { badge?: { name: string; tier: string; earned: boolean } | null; chapter: number; title: string; status: string; locked: boolean; locked_by?: string | null; score: number | null; hints_used: number; deadline?: string | null; checks: string[] }
-interface Board { variant: string; chapters: Chap[]; datasets: Ds[]; relations: Rel[] }
+interface Board { pass_score?: number; variant: string; chapters: Chap[]; datasets: Ds[]; relations: Rel[] }
 
 function Bars({ data, color }: { data: { label: string; n: number }[]; color: string }) {
   const max = Math.max(...data.map(d => d.n), 1)
@@ -40,7 +40,7 @@ export default function StudentBoard() {
 
   if (err) return <p className="text-xs text-red-400">{err}</p>
   if (!board) return <p className="text-xs text-slate-600">Cargando tu tablero…</p>
-  const done = board.chapters.filter(c => c.score != null && c.score >= 60).length
+  const done = board.chapters.filter(c => c.score != null && c.score >= (board.pass_score ?? 50)).length
 
   return (
     <div className="space-y-5 max-w-5xl">
@@ -79,12 +79,12 @@ export default function StudentBoard() {
                   {c.deadline && !c.locked && <span className="text-[9px] text-slate-600">cierra {fmtDate(c.deadline)}</span>}
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded min-w-12 text-center"
                         style={c.locked ? { color: '#475569', background: 'rgba(255,255,255,0.03)' } : c.score == null ? { color: '#94a3b8', background: 'rgba(255,255,255,0.05)' }
-                          : c.score >= 60 ? { color: '#4ade80', background: 'rgba(74,222,128,0.12)' } : { color: '#facc15', background: 'rgba(250,204,21,0.1)' }}>
+                          : c.score >= (board.pass_score ?? 50) ? { color: '#4ade80', background: 'rgba(74,222,128,0.12)' } : { color: '#facc15', background: 'rgba(250,204,21,0.1)' }}>
                     {c.locked ? 'bloqueado' : c.score == null ? 'sin entrega' : `${c.score}/100`}
                   </span>
                 </summary>
                 <div className="px-3 pb-3 space-y-1">
-                  {c.locked && <p className="text-[10px] text-slate-500">Se desbloquea al sacar 60 o más en «{c.locked_by}».</p>}
+                  {c.locked && <p className="text-[10px] text-slate-500">Se desbloquea al sacar {board.pass_score ?? 50} o más en «{c.locked_by}».</p>}
                   {!c.locked && c.score != null && c.checks.map((l, i) => (
                     <p key={i} className="text-[11px]" style={{ color: l.startsWith('✓') ? '#4ade80' : l.startsWith('◐') ? '#facc15' : '#94a3b8' }}>{l}</p>
                   ))}

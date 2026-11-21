@@ -7,7 +7,7 @@ const inputStyle = { background: 'rgba(255,255,255,0.04)', border: '1px solid rg
 
 interface ProgressChapter { chapter: number; title: string; status: string; starts_at?: string | null; deadline?: string | null }
 interface ProgressStudent { name: string; email: string; variant: string; wall: boolean; passed: number; chapters: { chapter: number; score: number | null; submitted_at: string | null; hints_used: number }[] }
-interface Progress { chapters: ProgressChapter[]; students: ProgressStudent[] }
+interface Progress { pass_score?: number; chapters: ProgressChapter[]; students: ProgressStudent[] }
 interface GuideChapter {
   chapter: number; title: string; cycle: string; difficulty: string; briefing: string; objective: string; criteria_text: string; hints: string[]; hint_labels?: string[]
   challenge?: { status: string } | null
@@ -48,11 +48,12 @@ export default function CaseGuide() {
   }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view === 'guia') loadGuide(who) }, [view, who, loadGuide])
 
+  const pass = prog?.pass_score ?? 50
   const chip = (score: number | null, hints: number) => (
     <div className="flex items-center justify-center gap-1">
       <span className="text-[11px] font-bold px-2 py-0.5 rounded min-w-9 text-center"
             style={score == null ? { color: '#475569', background: 'rgba(255,255,255,0.03)' }
-              : score >= 60 ? { color: '#4ade80', background: 'rgba(74,222,128,0.12)' } : { color: '#facc15', background: 'rgba(250,204,21,0.1)' }}>{score ?? '—'}</span>
+              : score >= pass ? { color: '#4ade80', background: 'rgba(74,222,128,0.12)' } : { color: '#facc15', background: 'rgba(250,204,21,0.1)' }}>{score ?? '—'}</span>
       {hints > 0 && <span title={`${hints} pista(s) pedidas`} className="text-[9px] text-yellow-600">💡{hints}</span>}
     </div>
   )
@@ -105,7 +106,7 @@ export default function CaseGuide() {
               </tbody>
             </table>
           )}
-          <p className="px-4 py-2 text-[9px] text-slate-700 border-t border-white/5">Verde = 60 o más (supera el capítulo) · 💡 = pistas pedidas · Clic en un estudiante para ver la guía con su variante · se actualiza cada 15 s</p>
+          <p className="px-4 py-2 text-[9px] text-slate-700 border-t border-white/5">Verde = {pass} o más (supera el capítulo) · 💡 = pistas pedidas · Clic en un estudiante para ver la guía con su variante · se actualiza cada 15 s</p>
         </div>
       )}
 
@@ -166,7 +167,7 @@ export default function CaseGuide() {
                           {c.hints.map((h, i) => (
                             <div key={i} className="rounded-lg p-3" style={{ background: 'rgba(250,204,21,0.04)', border: '1px solid rgba(250,204,21,0.12)' }}>
                               <p className="text-[9px] font-bold text-yellow-600 uppercase tracking-wider mb-1">{i + 1} · {c.hint_labels?.[i] ?? `Pista ${i + 1}`}</p>
-                              {c.hint_labels?.[i] === 'Esqueleto de código' ? <pre className="text-[11px] text-green-300 whitespace-pre-wrap font-mono">{h}</pre> : <p className="text-[11px] text-slate-300">{h}</p>}
+                              {['Esqueleto de código', 'Solución de referencia', 'Plantilla de informe', 'Lo mínimo para pasar'].includes(c.hint_labels?.[i] ?? '') ? <pre className="text-[11px] text-green-300 whitespace-pre-wrap font-mono">{h}</pre> : <p className="text-[11px] text-slate-300">{h}</p>}
                             </div>
                           ))}
                         </Section>

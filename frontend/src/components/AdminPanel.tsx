@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import IntelWall from './IntelWall'
 import { useAuth } from '../contexts/AuthContext'
 import { BadgeCard, TIER, type Badge } from './BadgeCard'
 
@@ -39,7 +40,7 @@ interface Stats {
   recent_submissions: { user_name: string; challenge: string; submitted_at: string; score?: number }[]
 }
 
-type Tab = 'dashboard' | 'users' | 'teams' | 'badges' | 'progreso' | 'fases' | 'datasets' | 'retos' | 'submissions' | 'fuentes'
+type Tab = 'dashboard' | 'users' | 'teams' | 'badges' | 'progreso' | 'fases' | 'datasets' | 'retos' | 'submissions' | 'fuentes' | 'muro'
 
 interface CtfPhase {
   id: number; order_idx: number; name: string; category: string
@@ -2553,6 +2554,7 @@ const TABS: { id: Tab; label: string; icon: string; badge?: number }[] = [
   { id: 'fases',       label: 'Fases CTF',  icon: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z' },
   { id: 'datasets',    label: 'Datasets',   icon: 'M4 7h16M4 12h16M4 17h16' },
   { id: 'retos',       label: 'Retos',      icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' },
+  { id: 'muro',        label: 'Muro',       icon: 'M4 5h16v14H4zM4 10h16M10 10v9' },
   { id: 'submissions', label: 'Entregas',   icon: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2' },
 ]
 
@@ -2695,6 +2697,7 @@ export default function AdminPanel({ onExitAdmin }: { onExitAdmin: () => void })
           {tab === 'datasets'    && <DatasetsTab    datasets={datasets} token={tk} onRefresh={fetchAll} />}
           {tab === 'fuentes'     && <FuentesTab     token={tk} />}
           {tab === 'retos'       && <RetosTab       challenges={challenges} datasets={datasets} users={users} allBadges={allBadges} token={tk} onRefresh={fetchAll} />}
+          {tab === 'muro'        && <IntelWall />}
           {tab === 'submissions' && <SubmissionsTab token={tk} challenges={challenges} />}
         </main>
       </div>

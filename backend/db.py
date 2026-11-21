@@ -308,6 +308,22 @@ def _migrate(conn) -> None:
             granted_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS intel_reports (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_email      TEXT NOT NULL UNIQUE,
+            user_name       TEXT NOT NULL DEFAULT '',
+            title           TEXT NOT NULL DEFAULT '',
+            summary         TEXT NOT NULL DEFAULT '',
+            evidence        TEXT NOT NULL DEFAULT '',
+            confidence      TEXT NOT NULL DEFAULT 'media',
+            recommendations TEXT NOT NULL DEFAULT '',
+            pinned          INTEGER NOT NULL DEFAULT 0,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')")
     sc = {r[1] for r in conn.execute("PRAGMA table_info(submissions)").fetchall()}
     if "auto_graded" not in sc:
         conn.execute("ALTER TABLE submissions ADD COLUMN auto_graded INTEGER NOT NULL DEFAULT 0")

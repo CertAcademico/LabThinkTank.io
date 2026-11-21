@@ -17,8 +17,9 @@ const ChallengeArena  = lazy(() => import('./components/ChallengeArena'))
 const CTIToolkit      = lazy(() => import('./components/CTIToolkit'))
 const LogIngest       = lazy(() => import('./components/LogIngest'))
 const FusionEngine    = lazy(() => import('./components/FusionEngine'))
+const IntelWall       = lazy(() => import('./components/IntelWall'))
 
-type ViewId = 'overview' | 'graph' | 'copilot' | 'attack' | 'timeline' | 'ioc' | 'feeds' | 'toolkit' | 'sandbox' | 'retos' | 'logs' | 'fusion'
+type ViewId = 'overview' | 'graph' | 'copilot' | 'attack' | 'timeline' | 'ioc' | 'feeds' | 'toolkit' | 'sandbox' | 'retos' | 'logs' | 'fusion' | 'wall'
 
 const NAV: { id: ViewId; label: string; tag?: string; icon: string; group?: string }[] = [
   { id: 'overview',  label: 'Threat Overview',  icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',                                                         group: 'Plataforma' },
@@ -31,6 +32,7 @@ const NAV: { id: ViewId; label: string; tag?: string; icon: string; group?: stri
   { id: 'toolkit',   label: 'CTI Toolkit',      icon: 'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.7-3.7a6 6 0 0 1-7.7 7.7l-6.4 6.4a2.1 2.1 0 0 1-3-3l6.4-6.4a6 6 0 0 1 7.7-7.7z', tag: 'CTI', group: 'Plataforma' },
   { id: 'sandbox',   label: 'Sandbox Lab',      icon: 'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3', tag: 'LAB', group: 'Educación' },
   { id: 'retos',     label: 'Mis Retos',        icon: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4', tag: 'RETO', group: 'Educación' },
+  { id: 'wall',      label: 'Muro de Inteligencia', icon: 'M4 5h16v14H4zM4 10h16M10 10v9', tag: 'NUEVO', group: 'Educación' },
   { id: 'logs',      label: 'Log Ingest',       icon: 'M4 7h16M4 12h16M4 17h10', tag: 'LIVE', group: 'Ingesta' },
   { id: 'fusion',    label: 'Motor de Fusión',  icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', tag: 'RC', group: 'Ingesta' },
 ]
@@ -127,6 +129,7 @@ function Shell() {
       case 'retos':     return <ChallengeArena />
       case 'logs':      return <LogIngest />
       case 'fusion':    return <FusionEngine />
+      case 'wall':      return <IntelWall />
     }
   }
 

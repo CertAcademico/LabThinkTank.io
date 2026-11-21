@@ -2671,6 +2671,94 @@ def admin_delete_announcement(ann_id: int, authorization: str = Header(None)):
     return {"ok": True}
 
 
+# ── Muro de resultados de inteligencia ────────────────────────────────────────
+# Cada estudiante redacta su reporte final. Mientras el admin no abra el muro,
+# cada quien ve solo el suyo (evita copiar); al abrirlo, todos ven todos.
+
+def _wall_open(conn) -> bool:
+    r = conn.execute("SELECT value FROM app_settings WHERE key = 'intel_wall_open'").fetchone()
+    return bool(r and r["value"] == "1")
+
+
+_WALL_LIMITS = {"title": 140, "summary": 1500, "evidence": 3000, "recommendations": 2000}
+
+
+@app.get("/intel-wall")
+def intel_wall(authorization: str = Header(None)):
+    user = _require_user(authorization)
+    admin = user.get("role") == "admin"
+    with get_conn() as conn:
+        is_open = _wall_open(conn)
+        rows = conn.execute("""SELECT id, user_email, user_name, title, summary, evidence, confidence,
+                                      recommendations, pinned, updated_at FROM intel_reports
+                               ORDER BY pinned DESC, updated_at DESC""").fetchall()
+    reports = [dict(r) for r in rows]
+    mine = next((r for r in reports if r["user_email"] == user["email"]), None)
+    visible = reports if (is_open or admin) else ([mine] if mine else [])
+    return {"open": is_open, "mine": mine, "reports": visible, "total": len(reports)}
+
+
+@app.put("/intel-wall/mine")
+def intel_wall_save(payload: dict = Body(...), authorization: str = Header(None)):
+    user = _require_user(authorization)
+    vals = {k: str(payload.get(k, "")).strip()[:n] for k, n in _WALL_LIMITS.items()}
+    conf = payload.get("confidence", "media")
+    conf = conf if conf in ("baja", "media", "alta") else "media"
+    if not vals["title"] or not vals["summary"]:
+        raise HTTPException(status_code=400, detail="El título y el resumen son obligatorios")
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO intel_reports (user_email, user_name, title, summary, evidence, confidence, recommendations)
+            VALUES (?,?,?,?,?,?,?)
+            ON CONFLICT(user_email) DO UPDATE SET user_name=excluded.user_name, title=excluded.title,
+              summary=excluded.summary, evidence=excluded.evidence, confidence=excluded.confidence,
+              recommendations=excluded.recommendations, updated_at=datetime('now')""",
+            (user["email"], user.get("name", ""), vals["title"], vals["summary"], vals["evidence"], conf, vals["recommendations"]))
+    return {"ok": True}
+
+
+@app.post("/admin/intel-wall/open")
+def admin_intel_wall_open(payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute("INSERT INTO app_settings (key, value) VALUES ('intel_wall_open', ?) "
+                     "ON CONFLICT(key) DO UPDATE SET value = excluded.value", ("1" if payload.get("open") else "0",))
+    return {"ok": True, "open": bool(payload.get("open"))}
+
+
+@app.patch("/admin/intel-wall/{report_id}/pin")
+def admin_intel_wall_pin(report_id: int, payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute("UPDATE intel_reports SET pinned = ? WHERE id = ?", (1 if payload.get("pinned") else 0, report_id))
+    return {"ok": True}
+
+
+@app.delete("/admin/intel-wall/{report_id}")
+def admin_intel_wall_delete(report_id: int, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute("DELETE FROM intel_reports WHERE id = ?", (report_id,))
+    return {"ok": True}
+
+
+@app.get("/admin/intel-wall/export")
+def admin_intel_wall_export(authorization: str = Header(None)):
+    """CSV de todos los reportes (para el diálogo y para evidencia de la clase)."""
+    _require_admin(authorization)
+    with get_conn() as conn:
+        rows = conn.execute("""SELECT user_name, user_email, title, summary, evidence, confidence, recommendations, updated_at
+                               FROM intel_reports ORDER BY user_name""").fetchall()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["estudiante", "email", "titulo", "resumen", "evidencia", "confianza", "recomendaciones", "actualizado"])
+    for r in rows:
+        w.writerow([r[k] for k in r.keys()])
+    from fastapi.responses import Response
+    return Response(buf.getvalue(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": "attachment; filename=muro_inteligencia.csv"})
+
+
 # ── Admin: Multi-dataset for challenges ──────────────────────────────────────
 
 @app.get("/admin/challenges/{challenge_id}/datasets")

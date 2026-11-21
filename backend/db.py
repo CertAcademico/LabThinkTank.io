@@ -1478,10 +1478,11 @@ from aurora.chapters import PATH_TITLES as INDIVIDUAL_PATH
 PATH_PASS_SCORE = 60
 
 
-def _path_challenges(conn) -> list:
+def _path_challenges(conn, only_active: bool = True) -> list:
     out = []
     for t in INDIVIDUAL_PATH:
-        r = conn.execute("SELECT id, title FROM challenges WHERE title = ? AND status = 'active'", (t,)).fetchone()
+        q = "SELECT id, title FROM challenges WHERE title = ?" + (" AND status = 'active'" if only_active else "")
+        r = conn.execute(q, (t,)).fetchone()
         if r:
             out.append(r)
     return out
@@ -1490,8 +1491,13 @@ def _path_challenges(conn) -> list:
 def enroll_individual_path(conn, email: str) -> int:
     """Marca al usuario como nuevo en la ruta y le asigna sus retos individuales."""
     conn.execute("UPDATE users SET onboarding_path = 1 WHERE email = ?", (email,))
+    return ensure_path_assignments(conn, email)
+
+
+def ensure_path_assignments(conn, email: str) -> int:
+    """Asigna TODOS los capítulos de la ruta (también los aún en borrador): el admin decide cuándo se activan."""
     n = 0
-    for ch in _path_challenges(conn):
+    for ch in _path_challenges(conn, only_active=False):
         n += conn.execute("INSERT OR IGNORE INTO challenge_assignments (challenge_id, user_email) VALUES (?,?)",
                           (ch["id"], email)).rowcount
     return n
@@ -1533,7 +1539,7 @@ def seed_aurora_challenges(conn) -> int:
                 """INSERT INTO challenges (title, description, objective, dataset_id, criteria, status, min_score_badge, difficulty,
                                            created_by, stage, hints_json, case_key, case_chapter)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (title, ch["description"], ch["objective"], None, ch["criteria"], "active", 70, ch["difficulty"],
+                (title, ch["description"], ch["objective"], None, ch["criteria"], "draft", 70, ch["difficulty"],
                  "system@cti-lab-aurora", "caso-aurora", "[]", "aurora", i))
             n += 1
     return n

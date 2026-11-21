@@ -1077,7 +1077,7 @@ def admin_challenges(authorization: str = Header(None)):
     with get_conn() as conn:
         rows = conn.execute("""
             SELECT c.id, c.title, c.description, c.objective, c.criteria, c.hints_json,
-                   c.deadline, c.status, c.created_at,
+                   c.deadline, c.starts_at, c.status, c.created_at, c.stage, c.case_key, c.case_chapter,
                    c.badge_id, c.min_score_badge, c.difficulty,
                    d.name AS dataset_name,
                    b.name AS badge_name, b.org AS badge_org, b.tier AS badge_tier, b.icon AS badge_icon,
@@ -1089,6 +1089,35 @@ def admin_challenges(authorization: str = Header(None)):
             ORDER BY c.created_at DESC
         """).fetchall()
     return [dict(r) for r in rows]
+
+
+@app.get("/admin/challenges/{challenge_id}/solution")
+def admin_challenge_solution(challenge_id: int, email: str = "", authorization: str = Header(None)):
+    """Rúbrica con la respuesta esperada y código de referencia. Para casos con datos por estudiante, usa su variante."""
+    admin = _require_admin(authorization)
+    with get_conn() as conn:
+        ch = conn.execute("""SELECT c.title, c.case_key, c.case_chapter, d.data_json FROM challenges c
+                             LEFT JOIN datasets d ON d.id = c.dataset_id WHERE c.id = ?""", (challenge_id,)).fetchone()
+    if not ch:
+        raise HTTPException(status_code=404)
+    from aurora import solutions as sol
+    if ch["case_key"] == "aurora":
+        from aurora.generator import build_case
+        from aurora.chapters import rubric as aurora_rubric
+        who = (email or admin["email"]).strip().lower()
+        case = build_case(who)
+        rub = aurora_rubric(ch["case_chapter"], case["facts"], {"has_wall_report": True})
+        exp = sol.expected(ch["case_chapter"], case["facts"])
+        code = sol.REFERENCE_CODE.get(ch["case_chapter"], "")
+        if ch["case_chapter"] == 7:
+            code = sol.reference_note(case["facts"])
+        return {"title": ch["title"], "variant": case["code"], "variant_email": who, "reference_code": code,
+                "criteria": [{"label": r[0], "weight": r[1], "hint": r[3], "expected": exp[i] if i < len(exp) else ""} for i, r in enumerate(rub)]}
+    rub = grading.rubric_for(ch["title"]) or []
+    rows = grading.rows_of(ch["data_json"])
+    exp = sol.practice_expected(ch["title"], rows)
+    return {"title": ch["title"], "variant": None, "variant_email": None, "reference_code": sol.PRACTICE_CODE.get(ch["title"], ""),
+            "criteria": [{"label": r[0], "weight": r[1], "hint": r[3], "expected": exp[i] if i < len(exp) else "Se calcula sobre el dataset del reto"} for i, r in enumerate(rub)]}
 
 
 @app.post("/admin/challenges")
@@ -1117,11 +1146,16 @@ def admin_create_challenge(payload: dict = Body(...), authorization: str = Heade
 @app.patch("/admin/challenges/{challenge_id}")
 def admin_update_challenge(challenge_id: int, payload: dict = Body(...), authorization: str = Header(None)):
     _require_admin(authorization)
-    updatable = ["status", "title", "description", "objective", "criteria", "hints_json", "deadline", "difficulty"]
+    updatable = ["status", "title", "description", "objective", "criteria", "hints_json", "deadline", "difficulty", "starts_at"]
+    if payload.get("status") not in (None, "draft", "active", "closed"):
+        raise HTTPException(status_code=400, detail="status debe ser draft, active o closed")
     with get_conn() as conn:
         for field in updatable:
             if field in payload:
-                conn.execute(f"UPDATE challenges SET {field} = ? WHERE id = ?", (payload[field], challenge_id))
+                val = payload[field]
+                if field in ("starts_at", "deadline") and not val:
+                    val = None
+                conn.execute(f"UPDATE challenges SET {field} = ? WHERE id = ?", (val, challenge_id))
         if "badge_id" in payload:
             conn.execute("UPDATE challenges SET badge_id = ? WHERE id = ?", (payload["badge_id"] or None, challenge_id))
         if "min_score_badge" in payload:
@@ -1402,6 +1436,11 @@ def admin_stats(authorization: str = Header(None)):
 @app.get("/student/challenges")
 def student_challenges(authorization: str = Header(None)):
     user = _require_user(authorization)
+    with get_conn() as conn:                       # cuentas nuevas: asegurar los capítulos de la ruta antes de listar
+        flag = conn.execute("SELECT onboarding_path FROM users WHERE email = ?", (user["email"],)).fetchone()
+        if flag and flag["onboarding_path"]:
+            from db import ensure_path_assignments
+            ensure_path_assignments(conn, user["email"])
     with get_conn() as conn:
         rows = conn.execute("""
             SELECT c.id, c.title, c.description, c.objective, c.criteria, c.hints_json,
@@ -1421,11 +1460,12 @@ def student_challenges(authorization: str = Header(None)):
             JOIN challenge_assignments ca ON c.id = ca.challenge_id
             LEFT JOIN datasets d ON c.dataset_id = d.id
             LEFT JOIN badges b ON c.badge_id = b.id
-            WHERE ca.user_email = ?
+            WHERE ca.user_email = ? AND c.status != 'draft'
             ORDER BY c.created_at DESC
         """, (user["email"], user["email"], user["email"], user["email"])).fetchall()
         from db import path_status, PATH_PASS_SCORE
         pstat = path_status(conn, user["email"])
+
     out = []
     for r in rows:
         if not _is_started(r["starts_at"]):
@@ -1625,6 +1665,9 @@ def admin_hint_usage(authorization: str = Header(None)):
 
 def _has_challenge_access(conn, challenge_id: int, user_email: str):
     from db import path_status
+    st0 = conn.execute("SELECT status FROM challenges WHERE id = ?", (challenge_id,)).fetchone()
+    if st0 and st0["status"] == "draft":
+        return None                           # borrador: solo el admin decide cuándo se activa
     st = path_status(conn, user_email).get(challenge_id)
     if st and st["locked"]:
         return None
@@ -2343,7 +2386,7 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _parse_dt(v: str | None) -> datetime | None:
+def _parse_iso(v: str | None) -> datetime | None:
     if not v:
         return None
     try:
@@ -2356,7 +2399,7 @@ def _parse_dt(v: str | None) -> datetime | None:
 def _apply_phase_schedule(conn) -> None:
     """Activa fases cuya fecha opens_at ya pasó."""
     for r in conn.execute("SELECT id, opens_at FROM ctf_phases WHERE status = 'inactive' AND opens_at IS NOT NULL").fetchall():
-        d = _parse_dt(r["opens_at"])
+        d = _parse_iso(r["opens_at"])
         if d and d <= _now_utc():
             conn.execute("UPDATE ctf_phases SET status = 'active' WHERE id = ?", (r["id"],))
 
@@ -2678,7 +2721,7 @@ def student_announcements(authorization: str = Header(None)):
     with get_conn() as conn:
         rows = conn.execute("SELECT id, title, body, publish_at, expires_at FROM announcements ORDER BY publish_at DESC").fetchall()
     return [dict(r) for r in rows
-            if (_parse_dt(r["publish_at"]) or now) <= now and (not r["expires_at"] or (_parse_dt(r["expires_at"]) or now) > now)]
+            if (_parse_iso(r["publish_at"]) or now) <= now and (not r["expires_at"] or (_parse_iso(r["expires_at"]) or now) > now)]
 
 
 @app.get("/admin/announcements")
@@ -2691,7 +2734,7 @@ def admin_announcements(authorization: str = Header(None)):
 @app.post("/admin/announcements")
 def admin_create_announcement(payload: dict = Body(...), authorization: str = Header(None)):
     admin = _require_admin(authorization)
-    if not payload.get("title") or not payload.get("body") or not _parse_dt(payload.get("publish_at")):
+    if not payload.get("title") or not payload.get("body") or not _parse_iso(payload.get("publish_at")):
         raise HTTPException(status_code=400, detail="title, body y publish_at (ISO 8601 con zona) requeridos")
     with get_conn() as conn:
         cur = conn.execute("INSERT INTO announcements (title, body, publish_at, expires_at, created_by) VALUES (?,?,?,?,?)",

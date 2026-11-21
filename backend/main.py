@@ -1258,41 +1258,60 @@ def admin_submissions(challenge_id: int = None, authorization: str = Header(None
                 FROM submissions s JOIN challenges c ON s.challenge_id = c.id
                 ORDER BY s.submitted_at DESC
             """).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["auto_feedback"], d["teacher_note"] = _split_feedback(d.get("feedback"), d.get("auto_graded", 0))
+        out.append(d)
+    return out
+
+
+_NOTE_MARK = "\n\n✉ Docente: "
+
+
+def _split_feedback(feedback: str | None, auto_graded: int) -> tuple[str, str]:
+    """(parte automática, nota del docente). Las notas manuales antiguas, sin marca, son enteramente del docente."""
+    fb = feedback or ""
+    if _NOTE_MARK in fb:
+        a, n = fb.split(_NOTE_MARK, 1)
+        return a, n
+    return ("", fb) if not auto_graded and fb else (fb, "")
 
 
 @app.put("/admin/submissions/{submission_id}/score")
 def admin_score(submission_id: int, payload: dict = Body(...), authorization: str = Header(None)):
+    """Ajusta la nota y/o la retroalimentación del docente. Cada campo es opcional: lo que no se envía no se toca.
+    La retroalimentación automática se conserva; la del docente se guarda aparte y se muestra al estudiante."""
     admin = _require_admin(authorization)
-    score = payload.get("score")
-    feedback = payload.get("feedback", "")
     badge_awarded = None
     with get_conn() as conn:
-        conn.execute(
-            "UPDATE submissions SET score = ?, feedback = ?, auto_graded = 0 WHERE id = ?",
-            (score, feedback, submission_id),
-        )
-        if score is not None:
-            sub = conn.execute(
-                "SELECT user_email, challenge_id FROM submissions WHERE id = ?", (submission_id,)
-            ).fetchone()
-            if sub:
-                ch = conn.execute(
-                    "SELECT badge_id, min_score_badge FROM challenges WHERE id = ?", (sub["challenge_id"],)
-                ).fetchone()
-                if ch and ch["badge_id"] and int(score) >= (ch["min_score_badge"] or 70):
-                    already = conn.execute(
-                        "SELECT 1 FROM user_badges WHERE user_email = ? AND badge_id = ?",
-                        (sub["user_email"], ch["badge_id"]),
-                    ).fetchone()
-                    if not already:
-                        conn.execute(
-                            "INSERT INTO user_badges (user_email, badge_id, awarded_by) VALUES (?,?,?)",
-                            (sub["user_email"], ch["badge_id"], admin["email"]),
-                        )
-                        b = conn.execute("SELECT name, org, tier FROM badges WHERE id = ?", (ch["badge_id"],)).fetchone()
-                        badge_awarded = dict(b) if b else None
-    return {"ok": True, "badge_awarded": badge_awarded}
+        cur = conn.execute("SELECT user_email, challenge_id, score, feedback, auto_graded FROM submissions WHERE id = ?", (submission_id,)).fetchone()
+        if not cur:
+            raise HTTPException(status_code=404, detail="Entrega no encontrada")
+        new_score, score_changed = cur["score"], False
+        if payload.get("score") not in (None, ""):
+            try:
+                new_score = int(float(payload["score"]))
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="La nota debe ser un número entre 0 y 100")
+            if not 0 <= new_score <= 100:
+                raise HTTPException(status_code=400, detail="La nota debe estar entre 0 y 100")
+            score_changed = new_score != cur["score"]
+        auto_part, note = _split_feedback(cur["feedback"], cur["auto_graded"])
+        if "feedback" in payload:
+            note = str(payload.get("feedback") or "").strip()[:4000]
+        new_fb = auto_part + (_NOTE_MARK + note if note else "")
+        # Solo pasa a «calificada por el docente» si realmente cambió la nota: así un comentario no frena la autocalificación al reentregar.
+        auto_flag = 0 if score_changed else cur["auto_graded"]
+        conn.execute("UPDATE submissions SET score = ?, feedback = ?, auto_graded = ? WHERE id = ?", (new_score, new_fb, auto_flag, submission_id))
+        if new_score is not None:
+            ch = conn.execute("SELECT badge_id, min_score_badge FROM challenges WHERE id = ?", (cur["challenge_id"],)).fetchone()
+            if ch and ch["badge_id"] and new_score >= (ch["min_score_badge"] or 70):
+                if not conn.execute("SELECT 1 FROM user_badges WHERE user_email = ? AND badge_id = ?", (cur["user_email"], ch["badge_id"])).fetchone():
+                    conn.execute("INSERT INTO user_badges (user_email, badge_id, awarded_by) VALUES (?,?,?)", (cur["user_email"], ch["badge_id"], admin["email"]))
+                    b = conn.execute("SELECT name, org, tier FROM badges WHERE id = ?", (ch["badge_id"],)).fetchone()
+                    badge_awarded = dict(b) if b else None
+    return {"ok": True, "score": new_score, "teacher_note": note, "score_changed": score_changed, "badge_awarded": badge_awarded}
 
 
 # ── Admin: Seed demo data ─────────────────────────────────────────────────────
@@ -3133,12 +3152,13 @@ def student_case_board(authorization: str = Header(None)):
             SELECT c.id, c.case_chapter, c.title, c.status, c.starts_at, c.deadline,
                    (SELECT score FROM submissions s WHERE s.challenge_id = c.id AND s.user_email = ?) AS score,
                    (SELECT feedback FROM submissions s WHERE s.challenge_id = c.id AND s.user_email = ?) AS feedback,
+                   (SELECT auto_graded FROM submissions s WHERE s.challenge_id = c.id AND s.user_email = ?) AS auto_graded,
                    (SELECT COUNT(*) FROM hint_usage h WHERE h.challenge_id = c.id AND h.user_email = ?) AS hints_used,
                    b.name AS badge_name, b.tier AS badge_tier, b.icon AS badge_icon,
                    (SELECT 1 FROM user_badges ub WHERE ub.user_email = ? AND ub.badge_id = c.badge_id) AS badge_earned
             FROM challenges c JOIN challenge_assignments a ON a.challenge_id = c.id LEFT JOIN badges b ON b.id = c.badge_id
             WHERE a.user_email = ? AND c.case_key = 'aurora' AND c.status != 'draft' ORDER BY c.case_chapter""",
-            (email, email, email, email, email)).fetchall()
+            (email, email, email, email, email, email)).fetchall()
     chapters, unlocked = [], 0
     for r in rows:
         if not _is_started(r["starts_at"]):
@@ -3147,10 +3167,11 @@ def student_case_board(authorization: str = Header(None)):
         locked = bool(st and st["locked"])
         if not locked:
             unlocked = max(unlocked, r["case_chapter"])
-        lines = [l for l in (r["feedback"] or "").splitlines()[1:]] if r["score"] is not None else []
+        auto_fb, teacher_fb = _split_feedback(r["feedback"], r["auto_graded"] or 0)
+        lines = [l for l in auto_fb.splitlines()[1:]] if r["score"] is not None else []
         chapters.append({"chapter": r["case_chapter"], "title": r["title"], "status": r["status"], "locked": locked,
                          "locked_by": st["requires"] if st else None, "score": r["score"], "hints_used": r["hints_used"],
-                         "deadline": r["deadline"], "checks": lines if not locked else [],
+                         "deadline": r["deadline"], "checks": lines if not locked else [], "teacher_feedback": teacher_fb if not locked else "",
                          "badge": {"name": r["badge_name"], "tier": r["badge_tier"], "earned": bool(r["badge_earned"])} if r["badge_name"] else None})
     case = build_case(email)
     keys = [k for k in CHAPTER_DATASET[:unlocked] if k]
@@ -3186,7 +3207,11 @@ def student_review(challenge_id: int, authorization: str = Header(None)):
     user = _require_user(authorization)
     with get_conn() as conn:
         r = conn.execute("SELECT review_json FROM submissions WHERE challenge_id = ? AND user_email = ?", (challenge_id, user["email"])).fetchone()
-    return json.loads(r["review_json"]) if r and r["review_json"] else None
+    with get_conn() as conn:
+        f = conn.execute("SELECT feedback, auto_graded FROM submissions WHERE challenge_id = ? AND user_email = ?", (challenge_id, user["email"])).fetchone()
+    note = _split_feedback(f["feedback"], f["auto_graded"])[1] if f else ""
+    rv = json.loads(r["review_json"]) if r and r["review_json"] else {}
+    return {**rv, "teacher_feedback": note} if (rv or note) else None
 
 
 def _weak_by_challenge(fb_rows: list[dict]) -> dict:

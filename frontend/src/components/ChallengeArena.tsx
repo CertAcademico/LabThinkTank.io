@@ -236,7 +236,7 @@ function Arena({ challenge }: { challenge: Challenge }) {
   const [submitting, setSubmitting] = useState(false)
   const [submitted,  setSubmitted]  = useState(challenge.submitted > 0)
   const [teacherNotes, setTeacherNotes] = useState<{ id: number; challenge_id: number | null; body: string; created_at: string }[]>([])
-  const [review,     setReview]     = useState<{ steps: string[]; reported: { entity: string; kind: string; facts: string[] }[]; observations: string[]; nudges: string[]; improve?: { label: string; points: number; tip: string; partial: boolean }[]; max_gain?: number } | null>(null)
+  const [review,     setReview]     = useState<{ steps: string[]; reported: { entity: string; kind: string; facts: string[] }[]; observations: string[]; nudges: string[]; improve?: { label: string; points: number; tip: string; partial: boolean }[]; max_gain?: number; teacher_feedback?: string } | null>(null)
   const [hintData,   setHintData]   = useState<{ total: number; revealed: { level: number; label: string; text: string }[]; next_label: string | null } | null>(null)
   const [hintBusy,   setHintBusy]   = useState(false)
   const [myDs,       setMyDs]       = useState<{ name: string; var: string; filename: string; rows: number; columns: string[] }[]>([])
@@ -997,20 +997,26 @@ if not uploaded_df.empty:
             <p className="text-[9px] text-slate-700">Calificación automática provisional. Corrige lo que falta y vuelve a entregar.</p>
           </div>
         )}
-        {review && (review.steps.length > 0 || review.reported.length > 0 || review.observations.length > 0 || review.nudges.length > 0) && (
+        {review?.teacher_feedback && (
+          <div className="rounded-lg p-3 space-y-1" style={{ background: 'rgba(250,204,21,0.07)', border: '1px solid rgba(250,204,21,0.4)' }}>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">✉ Retroalimentación de tu docente</p>
+            <p className="text-xs text-slate-200 whitespace-pre-line leading-relaxed">{review.teacher_feedback}</p>
+          </div>
+        )}
+        {review && ((review.steps?.length ?? 0) > 0 || (review.reported?.length ?? 0) > 0 || (review.observations?.length ?? 0) > 0 || (review.nudges?.length ?? 0) > 0) && (
           <div className="rounded-lg p-3 space-y-3" style={{ background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.18)' }}>
             <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">🔎 Lo que revisé de tu entrega</p>
-            {review.observations.map((o, i) => <p key={i} className="text-[11px] text-red-300">⚠ {o}</p>)}
-            {review.steps.length > 0 && (
+            {(review.observations ?? []).map((o, i) => <p key={i} className="text-[11px] text-red-300">⚠ {o}</p>)}
+            {(review.steps?.length ?? 0) > 0 && (
               <div className="space-y-0.5">
                 <p className="text-[9px] uppercase tracking-wider text-slate-500">Qué hace tu código</p>
-                {review.steps.map((st, i) => <p key={i} className="text-[11px] text-slate-300"><span className="text-slate-600">{i + 1}.</span> {st}</p>)}
+                {(review.steps ?? []).map((st, i) => <p key={i} className="text-[11px] text-slate-300"><span className="text-slate-600">{i + 1}.</span> {st}</p>)}
               </div>
             )}
-            {review.reported.length > 0 && (
+            {(review.reported?.length ?? 0) > 0 && (
               <div className="space-y-1.5">
                 <p className="text-[9px] uppercase tracking-wider text-slate-500">Lo que reportaste y qué dicen TUS datos de eso</p>
-                {review.reported.map((r, i) => (
+                {(review.reported ?? []).map((r, i) => (
                   <div key={i} className="text-[11px]">
                     <p><span className="text-[9px] px-1.5 py-0.5 rounded mr-1.5" style={{ background: 'rgba(255,255,255,0.06)', color: '#94a3b8' }}>{r.kind}</span><code className="text-cyan-300 font-mono">{r.entity}</code></p>
                     {r.facts.map((f, j) => <p key={j} className="ml-4 text-slate-400">↳ {f}</p>)}
@@ -1028,10 +1034,10 @@ if not uploaded_df.empty:
                 <p className="text-[10px] text-slate-600">Puedes repetir este capítulo las veces que quieras: corrige, ejecuta y vuelve a entregar.</p>
               </div>
             )}
-            {review.nudges.length > 0 && (
+            {(review.nudges?.length ?? 0) > 0 && (
               <div className="space-y-1">
                 <p className="text-[9px] uppercase tracking-wider text-yellow-600">Por dónde seguir</p>
-                {review.nudges.map((n, i) => <p key={i} className="text-[11px] text-yellow-200/90">→ {n}</p>)}
+                {(review.nudges ?? []).map((n, i) => <p key={i} className="text-[11px] text-yellow-200/90">→ {n}</p>)}
               </div>
             )}
           </div>

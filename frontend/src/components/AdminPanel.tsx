@@ -18,7 +18,7 @@ interface CtfChallenge { id: number; phase_id: number; phase_name: string; order
 interface BadgeProgress { name: string; email: string; role: string; badges: { id: number; name: string; org: string; tier: string; earned: boolean; earned_at?: string }[]; badge_count: number; ctf_solves: number; ctf_points: number; avg_score: number; submissions: number }
 interface AwardedBadge { user_email: string; user_name: string; org: string; badge_name: string; tier: string; icon: string; awarded_by: string; awarded_at: string; badge_id: number }
 interface Assignment { name: string; email: string; assigned_at: string; submitted: number }
-interface Submission { id: number; challenge_id: number; challenge_title: string; user_name: string; user_email: string; code: string; output: string; plots_json: string; notes: string; score?: number; feedback: string; submitted_at: string }
+interface Submission { id: number; challenge_id: number; challenge_title: string; user_name: string; user_email: string; code: string; output: string; plots_json: string; notes: string; score?: number; feedback: string; submitted_at: string ; auto_feedback?: string; teacher_note?: string; auto_graded?: number }
 interface Stats {
   students: number
   total_users: number
@@ -2050,18 +2050,32 @@ function SubmissionsTab({ token, challenges }: { token: string; challenges: Chal
 
   useEffect(() => { load(); const id = setInterval(load, 5000); return () => clearInterval(id) }, [load])
 
-  const saveScore = async (sid: number) => {
-    const s = scoring[sid]
-    if (!s?.score) return
-    const res = await apiFetch(`/admin/submissions/${sid}/score`, token, {
-      method: 'PUT',
-      body: JSON.stringify({ score: Number(s.score), feedback: s.feedback ?? '' }),
-    }).catch(alert)
-    if (res?.badge_awarded) {
-      setBadgeToasts(p => ({ ...p, [sid]: res.badge_awarded }))
-      setTimeout(() => setBadgeToasts(p => ({ ...p, [sid]: null })), 6000)
+  const [saveState, setSaveState] = useState<Record<number, { kind: 'saving' | 'ok' | 'err'; text: string }>>({})
+  const setSS = (sid: number, kind: 'saving' | 'ok' | 'err', text: string) => setSaveState(p => ({ ...p, [sid]: { kind, text } }))
+
+  // Cada campo es opcional: solo se envía lo que el docente cambió. Guardar un comentario no toca la nota, y ajustar la nota no borra el comentario.
+  const saveScore = async (sub: Submission) => {
+    const sid = sub.id
+    const draft = scoring[sid] ?? {}
+    const body: Record<string, unknown> = {}
+    const typedScore = draft.score !== undefined && draft.score !== '' ? Number(draft.score) : undefined
+    if (typedScore !== undefined) {
+      if (Number.isNaN(typedScore) || typedScore < 0 || typedScore > 100) { setSS(sid, 'err', 'La nota debe ser un número entre 0 y 100'); return }
+      if (typedScore !== sub.score) body.score = typedScore
     }
-    load()
+    if (draft.feedback !== undefined && draft.feedback !== (sub.teacher_note ?? '')) body.feedback = draft.feedback
+    if (Object.keys(body).length === 0) { setSS(sid, 'err', 'No hay cambios por guardar'); return }
+    setSS(sid, 'saving', 'Guardando…')
+    try {
+      const res = await apiFetch(`/admin/submissions/${sid}/score`, token, { method: 'PUT', body: JSON.stringify(body) })
+      setSS(sid, 'ok', `✓ Guardado${'score' in body ? ` · nota ${res.score}/100` : ''}${'feedback' in body ? ' · retroalimentación enviada al estudiante' : ''}`)
+      setScoring(p => { const n = { ...p }; delete n[sid]; return n })
+      if (res?.badge_awarded) {
+        setBadgeToasts(p => ({ ...p, [sid]: res.badge_awarded }))
+        setTimeout(() => setBadgeToasts(p => ({ ...p, [sid]: null })), 6000)
+      }
+      load()
+    } catch (e) { setSS(sid, 'err', `No se pudo guardar: ${e instanceof Error ? e.message : e}`) }
   }
 
   return (
@@ -2176,23 +2190,34 @@ function SubmissionsTab({ token, challenges }: { token: string; challenges: Chal
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <input type="number" min="0" max="100" placeholder="0–100"
-                           value={scoring[s.id]?.score ?? (s.score ?? '')}
-                           onChange={e => setScoring(p => ({ ...p, [s.id]: { ...p[s.id], score: e.target.value } }))}
-                           className="w-20 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none"
-                           style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
-                    <input placeholder="Retroalimentación al estudiante..."
-                           value={scoring[s.id]?.feedback ?? (s.feedback ?? '')}
-                           onChange={e => setScoring(p => ({ ...p, [s.id]: { ...p[s.id], feedback: e.target.value } }))}
-                           className="flex-1 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none"
-                           style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }} />
-                    <button onClick={() => saveScore(s.id)}
-                            className="px-4 py-2 rounded-lg text-xs font-bold"
+                  {s.auto_feedback && (
+                    <details className="rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                      <summary className="text-[10px] text-slate-500 cursor-pointer">Retroalimentación automática (se conserva)</summary>
+                      <pre className="text-[10px] text-slate-400 whitespace-pre-wrap mt-2 font-sans">{s.auto_feedback}</pre>
+                    </details>
+                  )}
+                  <div className="flex items-start gap-3">
+                    <label className="text-[9px] text-slate-600 uppercase">Nota
+                      <input type="number" min="0" max="100" placeholder="0–100"
+                             value={scoring[s.id]?.score ?? (s.score ?? '')}
+                             onChange={e => setScoring(p => ({ ...p, [s.id]: { ...p[s.id], score: e.target.value } }))}
+                             className="block mt-1 w-20 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none"
+                             style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} /></label>
+                    <label className="flex-1 text-[9px] text-slate-600 uppercase">Retroalimentación del docente (la ve el estudiante)
+                      <textarea rows={3} placeholder="Qué hizo bien, qué le falta y por dónde seguir…"
+                             value={scoring[s.id]?.feedback ?? (s.teacher_note ?? '')}
+                             onChange={e => setScoring(p => ({ ...p, [s.id]: { ...p[s.id], feedback: e.target.value } }))}
+                             className="block mt-1 w-full rounded-lg px-3 py-2 text-xs text-slate-100 outline-none resize-y normal-case"
+                             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }} /></label>
+                    <button onClick={() => saveScore(s)} disabled={saveState[s.id]?.kind === 'saving'}
+                            className="mt-4 px-4 py-2 rounded-lg text-xs font-bold disabled:opacity-50"
                             style={{ background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.4)', color: '#4ade80' }}>
-                      Guardar
+                      {saveState[s.id]?.kind === 'saving' ? 'Guardando…' : 'Guardar'}
                     </button>
                   </div>
+                  {saveState[s.id] && saveState[s.id].kind !== 'saving' && (
+                    <p className="text-[11px]" style={{ color: saveState[s.id].kind === 'ok' ? '#4ade80' : '#f87171' }}>{saveState[s.id].text}</p>
+                  )}
                 </div>
               </div>
             )}

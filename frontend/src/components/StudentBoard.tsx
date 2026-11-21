@@ -8,7 +8,7 @@ const glass = { background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(16px)',
 interface Col { name: string; kind: 'num' | 'time' | 'text'; nulls: number; distinct: number; min?: number; max?: number; mean?: number; dist?: { value: string; n: number }[]; hist?: { label: string; n: number }[] }
 interface Ds { name: string; rows: number; duplicates: number; columns: Col[] }
 interface Rel { a: string; col_a: string; b: string; col_b: string; shared: number; how: string }
-interface Chap { badge?: { name: string; tier: string; earned: boolean } | null; chapter: number; title: string; status: string; locked: boolean; locked_by?: string | null; score: number | null; hints_used: number; deadline?: string | null; checks: string[] }
+interface Chap { teacher_feedback?: string; badge?: { name: string; tier: string; earned: boolean } | null; chapter: number; title: string; status: string; locked: boolean; locked_by?: string | null; score: number | null; hints_used: number; deadline?: string | null; checks: string[] }
 interface Board { pass_score?: number; variant: string; chapters: Chap[]; datasets: Ds[]; relations: Rel[] }
 
 function Bars({ data, color }: { data: { label: string; n: number }[]; color: string }) {
@@ -85,6 +85,12 @@ export default function StudentBoard() {
                 </summary>
                 <div className="px-3 pb-3 space-y-1">
                   {c.locked && <p className="text-[10px] text-slate-500">Se desbloquea al sacar {board.pass_score ?? 50} o más en «{c.locked_by}».</p>}
+                  {!c.locked && c.teacher_feedback && (
+                    <div className="rounded-lg p-2.5 mb-1" style={{ background: 'rgba(250,204,21,0.07)', border: '1px solid rgba(250,204,21,0.35)' }}>
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-yellow-400">✉ Retroalimentación de tu docente</p>
+                      <p className="text-[11px] text-slate-200 whitespace-pre-line">{c.teacher_feedback}</p>
+                    </div>
+                  )}
                   {!c.locked && c.score != null && c.checks.map((l, i) => (
                     <p key={i} className="text-[11px]" style={{ color: l.startsWith('✓') ? '#4ade80' : l.startsWith('◐') ? '#facc15' : '#94a3b8' }}>{l}</p>
                   ))}

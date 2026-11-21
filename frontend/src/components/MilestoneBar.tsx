@@ -12,11 +12,13 @@ export default function MilestoneBar() {
   const { token } = useAuth()
   const [d, setD] = useState<Data | null>(null)
   const [now, setNow] = useState(Date.now())
+  const [published, setPublished] = useState<boolean | null>(null)
   const skew = useRef(0)
   useEffect(() => {
     const load = () => fetch(`${API}/student/milestone`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null).then((x: Data | null) => { if (x) { skew.current = new Date(x.server_time).getTime() - Date.now(); setD(x) } }).catch(() => {})
-    load(); const t = setInterval(load, 60_000); return () => clearInterval(t)
+    const loadMine = () => fetch(`${API}/intel-wall`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).then(w => { if (w) setPublished(Boolean(w.mine)) }).catch(() => {})
+    load(); loadMine(); const t = setInterval(() => { load(); loadMine() }, 60_000); return () => clearInterval(t)
   }, [token])
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [])
   if (!d?.milestone) return null
@@ -39,6 +41,14 @@ export default function MilestoneBar() {
         <p className="text-xs font-bold" style={{ color }}>{d.milestone.title} · {fmtHM(d.milestone.at)}{over ? ' — ¡en curso!' : ''}</p>
         <p className="text-[11px] text-slate-300 leading-snug">{d.milestone.message}</p>
       </div>
+      {published === false && !over && (
+        <span className="text-[10px] px-2.5 py-1 rounded font-bold" style={{ color: '#fca5a5', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.4)' }}>
+          ⚠ Aún no publicas tu informe en el Muro
+        </span>
+      )}
+      {published === true && (
+        <span className="text-[10px] px-2.5 py-1 rounded font-semibold" style={{ color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)' }}>✓ Tu informe está publicado</span>
+      )}
       {d.wall_open_at && (
         <span className="text-[10px] px-2.5 py-1 rounded font-semibold" style={{ color: d.wall_open ? '#4ade80' : '#94a3b8', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
           {d.wall_open ? '🟢 Muro abierto para todos' : `🔒 El Muro se abre a las ${fmtHM(d.wall_open_at)}${wallLeft && wallLeft > 0 ? ` (en ${Math.ceil(wallLeft / 60)} min)` : ''}`}

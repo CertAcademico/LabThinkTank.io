@@ -3,21 +3,39 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { BadgeRow, type Badge } from './components/BadgeCard'
 import IOCSearch from './components/IOCSearch'
 
-const AuthPage        = lazy(() => import('./components/AuthPage'))
-const AdminPanel      = lazy(() => import('./components/AdminPanel'))
-const GlobalOverview  = lazy(() => import('./components/GlobalOverview'))
-const ThreatGraphView = lazy(() => import('./components/ThreatGraphView'))
-const AICopilot       = lazy(() => import('./components/AICopilot'))
-const ATTCKMatrix     = lazy(() => import('./components/ATTCKMatrix'))
-const ThreatTimeline  = lazy(() => import('./components/ThreatTimeline'))
-const IOCIOABoard     = lazy(() => import('./components/IOCIOABoard'))
-const IntelFeed       = lazy(() => import('./components/IntelFeed'))
-const SandboxLab      = lazy(() => import('./components/SandboxLab'))
-const ChallengeArena  = lazy(() => import('./components/ChallengeArena'))
-const CTIToolkit      = lazy(() => import('./components/CTIToolkit'))
-const LogIngest       = lazy(() => import('./components/LogIngest'))
-const FusionEngine    = lazy(() => import('./components/FusionEngine'))
-const IntelWall       = lazy(() => import('./components/IntelWall'))
+// Tras un despliegue, una pestaña abierta puede pedir pantallas (chunks) que ya no existen y quedaría en blanco.
+// Si pasa, recargamos una sola vez para traer la versión nueva.
+function lazyRetry<T extends { default: React.ComponentType<any> }>(load: () => Promise<T>) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  return lazy(() => load().then(m => {
+    try { sessionStorage.removeItem('chunk_reload') } catch { /* ok */ }
+    return m
+  }).catch(err => {
+    try {
+      if (!sessionStorage.getItem('chunk_reload')) {
+        sessionStorage.setItem('chunk_reload', '1')
+        window.location.reload()
+        return new Promise<T>(() => {})
+      }
+    } catch { /* ok */ }
+    throw err
+  }))
+}
+
+const AuthPage        = lazyRetry(() => import('./components/AuthPage'))
+const AdminPanel      = lazyRetry(() => import('./components/AdminPanel'))
+const GlobalOverview  = lazyRetry(() => import('./components/GlobalOverview'))
+const ThreatGraphView = lazyRetry(() => import('./components/ThreatGraphView'))
+const AICopilot       = lazyRetry(() => import('./components/AICopilot'))
+const ATTCKMatrix     = lazyRetry(() => import('./components/ATTCKMatrix'))
+const ThreatTimeline  = lazyRetry(() => import('./components/ThreatTimeline'))
+const IOCIOABoard     = lazyRetry(() => import('./components/IOCIOABoard'))
+const IntelFeed       = lazyRetry(() => import('./components/IntelFeed'))
+const SandboxLab      = lazyRetry(() => import('./components/SandboxLab'))
+const ChallengeArena  = lazyRetry(() => import('./components/ChallengeArena'))
+const CTIToolkit      = lazyRetry(() => import('./components/CTIToolkit'))
+const LogIngest       = lazyRetry(() => import('./components/LogIngest'))
+const FusionEngine    = lazyRetry(() => import('./components/FusionEngine'))
+const IntelWall       = lazyRetry(() => import('./components/IntelWall'))
 
 type ViewId = 'overview' | 'graph' | 'copilot' | 'attack' | 'timeline' | 'ioc' | 'feeds' | 'toolkit' | 'sandbox' | 'retos' | 'logs' | 'fusion' | 'wall'
 

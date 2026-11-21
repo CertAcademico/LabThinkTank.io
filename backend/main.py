@@ -1445,8 +1445,10 @@ def student_challenges(authorization: str = Header(None)):
     with get_conn() as conn:                       # cuentas nuevas: asegurar los capítulos de la ruta antes de listar
         flag = conn.execute("SELECT onboarding_path FROM users WHERE email = ?", (user["email"],)).fetchone()
         if flag and flag["onboarding_path"]:
-            from db import ensure_path_assignments
+            from db import ensure_path_assignments, badge_flow_active, sync_chapter_badges
             ensure_path_assignments(conn, user["email"])
+            if badge_flow_active(conn):
+                sync_chapter_badges(conn, user["email"])
     with get_conn() as conn:
         rows = conn.execute("""
             SELECT c.id, c.title, c.description, c.objective, c.criteria, c.hints_json,
@@ -1620,6 +1622,20 @@ def _auto_grade(conn, sub_id: int, challenge_id: int, payload: dict) -> dict | N
         lines.append(f"{mark} {it['label']} ({it['earned']}/{it['weight']})" + (f" → {it['hint']}" if it["hint"] else ""))
     conn.execute("UPDATE submissions SET score = ?, feedback = ?, auto_graded = 1 WHERE id = ?",
                  (result["score"], "\n".join(lines), sub_id))
+    if row["case_key"] == "aurora":
+        from db import badge_flow_active, award_chapter_badge, _path_challenges, PATH_PASS_SCORE
+        result["pass_score"] = PATH_PASS_SCORE
+        result["passed"] = result["score"] >= PATH_PASS_SCORE
+        if badge_flow_active(conn) and result["passed"]:
+            email = conn.execute("SELECT user_email FROM submissions WHERE id = ?", (sub_id,)).fetchone()["user_email"]
+            new_badge = award_chapter_badge(conn, email, challenge_id)
+            if new_badge:
+                result["badge"] = new_badge
+            chs = _path_challenges(conn)
+            nxt = next((c for i, c in enumerate(chs[:-1]) if c["id"] == challenge_id), None)
+            if nxt:
+                following = chs[[c["id"] for c in chs].index(challenge_id) + 1]
+                result["next_chapter"] = following["title"]
     return result
 
 
@@ -3051,10 +3067,12 @@ def student_case_board(authorization: str = Header(None)):
             SELECT c.id, c.case_chapter, c.title, c.status, c.starts_at, c.deadline,
                    (SELECT score FROM submissions s WHERE s.challenge_id = c.id AND s.user_email = ?) AS score,
                    (SELECT feedback FROM submissions s WHERE s.challenge_id = c.id AND s.user_email = ?) AS feedback,
-                   (SELECT COUNT(*) FROM hint_usage h WHERE h.challenge_id = c.id AND h.user_email = ?) AS hints_used
-            FROM challenges c JOIN challenge_assignments a ON a.challenge_id = c.id
+                   (SELECT COUNT(*) FROM hint_usage h WHERE h.challenge_id = c.id AND h.user_email = ?) AS hints_used,
+                   b.name AS badge_name, b.tier AS badge_tier, b.icon AS badge_icon,
+                   (SELECT 1 FROM user_badges ub WHERE ub.user_email = ? AND ub.badge_id = c.badge_id) AS badge_earned
+            FROM challenges c JOIN challenge_assignments a ON a.challenge_id = c.id LEFT JOIN badges b ON b.id = c.badge_id
             WHERE a.user_email = ? AND c.case_key = 'aurora' AND c.status != 'draft' ORDER BY c.case_chapter""",
-            (email, email, email, email)).fetchall()
+            (email, email, email, email, email)).fetchall()
     chapters, unlocked = [], 0
     for r in rows:
         if not _is_started(r["starts_at"]):
@@ -3066,12 +3084,34 @@ def student_case_board(authorization: str = Header(None)):
         lines = [l for l in (r["feedback"] or "").splitlines()[1:]] if r["score"] is not None else []
         chapters.append({"chapter": r["case_chapter"], "title": r["title"], "status": r["status"], "locked": locked,
                          "locked_by": st["requires"] if st else None, "score": r["score"], "hints_used": r["hints_used"],
-                         "deadline": r["deadline"], "checks": lines if not locked else []})
+                         "deadline": r["deadline"], "checks": lines if not locked else [],
+                         "badge": {"name": r["badge_name"], "tier": r["badge_tier"], "earned": bool(r["badge_earned"])} if r["badge_name"] else None})
     case = build_case(email)
     keys = [k for k in CHAPTER_DATASET[:unlocked] if k]
     data = {DATASETS[k]: case["datasets"][k] for k in keys}
     return {"variant": case["code"], "chapters": chapters,
             "datasets": [{"name": n, **profile(v)} for n, v in data.items()], "relations": relations(data)}
+
+
+@app.get("/admin/badge-flow")
+def admin_badge_flow(authorization: str = Header(None)):
+    _require_admin(authorization)
+    from db import badge_flow_start, badge_flow_active, AURORA_BADGES
+    with get_conn() as conn:
+        return {"start": badge_flow_start(conn), "active": badge_flow_active(conn),
+                "badges": [{"chapter": i + 1, "name": b[0], "tier": b[2]} for i, b in enumerate(AURORA_BADGES)]}
+
+
+@app.post("/admin/badge-flow")
+def admin_set_badge_flow(payload: dict = Body(...), authorization: str = Header(None)):
+    """Fija desde cuándo cada capítulo superado entrega su insignia y habilita el siguiente."""
+    _require_admin(authorization)
+    start = payload.get("start")
+    if not start or not _parse_iso(start):
+        raise HTTPException(status_code=400, detail="start (ISO 8601 con zona horaria) requerido")
+    with get_conn() as conn:
+        conn.execute("INSERT INTO app_settings (key, value) VALUES ('badge_flow_start', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (start,))
+    return {"ok": True, "start": start}
 
 
 # ── Admin: Multi-dataset for challenges ──────────────────────────────────────

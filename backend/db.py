@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import sqlite3
@@ -1522,7 +1524,9 @@ def path_status(conn, email: str) -> dict:
         if prev is not None:
             sc = conn.execute("SELECT MAX(score) m FROM submissions WHERE challenge_id = ? AND user_email = ?",
                               (prev["id"], email)).fetchone()["m"]
-            if sc is None or sc < PATH_PASS_SCORE:
+            has_badge = conn.execute("""SELECT 1 FROM user_badges ub JOIN challenges c ON c.badge_id = ub.badge_id
+                                        WHERE ub.user_email = ? AND c.id = ?""", (email, prev["id"])).fetchone()
+            if not has_badge and (sc is None or sc < PATH_PASS_SCORE):
                 locked, requires = True, prev["title"]
             if status[prev["id"]]["locked"]:      # un reto no se abre si el anterior sigue bloqueado
                 locked, requires = True, status[prev["id"]]["requires"]
@@ -1551,4 +1555,70 @@ def seed_aurora_challenges(conn) -> int:
                 (title, ch["description"], ch["objective"], None, ch["criteria"], "draft", 70, ch["difficulty"],
                  "system@cti-lab-aurora", "caso-aurora", "[]", "aurora", i))
             n += 1
+    _seed_aurora_badges(conn)
+    return n
+
+
+# Insignia de culminación de cada capítulo: nombra la HABILIDAD que el estudiante demostró.
+AURORA_BADGES = [
+    ("Cazador de Señales",              "Detectó beacons y exfiltración en el tráfico de red de su propio caso.",                    "bronze",   "target"),
+    ("Analista de Indicadores",         "Limpió y priorizó un feed de IOC y supo desconfiar de una fuente equivocada.",              "bronze",   "chart"),
+    ("Analista de Malware",             "Perfiló una familia de malware y la conectó con lo que vio en la red.",                     "silver",   "flask"),
+    ("Reconstructor de Incidentes",     "Reconstruyó la línea de tiempo de un ataque: entrada, movimiento lateral y cifrado.",       "silver",   "eye"),
+    ("Analista de Inteligencia Textual","Extrajo entidades de informes y resolvió un alias entre dominios.",                         "gold",     "book"),
+    ("Predictor de Amenazas",           "Entrenó y evaluó un clasificador para anticipar dominios maliciosos.",                      "gold",     "cpu"),
+    ("Cazador de Agentes de IA",        "Detectó agentes ofensivos autónomos con anomalías y separó la automatización legítima.",    "platinum", "fire"),
+    ("Analista CTI Certificado",        "Cerró el ciclo de inteligencia: informe ejecutivo con evidencia, confianza y recomendaciones.", "diamond", "trophy"),
+]
+BADGE_ORG = "LabThinkTank"
+
+
+def _seed_aurora_badges(conn) -> None:
+    """Crea las insignias del caso (idempotente) y las vincula a cada capítulo con el mismo umbral que desbloquea el siguiente."""
+    from aurora.chapters import PATH_TITLES
+    for title, (name, desc, tier, icon) in zip(PATH_TITLES, AURORA_BADGES):
+        b = conn.execute("SELECT id FROM badges WHERE org = ? AND name = ?", (BADGE_ORG, name)).fetchone()
+        if not b:
+            cur = conn.execute("INSERT INTO badges (org, name, description, tier, icon) VALUES (?,?,?,?,?)", (BADGE_ORG, name, desc, tier, icon))
+            bid = cur.lastrowid
+        else:
+            bid = b["id"]
+        conn.execute("UPDATE challenges SET badge_id = ?, min_score_badge = ? WHERE title = ?", (bid, PATH_PASS_SCORE, title))
+
+
+def badge_flow_start(conn) -> str:
+    """Desde cuándo rige el flujo «insignia = habilita el siguiente capítulo». Por defecto, hoy 14:00 (Bogotá)."""
+    r = conn.execute("SELECT value FROM app_settings WHERE key = 'badge_flow_start'").fetchone()
+    return r["value"] if r and r["value"] else "2026-11-21T14:00:00-05:00"
+
+
+def badge_flow_active(conn) -> bool:
+    from datetime import datetime, timezone
+    try:
+        d = datetime.fromisoformat(badge_flow_start(conn).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) >= d
+
+
+def award_chapter_badge(conn, email: str, challenge_id: int) -> dict | None:
+    """Otorga la insignia del capítulo si aún no la tiene. Devuelve la insignia solo cuando es NUEVA."""
+    ch = conn.execute("SELECT badge_id FROM challenges WHERE id = ?", (challenge_id,)).fetchone()
+    if not ch or not ch["badge_id"]:
+        return None
+    if conn.execute("SELECT 1 FROM user_badges WHERE user_email = ? AND badge_id = ?", (email, ch["badge_id"])).fetchone():
+        return None
+    conn.execute("INSERT INTO user_badges (user_email, badge_id, awarded_by) VALUES (?,?,?)", (email, ch["badge_id"], "auto@cti-lab"))
+    b = conn.execute("SELECT id, org, name, description, tier, icon FROM badges WHERE id = ?", (ch["badge_id"],)).fetchone()
+    return dict(b) if b else None
+
+
+def sync_chapter_badges(conn, email: str) -> int:
+    """Otorga las insignias de capítulos ya superados (por ejemplo, entregados antes de que rigiera el flujo)."""
+    n = 0
+    for r in conn.execute("""SELECT c.id FROM challenges c JOIN submissions s ON s.challenge_id = c.id
+                             WHERE c.case_key = 'aurora' AND s.user_email = ? AND s.score >= ?""", (email, PATH_PASS_SCORE)).fetchall():
+        n += 1 if award_chapter_badge(conn, email, r["id"]) else 0
     return n

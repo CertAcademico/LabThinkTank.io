@@ -4,6 +4,7 @@ import HelpBot from './HelpBot'
 import type { PyodideInterface } from '../types/pyodide'
 
 import CasePrimer, { type Learn } from './CasePrimer'
+import { TIER } from './BadgeCard'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -215,7 +216,7 @@ function Arena({ challenge }: { challenge: Challenge }) {
   const [myDs,       setMyDs]       = useState<{ name: string; var: string; filename: string; rows: number; columns: string[] }[]>([])
   const [myDsBusy,   setMyDsBusy]   = useState(false)
   const [myDsError,  setMyDsError]  = useState('')
-  const [grading,    setGrading]    = useState<{ score: number; manual_override?: boolean; items: { label: string; weight: number; earned: number; ok: boolean; partial: boolean; hint: string }[] } | null>(null)
+  const [grading,    setGrading]    = useState<{ score: number; manual_override?: boolean; passed?: boolean; pass_score?: number; next_chapter?: string; badge?: { name: string; description: string; tier: string }; items: { label: string; weight: number; earned: number; ok: boolean; partial: boolean; hint: string }[] } | null>(null)
   const [docFile,    setDocFile]    = useState<File | null>(null)
   const [docStatus,  setDocStatus]  = useState<{ uploaded: boolean; filename?: string; pages?: number } | null>(null)
   const [docUploading, setDocUploading] = useState(false)
@@ -909,6 +910,17 @@ if not uploaded_df.empty:
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex-1">Resultado de tu entrega</p>
               <span className="text-sm font-bold" style={{ color: grading.score >= 70 ? '#4ade80' : grading.score >= 40 ? '#facc15' : '#f87171' }}>{grading.score}/100</span>
             </div>
+            {grading.badge && (() => { const t = TIER[grading.badge.tier] ?? TIER.bronze; return (
+              <div className="rounded-xl p-4 text-center space-y-1" style={{ background: `${t.color}14`, border: `1px solid ${t.color}88`, boxShadow: `0 0 24px ${t.glow}` }}>
+                <p className="text-3xl">🏅</p>
+                <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: t.color }}>¡Insignia de habilidad desbloqueada! · {t.label}</p>
+                <p className="text-sm font-bold text-slate-100">{grading.badge.name}</p>
+                <p className="text-[11px] text-slate-400">{grading.badge.description}</p>
+                {grading.next_chapter && <p className="text-[11px] text-green-300 pt-1">✔ Se habilitó el siguiente capítulo: <strong>{grading.next_chapter.replace(/^Caso Aurora \d — /, '')}</strong></p>}
+              </div>) })()}
+            {grading.passed && !grading.badge && (
+              <p className="text-[11px] text-green-300">✔ ¡Superaste este capítulo ({grading.pass_score ?? 60}+)! {grading.next_chapter ? 'Ya tienes su insignia.' : 'Tu insignia y el siguiente capítulo se habilitan a partir de las 2 pm, o ya los tienes si los desbloqueaste antes.'}</p>
+            )}
             {grading.manual_override && (
               <p className="text-[10px] text-yellow-400">Tu docente ya calificó este reto; su nota se conserva.</p>
             )}

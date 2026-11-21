@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { TIER } from './BadgeCard'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 const glass = { background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
@@ -7,7 +8,7 @@ const glass = { background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(16px)',
 interface Col { name: string; kind: 'num' | 'time' | 'text'; nulls: number; distinct: number; min?: number; max?: number; mean?: number; dist?: { value: string; n: number }[]; hist?: { label: string; n: number }[] }
 interface Ds { name: string; rows: number; duplicates: number; columns: Col[] }
 interface Rel { a: string; col_a: string; b: string; col_b: string; shared: number; how: string }
-interface Chap { chapter: number; title: string; status: string; locked: boolean; locked_by?: string | null; score: number | null; hints_used: number; deadline?: string | null; checks: string[] }
+interface Chap { badge?: { name: string; tier: string; earned: boolean } | null; chapter: number; title: string; status: string; locked: boolean; locked_by?: string | null; score: number | null; hints_used: number; deadline?: string | null; checks: string[] }
 interface Board { variant: string; chapters: Chap[]; datasets: Ds[]; relations: Rel[] }
 
 function Bars({ data, color }: { data: { label: string; n: number }[]; color: string }) {
@@ -59,6 +60,12 @@ export default function StudentBoard() {
               <details key={c.chapter} className="rounded-lg" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <summary className="flex items-center gap-3 px-3 py-2.5 cursor-pointer list-none">
                   <span className="text-[11px] text-slate-200 flex-1 min-w-0 truncate">{c.locked ? '🔒 ' : ''}{c.title.replace(/^Caso Aurora \d — /, `${c.chapter}. `)}</span>
+                  {c.badge && (
+                    <span title={`${c.badge.name}${c.badge.earned ? ' · ganada' : ' · por ganar'}`} className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                          style={c.badge.earned ? { color: (TIER[c.badge.tier] ?? TIER.bronze).color, background: 'rgba(255,255,255,0.06)' } : { color: '#475569', background: 'rgba(255,255,255,0.02)', opacity: 0.7 }}>
+                      {c.badge.earned ? '🏅' : '○'} {c.badge.name}
+                    </span>
+                  )}
                   {c.hints_used > 0 && <span className="text-[10px] text-yellow-600">💡 {c.hints_used}</span>}
                   {c.deadline && !c.locked && <span className="text-[9px] text-slate-600">cierra {fmtDate(c.deadline)}</span>}
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded min-w-12 text-center"

@@ -38,6 +38,7 @@ export default function CaseControl() {
   const [sol, setSol] = useState<Solution | null>(null)
   const [solFor, setSolFor] = useState<{ id: number; email: string } | null>(null)
   const [msg, setMsg] = useState('')
+  const [flow, setFlow] = useState<{ start: string; active: boolean; badges: { chapter: number; name: string; tier: string }[] } | null>(null)
   const [form, setForm] = useState({ title: '', body: '', publish_at: '', expires_at: '' })
 
   const api = useCallback(async (path: string, init?: RequestInit) => {
@@ -51,6 +52,7 @@ export default function CaseControl() {
     api('/admin/challenges').then(setChs).catch(() => {})
     api('/admin/announcements').then(setAnns).catch(() => {})
     api('/admin/users').then(setUsers).catch(() => {})
+    api('/admin/badge-flow').then(setFlow).catch(() => {})
   }, [api])
   useEffect(() => { load() }, [load])
 
@@ -117,6 +119,28 @@ export default function CaseControl() {
         </p>
         {msg && <p className="text-[11px] text-red-400">{msg}</p>}
       </div>
+
+      {flow && (
+        <div className="rounded-xl p-5 space-y-3" style={glass}>
+          <div className="flex items-center gap-3 flex-wrap">
+            <p className="text-xs font-bold text-yellow-300 flex-1">🏅 Insignias de habilidad: cada capítulo superado entrega la suya y habilita el siguiente</p>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={flow.active ? { color: '#4ade80', background: 'rgba(74,222,128,0.12)' } : { color: '#facc15', background: 'rgba(250,204,21,0.1)' }}>
+              {flow.active ? 'Rigiendo ahora' : 'Aún no rige'}
+            </span>
+          </div>
+          <div className="flex items-end gap-3 flex-wrap">
+            <label className="text-[10px] text-slate-500">Rige desde (hora Bogotá)
+              <input type="datetime-local" defaultValue={toInput(flow.start)} key={flow.start} id="flow-start" className="block mt-1 rounded px-2 py-1 text-[11px] text-slate-300" style={inputStyle} /></label>
+            <button onClick={async () => { const v = (document.getElementById('flow-start') as HTMLInputElement).value; if (!v) return
+                      try { await api('/admin/badge-flow', { method: 'POST', body: JSON.stringify({ start: fromInput(v) }) }); load() } catch (e) { setMsg(String(e instanceof Error ? e.message : e)) } }}
+                    className="text-[11px] px-3 py-1.5 rounded font-semibold text-yellow-300" style={{ background: 'rgba(250,204,21,0.1)', border: '1px solid rgba(250,204,21,0.3)' }}>Guardar</button>
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            {flow.badges.map(b => <span key={b.chapter} className="text-[10px] px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#94a3b8' }}>Cap {b.chapter} · {b.name}</span>)}
+          </div>
+          <p className="text-[10px] text-slate-600">Antes de esa hora los capítulos siguen desbloqueándose con 60 puntos, pero la insignia no se otorga. A la hora indicada, quien ya había superado un capítulo la recibe al abrir sus retos.</p>
+        </div>
+      )}
 
       <div className="rounded-xl overflow-hidden" style={glass}>
         <div className="px-4 py-3 flex items-center gap-3 flex-wrap">

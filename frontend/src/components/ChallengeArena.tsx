@@ -43,6 +43,29 @@ interface OutputPart { type: 'text' | 'plot'; content: string }
 
 const glass = { background: 'rgba(15,23,42,0.55)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
 
+// En los retos, plt.show() debe mostrar la gráfica en el panel de salida y adjuntarla a la entrega (igual que en el Sandbox Lab).
+const PLT_HOOK = `import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as _plt
+import io as _io, base64 as _b64
+if not getattr(_plt, '_cti_patched', False):
+    _plt.rcParams.update({
+        'figure.facecolor': '#0a0f1e', 'axes.facecolor': '#0f172a', 'axes.edgecolor': '#1e293b', 'text.color': '#94a3b8',
+        'xtick.color': '#64748b', 'ytick.color': '#64748b', 'axes.labelcolor': '#94a3b8', 'grid.color': '#1e293b',
+        'grid.linestyle': '--', 'grid.alpha': 0.6, 'font.size': 9,
+    })
+    def _cti_show(*a, **k):
+        for n in _plt.get_fignums():
+            f = _plt.figure(n)
+            buf = _io.BytesIO()
+            f.savefig(buf, format='png', bbox_inches='tight', facecolor=f.get_facecolor(), dpi=110)
+            buf.seek(0)
+            print('__PLOT__:' + _b64.b64encode(buf.read()).decode())
+        _plt.close('all')
+    _plt.show = _cti_show
+    _plt._cti_patched = True
+`
+
 function parseOutput(raw: string): OutputPart[] {
   return raw.split(/(__PLOT__:[A-Za-z0-9+/=]+)/).map(p => ({
     type: (p.startsWith('__PLOT__:') ? 'plot' : 'text') as 'text' | 'plot',
@@ -379,6 +402,10 @@ if not uploaded_df.empty:
     try {
       await pyodide.runPythonAsync(`import sys, io; _cap = io.StringIO(); sys.stdout = _cap`)
       await pyodide.loadPackagesFromImports(code)
+      if (/matplotlib|\bplt\b|\.plot\(|seaborn|\.hist\(|\.imshow\(/.test(code)) {
+        await pyodide.loadPackage(['matplotlib'])          // df.plot() lo necesita aunque no se importe explícitamente
+        await pyodide.runPythonAsync(PLT_HOOK)
+      }
       await pyodide.runPythonAsync(code)
       const out = String(await pyodide.runPythonAsync(`sys.stdout = sys.__stdout__; _cap.getvalue()`))
       setOutput(out || '(sin output)')

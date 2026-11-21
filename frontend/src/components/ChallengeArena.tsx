@@ -15,6 +15,7 @@ interface Challenge {
   badge_tier?: string; badge_icon?: string; min_score_badge?: number
   badge_earned?: number
   submitted: number; my_score?: number
+  path_order?: number; path_total?: number; locked?: boolean; locked_by?: string; path_pass_score?: number
 }
 
 interface SolvedChallenge {
@@ -1551,6 +1552,23 @@ export default function ChallengeArena() {
         </div>
       ) : (
         <div className="grid gap-3">
+          {challenges.some(c => c.path_order) && (() => {
+            const path = challenges.filter(c => c.path_order)
+            const pass = path[0]?.path_pass_score ?? 60
+            const done = path.filter(c => c.my_score != null && c.my_score >= pass).length
+            return (
+              <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.2)' }}>
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest flex-1">Tu ruta individual</p>
+                  <span className="text-xs font-bold text-cyan-300">{done}/{path.length} completados</span>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden bg-white/[0.05]">
+                  <div className="h-full rounded-full bg-cyan-400" style={{ width: `${(done / path.length) * 100}%` }} />
+                </div>
+                <p className="text-[10px] text-slate-500">Cada reto se desbloquea al sacar al menos {pass}/100 en el anterior. Puedes reentregar para mejorar tu nota.</p>
+              </div>
+            )
+          })()}
           {challenges.map(c => {
             const tierColor  = c.badge_tier ? (TIER_COLOR[c.badge_tier] ?? '#facc15') : undefined
             const diffColor  = c.difficulty ? (DIFF_COLOR[c.difficulty] ?? '#64748b') : undefined
@@ -1560,9 +1578,9 @@ export default function ChallengeArena() {
 
             return (
               <div key={c.id}
-                   className="rounded-xl overflow-hidden cursor-pointer group transition-all hover:bg-white/[0.02]"
+                   className={`rounded-xl overflow-hidden group transition-all ${c.locked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-white/[0.02]'}`}
                    style={{ background: 'rgba(15,23,42,0.55)', border: `1px solid ${borderColor}` }}
-                   onClick={() => setActive(c)}>
+                   onClick={() => { if (!c.locked) setActive(c) }}>
 
                 {/* Badge earned top bar */}
                 {earned && tierColor && (
@@ -1580,7 +1598,13 @@ export default function ChallengeArena() {
                   <div className="flex-1 min-w-0">
                     {/* Title + pills */}
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <h3 className="text-sm font-semibold text-slate-100">{c.title}</h3>
+                      {c.path_order && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                              style={{ background: 'rgba(34,211,238,0.1)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.25)' }}>
+                          {c.path_order}/{c.path_total}
+                        </span>
+                      )}
+                      <h3 className="text-sm font-semibold text-slate-100">{c.locked ? '🔒 ' : ''}{c.title}</h3>
 
                       {diffColor && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
@@ -1603,8 +1627,10 @@ export default function ChallengeArena() {
                         </span>
                       ) : (
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                              style={{ background: 'rgba(250,204,21,0.08)', color: '#facc15', border: '1px solid rgba(250,204,21,0.15)' }}>
-                          Pendiente
+                              style={c.locked
+                                ? { background: 'rgba(100,116,139,0.1)', color: '#64748b', border: '1px solid rgba(100,116,139,0.2)' }
+                                : { background: 'rgba(250,204,21,0.08)', color: '#facc15', border: '1px solid rgba(250,204,21,0.15)' }}>
+                          {c.locked ? 'Bloqueado' : 'Pendiente'}
                         </span>
                       )}
 
@@ -1613,6 +1639,11 @@ export default function ChallengeArena() {
                       )}
                     </div>
 
+                    {c.locked && (
+                      <p className="text-[10px] text-cyan-500/80 mb-2">
+                        🔒 Se desbloquea al sacar al menos {c.path_pass_score ?? 60}/100 en «{c.locked_by}».
+                      </p>
+                    )}
                     {c.description && (
                       <p className="text-xs text-slate-500 mb-2 leading-relaxed line-clamp-2">{c.description}</p>
                     )}

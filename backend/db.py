@@ -289,6 +289,8 @@ def _migrate(conn) -> None:
     tcols = {r[1] for r in conn.execute("PRAGMA table_info(teams)").fetchall()}
     if "open_signup" not in tcols:
         conn.execute("ALTER TABLE teams ADD COLUMN open_signup INTEGER NOT NULL DEFAULT 0")
+    if "onboarding_path" not in {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}:
+        conn.execute("ALTER TABLE users ADD COLUMN onboarding_path INTEGER NOT NULL DEFAULT 0")
     sc = {r[1] for r in conn.execute("PRAGMA table_info(submissions)").fetchall()}
     if "auto_graded" not in sc:
         conn.execute("ALTER TABLE submissions ADD COLUMN auto_graded INTEGER NOT NULL DEFAULT 0")
@@ -1427,3 +1429,57 @@ def balance_phase_challenges(conn, phase_id: int, points: int = 150) -> int:
         )
         n += 1
     return n
+
+
+# ── Ruta individual para estudiantes nuevos ───────────────────────────────────
+# Solo aplica a usuarios con onboarding_path = 1 (los que se registran desde
+# ahora). Los estudiantes existentes no cambian: conservan sus retos y su acceso.
+INDIVIDUAL_PATH = [
+    "Caza de IOCs — APT28 Fancy Bear",
+    "Enriquecimiento y Priorización de IOC Feed",
+    "Perfilado de Malware con Pandas — AgentTesla & Emotet",
+    "Análisis de Campaña Ransomware LockBit 3.0",
+    "Extracción de Entidades CTI — NLP sobre Texto de Amenaza",
+    "Detección de Phishing con Machine Learning",
+]
+PATH_PASS_SCORE = 60
+
+
+def _path_challenges(conn) -> list:
+    out = []
+    for t in INDIVIDUAL_PATH:
+        r = conn.execute("SELECT id, title FROM challenges WHERE title = ? AND status = 'active'", (t,)).fetchone()
+        if r:
+            out.append(r)
+    return out
+
+
+def enroll_individual_path(conn, email: str) -> int:
+    """Marca al usuario como nuevo en la ruta y le asigna sus retos individuales."""
+    conn.execute("UPDATE users SET onboarding_path = 1 WHERE email = ?", (email,))
+    n = 0
+    for ch in _path_challenges(conn):
+        n += conn.execute("INSERT OR IGNORE INTO challenge_assignments (challenge_id, user_email) VALUES (?,?)",
+                          (ch["id"], email)).rowcount
+    return n
+
+
+def path_status(conn, email: str) -> dict:
+    """{challenge_id: {order, total, locked, requires}} para usuarios en ruta; {} si no aplica."""
+    u = conn.execute("SELECT onboarding_path FROM users WHERE email = ?", (email,)).fetchone()
+    if not u or not u["onboarding_path"]:
+        return {}
+    chs = _path_challenges(conn)
+    status, prev = {}, None
+    for i, ch in enumerate(chs):
+        locked, requires = False, None
+        if prev is not None:
+            sc = conn.execute("SELECT MAX(score) m FROM submissions WHERE challenge_id = ? AND user_email = ?",
+                              (prev["id"], email)).fetchone()["m"]
+            if sc is None or sc < PATH_PASS_SCORE:
+                locked, requires = True, prev["title"]
+            if status[prev["id"]]["locked"]:      # un reto no se abre si el anterior sigue bloqueado
+                locked, requires = True, status[prev["id"]]["requires"]
+        status[ch["id"]] = {"order": i + 1, "total": len(chs), "locked": locked, "requires": requires}
+        prev = ch
+    return status

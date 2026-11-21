@@ -396,8 +396,10 @@ def auth_register(payload: dict = Body(...)):
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    if team_id:
-        with get_conn() as conn:
+    with get_conn() as conn:
+        from db import enroll_individual_path
+        enroll_individual_path(conn, user["email"])       # ruta individual solo para cuentas nuevas
+        if team_id:
             conn.execute("INSERT OR IGNORE INTO team_members (team_id, user_email) VALUES (?,?)", (team_id, user["email"]))
     return user
 
@@ -1420,7 +1422,22 @@ def student_challenges(authorization: str = Header(None)):
             WHERE ca.user_email = ?
             ORDER BY c.created_at DESC
         """, (user["email"], user["email"], user["email"], user["email"])).fetchall()
-    return [dict(r) for r in rows if _is_started(r["starts_at"])]
+        from db import path_status, PATH_PASS_SCORE
+        pstat = path_status(conn, user["email"])
+    out = []
+    for r in rows:
+        if not _is_started(r["starts_at"]):
+            continue
+        d = dict(r)
+        st = pstat.get(d["id"])
+        if st:
+            d.update(path_order=st["order"], path_total=st["total"], locked=st["locked"],
+                     locked_by=st["requires"], path_pass_score=PATH_PASS_SCORE)
+            if st["locked"]:      # no filtrar enunciado, pistas ni dataset de un reto aún cerrado
+                d.update(objective="", criteria="", hints_json="[]", schema_json=None, dataset_name=None)
+        out.append(d)
+    out.sort(key=lambda d: (d.get("path_order") is None, d.get("path_order") or 0))
+    return out
 
 
 @app.get("/student/solved-challenges")
@@ -1515,6 +1532,14 @@ def _auto_grade(conn, sub_id: int, challenge_id: int, payload: dict) -> dict | N
 
 
 def _has_challenge_access(conn, challenge_id: int, user_email: str):
+    from db import path_status
+    st = path_status(conn, user_email).get(challenge_id)
+    if st and st["locked"]:
+        return None
+    return _has_challenge_access_raw(conn, challenge_id, user_email)
+
+
+def _has_challenge_access_raw(conn, challenge_id: int, user_email: str):
     direct = conn.execute(
         "SELECT 1 FROM challenge_assignments WHERE challenge_id = ? AND user_email = ?",
         (challenge_id, user_email),

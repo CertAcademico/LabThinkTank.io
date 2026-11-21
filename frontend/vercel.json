@@ -4,7 +4,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://specialist-workshop-heading-designers.trycloudflare.com/api/:path*" },
+    { "source": "/api/:path*", "destination": "https://intro-nottingham-surplus-insulin.trycloudflare.com/api/:path*" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

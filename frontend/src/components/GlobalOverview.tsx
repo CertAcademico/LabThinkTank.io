@@ -141,7 +141,7 @@ export default function GlobalOverview() {
 
     // Auth-gated endpoints
     if (token) {
-      fetch(`${API}/student/ctf-phases`, { headers }).then(r => r.json()).then(setPhases).catch(() => {})
+      if (isAdmin) fetch(`${API}/student/ctf-phases`, { headers }).then(r => r.json()).then(setPhases).catch(() => {})
       fetch(`${API}/student/badges`,     { headers }).then(r => r.json()).then(setMyBadges).catch(() => {})
       fetch(`${API}/student/challenges`, { headers }).then(r => r.json()).then(setMyChallenges).catch(() => {})
       if (isAdmin) {
@@ -176,7 +176,7 @@ export default function GlobalOverview() {
     { label: 'IOCs Activos',      value: String(iocs.length || '—'),          sub: 'en el feed', c: '#f87171', glow: 'rgba(248,113,113,0.12)' },
     { label: 'IOAs Detectados',   value: String(highIoas || '—'),             sub: 'crítico/alto', c: '#fb923c', glow: 'rgba(251,146,60,0.12)' },
     { label: 'Actores Rastreados',value: String(actors.length || '—'),        sub: 'APT activos', c: '#c084fc', glow: 'rgba(192,132,252,0.12)' },
-    { label: 'Fases CTF Activas', value: `${activePhases}/${phases.length || '—'}`, sub: 'habilitadas', c: '#22d3ee', glow: 'rgba(34,211,238,0.12)' },
+    ...(isAdmin ? [{ label: 'Fases CTF Activas', value: `${activePhases}/${phases.length || '—'}`, sub: 'habilitadas', c: '#22d3ee', glow: 'rgba(34,211,238,0.12)' }] : []),
     { label: isAdmin ? 'Estudiantes' : 'Mis Retos', value: isAdmin ? String(adminStats?.students ?? '—') : String(myChallenges.length || '—'), sub: isAdmin ? 'registrados' : pendingRetos > 0 ? `${pendingRetos} pendiente${pendingRetos > 1 ? 's':''}` : 'asignados', c: '#4ade80', glow: 'rgba(74,222,128,0.12)' },
     { label: isAdmin ? 'Entregas Hoy' : 'Mis Insignias', value: isAdmin ? String(adminStats?.submissions_today ?? '—') : String(myBadges.length || '0'), sub: isAdmin ? 'submissions' : 'obtenidas', c: '#facc15', glow: 'rgba(250,204,21,0.12)' },
   ]
@@ -194,7 +194,7 @@ export default function GlobalOverview() {
     <div className="space-y-4">
 
       {/* ── KPI row ─────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-6 gap-3">
+      <div className={`grid ${isAdmin ? 'grid-cols-6' : 'grid-cols-5'} gap-3`}>
         {KPIS.map(k => (
           <div key={k.label} className="rounded-xl p-4 relative overflow-hidden"
                style={{ ...glass, background: `linear-gradient(135deg, ${k.glow} 0%, rgba(15,23,42,0.55) 60%)` }}>
@@ -208,7 +208,7 @@ export default function GlobalOverview() {
       </div>
 
       {/* ── CTF Phases strip ─────────────────────────────────────────────────── */}
-      {phases.length > 0 && (
+      {isAdmin && phases.length > 0 && (
         <div className="rounded-xl p-4" style={glass}>
           <div className="flex items-center justify-between mb-3">
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Estado Fases CTF</p>
@@ -456,7 +456,7 @@ export default function GlobalOverview() {
           </div>
           <p className="text-[10px] text-slate-400 leading-relaxed">
             {actors.length > 0
-              ? `${actors.length} actores rastreados. ${criticalIOCs} IOCs críticos activos. ${highIoas} IOAs de alta prioridad. ${activePhases > 0 ? `Fase${activePhases > 1 ? 's' : ''} CTF activa${activePhases > 1 ? 's' : ''}: ${phases.filter(p => p.status==='active').map(p => p.name).join(', ')}.` : 'Sin fases CTF activas.'}`
+              ? `${actors.length} actores rastreados. ${criticalIOCs} IOCs críticos activos. ${highIoas} IOAs de alta prioridad.${!isAdmin ? '' : activePhases > 0 ? ` Fase${activePhases > 1 ? 's' : ''} CTF activa${activePhases > 1 ? 's' : ''}: ${phases.filter(p => p.status==='active').map(p => p.name).join(', ')}.` : ' Sin fases CTF activas.'}`
               : 'Analizando inteligencia de amenazas...'}
           </p>
           <div className="mt-3 space-y-1.5">

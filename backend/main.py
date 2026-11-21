@@ -1624,11 +1624,12 @@ def _hint_payload(conn, challenge_id: int, email: str, title: str) -> dict:
     levels = hints_mod.levels_for(title)
     used = {r["level"] for r in conn.execute(
         "SELECT level FROM hint_usage WHERE challenge_id = ? AND user_email = ?", (challenge_id, email)).fetchall()}
-    revealed = [{"level": i, "label": hints_mod.LEVEL_LABELS.get(i, f"Pista {i}"), "text": levels[i - 1]}
-                for i in range(1, len(levels) + 1) if i in used]
+    n = len(levels)
+    revealed = [{"level": i, "label": hints_mod.label_for(i, n), "text": levels[i - 1]}
+                for i in range(1, n + 1) if i in used]
     nxt = len(revealed) + 1
-    return {"total": len(levels), "revealed": revealed,
-            "next_label": hints_mod.LEVEL_LABELS.get(nxt) if nxt <= len(levels) else None}
+    return {"total": n, "revealed": revealed,
+            "next_label": hints_mod.label_for(nxt, n) if nxt <= n else None}
 
 
 @app.get("/student/challenges/{challenge_id}/hints")
@@ -1666,10 +1667,14 @@ def admin_hint_usage(authorization: str = Header(None)):
     _require_admin(authorization)
     with get_conn() as conn:
         rows = conn.execute("""
-            SELECT c.id AS challenge_id, c.title, COUNT(DISTINCT h.user_email) AS students, COUNT(*) AS hints_revealed,
-                   SUM(h.level = 3) AS reached_skeleton
+            SELECT c.id AS challenge_id, c.title, COUNT(DISTINCT h.user_email) AS students, COUNT(*) AS hints_revealed
             FROM hint_usage h JOIN challenges c ON c.id = h.challenge_id GROUP BY c.id ORDER BY c.id""").fetchall()
-    return [dict(r) for r in rows]
+        out = []
+        for r in rows:
+            total = len(hints_mod.levels_for(r["title"]))
+            last = conn.execute("SELECT COUNT(*) n FROM hint_usage WHERE challenge_id = ? AND level = ?", (r["challenge_id"], total)).fetchone()["n"]
+            out.append({**dict(r), "reached_skeleton": last, "levels": total})
+    return out
 
 
 def _has_challenge_access(conn, challenge_id: int, user_email: str):
@@ -2874,7 +2879,7 @@ def admin_aurora_guide(email: str = "", authorization: str = Header(None)):
         chapters.append({
             "chapter": i, "title": title, "cycle": cycle[i], "difficulty": ch["difficulty"],
             "challenge": status.get(i), "briefing": ch["description"], "objective": ch["objective"], "criteria_text": ch["criteria"],
-            "hints": ch["hints"], "dataset": ({"name": DATASETS[key], "rows": len(rows), "columns": list(rows[0].keys()) if rows else [], "preview": rows[:8]} if key else None),
+            "hints": hints_mod.levels_for(title), "hint_labels": [hints_mod.label_for(k, len(hints_mod.levels_for(title))) for k in range(1, len(hints_mod.levels_for(title)) + 1)], "dataset": ({"name": DATASETS[key], "rows": len(rows), "columns": list(rows[0].keys()) if rows else [], "preview": rows[:8]} if key else None),
             "rubric": [{"label": r[0], "weight": r[1], "hint": r[3], "expected": exp[j] if j < len(exp) else ""} for j, r in enumerate(rub)],
             "reference_code": sol.reference_note(f) if i == 7 else sol.REFERENCE_CODE.get(i, ""),
         })
@@ -2911,6 +2916,121 @@ def admin_aurora_progress(authorization: str = Header(None)):
         rows.append({"name": u["name"], "email": u["email"], "variant": case_code(u["email"]), "chapters": per, "wall": u["email"] in wall,
                      "passed": sum(1 for p in per if p["score"] is not None and p["score"] >= 60)})
     return {"chapters": [{"chapter": c["case_chapter"], "title": c["title"], "status": c["status"], "starts_at": c["starts_at"], "deadline": c["deadline"]} for c in chs], "students": rows}
+
+
+# ── Mis datasets: biblioteca personal del estudiante, disponible en todos los capítulos ──
+MY_DS_DIR = RAW_DATASETS_DIR / "_mine"
+MAX_MY_DATASETS = 8
+
+
+def _my_ds_dir(email: str) -> Path:
+    return MY_DS_DIR / re.sub(r"[^\w@.]", "_", email)
+
+
+def _slug(name: str) -> str:
+    base = Path(name).stem.lower()
+    base = re.sub(r"[^a-z0-9]+", "_", base.encode("ascii", "ignore").decode()).strip("_") or "datos"
+    return base[:40]
+
+
+def _parse_upload_rows(filename: str, data: bytes) -> list[dict]:
+    """CSV/TSV/JSON/JSONL/TXT/LOG -> filas. El texto libre (informes, logs sin columnas) pasa a una fila por línea."""
+    ext = Path(filename).suffix.lower()
+    text = data.decode("utf-8-sig", errors="replace")
+    if ext == ".json":
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            lists = [v for v in parsed.values() if isinstance(v, list) and v and isinstance(v[0], dict)]
+            parsed = lists[0] if len(lists) == 1 else [parsed]
+        return [r if isinstance(r, dict) else {"valor": r} for r in parsed]
+    if ext in (".jsonl", ".ndjson"):
+        return [json.loads(l) for l in text.splitlines() if l.strip()]
+    import csv as _csv
+    try:
+        dialect = _csv.Sniffer().sniff(text[:4096], delimiters=",;\t|")
+        rows = [dict(r) for r in _csv.DictReader(io.StringIO(text), dialect=dialect)]
+        if rows and len(rows[0]) >= 2:
+            return rows
+    except _csv.Error:
+        pass
+    if ext in (".txt", ".log"):
+        return [{"linea": l} for l in text.splitlines() if l.strip()]
+    return [dict(r) for r in _csv.DictReader(io.StringIO(text))]
+
+
+@app.post("/student/my-datasets")
+async def student_upload_my_dataset(file: UploadFile = File(...), authorization: str = Header(None)):
+    user = _require_user(authorization)
+    data = await file.read()
+    if len(data) > MAX_RAW_MB * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"El archivo supera el límite de {MAX_RAW_MB} MB.")
+    filename = file.filename or "datos.csv"
+    if Path(filename).suffix.lower() not in {".csv", ".tsv", ".json", ".jsonl", ".ndjson", ".txt", ".log"}:
+        raise HTTPException(status_code=415, detail="Formatos permitidos: CSV, TSV, JSON, JSONL, TXT y LOG. Si tienes Excel, expórtalo a CSV.")
+    try:
+        rows = _parse_upload_rows(filename, data)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"No se pudo leer el archivo: {exc}")
+    if not rows:
+        raise HTTPException(status_code=422, detail="El archivo está vacío o no tiene estructura legible.")
+    d = _my_ds_dir(user["email"])
+    d.mkdir(parents=True, exist_ok=True)
+    slug = _slug(filename)
+    if not (d / f"{slug}.json").exists() and len(list(d.glob("*.json"))) >= MAX_MY_DATASETS:
+        raise HTTPException(status_code=409, detail=f"Máximo {MAX_MY_DATASETS} datasets. Elimina alguno para subir otro.")
+    (d / f"{slug}.json").write_text(json.dumps({"filename": filename, "rows": rows}, ensure_ascii=False), encoding="utf-8")
+    cols = list(rows[0].keys())
+    return {"name": slug, "var": f"up_{slug}", "filename": filename, "rows": len(rows), "columns": cols, "preview": rows[:5], "data": rows}
+
+
+@app.get("/student/my-datasets")
+def student_list_my_datasets(authorization: str = Header(None)):
+    user = _require_user(authorization)
+    d = _my_ds_dir(user["email"])
+    out = []
+    for f in sorted(d.glob("*.json")) if d.exists() else []:
+        try:
+            j = json.loads(f.read_text(encoding="utf-8"))
+            out.append({"name": f.stem, "var": f"up_{f.stem}", "filename": j.get("filename", f.name), "rows": len(j["rows"]),
+                        "columns": list(j["rows"][0].keys()) if j["rows"] else []})
+        except Exception:
+            continue
+    return out
+
+
+@app.get("/student/my-datasets/{name}")
+def student_get_my_dataset(name: str, authorization: str = Header(None)):
+    user = _require_user(authorization)
+    if not re.fullmatch(r"[a-z0-9_]{1,40}", name):
+        raise HTTPException(status_code=400)
+    f = _my_ds_dir(user["email"]) / f"{name}.json"
+    if not f.exists():
+        raise HTTPException(status_code=404)
+    j = json.loads(f.read_text(encoding="utf-8"))
+    return {"name": name, "var": f"up_{name}", "filename": j.get("filename"), "rows": j["rows"]}
+
+
+@app.delete("/student/my-datasets/{name}")
+def student_delete_my_dataset(name: str, authorization: str = Header(None)):
+    user = _require_user(authorization)
+    if not re.fullmatch(r"[a-z0-9_]{1,40}", name):
+        raise HTTPException(status_code=400)
+    f = _my_ds_dir(user["email"]) / f"{name}.json"
+    if f.exists():
+        f.unlink()
+    return {"ok": True}
+
+
+@app.get("/admin/my-datasets")
+def admin_student_datasets(email: str, authorization: str = Header(None)):
+    """El docente ve qué datasets propios subió un estudiante (para acompañar su análisis)."""
+    _require_admin(authorization)
+    d = _my_ds_dir(email.strip().lower())
+    out = []
+    for f in sorted(d.glob("*.json")) if d.exists() else []:
+        j = json.loads(f.read_text(encoding="utf-8"))
+        out.append({"name": f.stem, "filename": j.get("filename"), "rows": len(j["rows"]), "preview": j["rows"][:5]})
+    return out
 
 
 # ── Admin: Multi-dataset for challenges ──────────────────────────────────────

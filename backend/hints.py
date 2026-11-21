@@ -5,7 +5,60 @@ el siguiente). No dan los valores finales: orientan, indican el método y, al
 final, un esqueleto de código con huecos (___) por completar.
 Clave = título exacto del reto.
 """
-LEVEL_LABELS = {1: "Orientación", 2: "Método", 3: "Esqueleto de código"}
+LEVEL_LABELS = {1: "Orientación", 2: "Método", 3: "Esqueleto de código"}          # compatibilidad (3 niveles)
+LABELS_5 = ["Orientación", "Método", "Cuidado con…", "Cómo verificar tu resultado", "Esqueleto de código"]
+
+
+def label_for(level: int, total: int) -> str:
+    """Etiqueta del nivel según cuántos niveles tiene el reto."""
+    if total == 5:
+        return LABELS_5[level - 1]
+    return LEVEL_LABELS.get(level, f"Pista {level}")
+
+
+# Dos niveles intermedios por reto: el error típico y cómo comprobar el propio resultado (sin dar la respuesta).
+EXTRA: dict[str, tuple[str, str]] = {
+    "Caza de IOCs — APT28 Fancy Bear": (
+        "No cuentes las IPs internas (10.x, 192.168.x): no son C2. Y un destino con muchas filas no es necesariamente el que recibió más datos: puede ser un beacon (muchas filas, pocos bytes).",
+        "Debes obtener muy pocas IPs externas (menos de 5). Si te salen decenas, estás incluyendo IPs internas. Tu total de bytes exfiltrados debe ser mucho mayor que el de cualquier fila individual.",
+    ),
+    "Enriquecimiento y Priorización de IOC Feed": (
+        "Las mayúsculas y los duplicados cambian los conteos: normaliza antes de contar. Si confidence llega como texto, convierte con astype(float) antes de multiplicar.",
+        "Todos los IOC deben quedar en exactamente uno de los 4 niveles: la suma de value_counts() debe ser igual al número de filas que quedaron tras limpiar.",
+    ),
+    "Perfilado de Malware con Pandas — AgentTesla & Emotet": (
+        "La columna mitre trae varios códigos en una misma celda: contar filas no es contar técnicas. Sepáralos con split y explode antes de agrupar.",
+        "Una tabla cruzada bien armada suma tantas celdas como muestras tienes: compruébalo con tabla.values.sum().",
+    ),
+    "Análisis de Campaña Ransomware LockBit 3.0": (
+        "El «primer evento» es el más antiguo por fecha, no la primera fila del archivo: ordena por timestamp antes de decidir.",
+        "El host de Paciente Cero debe coincidir con el host de la fase Initial Access. Si no coincide, revisa el orden.",
+    ),
+    "Extracción de Entidades CTI — NLP sobre Texto de Amenaza": (
+        "entries es un texto JSON: si lo usas como lista sin json.loads, los conteos salen mal. Revisa también las filas con entries vacío.",
+        "El grafo debe tener al menos tantos nodos como entidades distintas extraíste. Si tiene menos, perdiste relaciones.",
+    ),
+    "Detección de Phishing con Machine Learning": (
+        "Con ~12 filas, el accuracy cambia muchísimo según cómo se parta el conjunto: no te fíes de una sola corrida. Prueba varios random_state o cross_val_score.",
+        "La suma de la matriz de confusión debe ser igual al tamaño del conjunto de prueba. Si no, mezclaste conjuntos.",
+    ),
+}
+EXTRA_AURORA: dict[int, tuple[str, str]] = {
+    1: ("Un destino con muchas conexiones no es el que recibió más datos. Beacon = mucha frecuencia y pocos bytes; exfiltración = pocas conexiones y muchísimos bytes. Y no cuentes las filas con acción BLOCK.",
+        "La IP del beacon y la de exfiltración deben ser distintas, ambas externas (no 10.20.x.x). Tu total de bytes debe estar en el orden de gigabytes."),
+    2: ("El feed puede equivocarse: una IP con baja severidad y campaña «sin asignar» puede ser justo la que movió gigas en tu red. Tus datos propios pesan más que el feed.",
+        "Los indicadores de tu campaña comparten el valor de la columna campana de tu IP del C2: deberías encontrar 3. La IP de exfiltración no está entre ellos, y justo por eso tienes que reclasificarla."),
+    3: ("Hay familias de otros casos mezcladas: si no filtras por tu servidor de mando, tu conclusión mezcla incidentes distintos.",
+        "Todas tus muestras comparten el mismo c2_ip y el mismo c2_dominio. Si ves dos servidores distintos, el filtro está mal."),
+    4: ("Sin filtrar por severidad, el primer evento es ruido de días antes del incidente. Y el tiempo se mide entre eventos del incidente, no desde el primer registro del archivo.",
+        "El Paciente Cero debe aparecer también como origen de las conexiones al C2 en el NetFlow (cruza el host con la columna host de aurora_netflow)."),
+    5: ("Las expresiones regulares se pasan de largo: una IP puede capturar parte de un número más largo y los hosts se confunden con palabras en mayúsculas. Revisa a mano lo que extraes en 2 o 3 textos.",
+        "Los dos dominios del alias aparecen en textos distintos y hay un tercer dato que los une (misma IP de alojamiento o mismo día de registro). Esa es tu prueba."),
+    6: ("Entrenas con pocos ejemplos: un accuracy de 1.0 puede ser suerte. Y no entrenes con los candidatos sin etiqueta: son el examen, no el material de estudio.",
+        "Los dominios que recomiendas bloquear comparten IP de alojamiento y tienen pocos días desde el registro. Si recomiendas dominios antiguos, revisa tus features."),
+    7: ("Un informe sin cifras no convence: cada afirmación necesita un dato (IP, host, minutos, GB). Y separa lo que sabes de lo que supones.",
+        "Léelo como si fueras el comité: ¿se entiende sin haber visto los datos? ¿hay al menos 3 medidas ordenadas por urgencia? ¿está publicado en el Muro?"),
+}
 
 HINTS: dict[str, list[str]] = {
     "Caza de IOCs — APT28 Fancy Bear": [
@@ -132,9 +185,13 @@ HINTS: dict[str, list[str]] = {
 
 
 def levels_for(title: str) -> list[str]:
-    if title in HINTS:
-        return HINTS[title]
+    """5 niveles: orientación, método, cuidado con…, cómo verificar y esqueleto de código."""
+    if title in HINTS and title in EXTRA:
+        b = HINTS[title]
+        return b[:2] + list(EXTRA[title]) + b[2:]
     from aurora.chapters import CHAPTERS, PATH_TITLES
     if title in PATH_TITLES:
-        return CHAPTERS[PATH_TITLES.index(title)]["hints"]
-    return []
+        i = PATH_TITLES.index(title)
+        b = CHAPTERS[i]["hints"]
+        return b[:2] + list(EXTRA_AURORA[i + 1]) + b[2:]
+    return HINTS.get(title, [])

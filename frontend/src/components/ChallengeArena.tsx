@@ -210,6 +210,9 @@ function Arena({ challenge }: { challenge: Challenge }) {
   const [submitted,  setSubmitted]  = useState(challenge.submitted > 0)
   const [hintData,   setHintData]   = useState<{ total: number; revealed: { level: number; label: string; text: string }[]; next_label: string | null } | null>(null)
   const [hintBusy,   setHintBusy]   = useState(false)
+  const [myDs,       setMyDs]       = useState<{ name: string; var: string; filename: string; rows: number; columns: string[] }[]>([])
+  const [myDsBusy,   setMyDsBusy]   = useState(false)
+  const [myDsError,  setMyDsError]  = useState('')
   const [grading,    setGrading]    = useState<{ score: number; manual_override?: boolean; items: { label: string; weight: number; earned: number; ok: boolean; partial: boolean; hint: string }[] } | null>(null)
   const [docFile,    setDocFile]    = useState<File | null>(null)
   const [docStatus,  setDocStatus]  = useState<{ uploaded: boolean; filename?: string; pages?: number } | null>(null)
@@ -238,6 +241,7 @@ ${challenge.case_key === 'aurora' ? `# CASO AURORA — tu variante: ${challenge.
 #   challenge_df  -> dataset del reto (estructurado)
 #   uploaded_df   -> dataset turbio subido por ti (si lo cargaste)
 #   ioc_df        -> feed de IOCs del laboratorio
+#   mis_datasets  -> dict con tus datasets subidos (también como up_<nombre>)
 
 print("=== DATASET DEL RETO ===")
 print(challenge_df.head())
@@ -337,6 +341,21 @@ if not uploaded_df.empty:
           } catch { /* ok */ }
         }
 
+        // Mis datasets: biblioteca personal, disponible en todos los capítulos como up_<nombre> y en el dict mis_datasets
+        await py.runPythonAsync(`mis_datasets = {}`)
+        try {
+          const listRes = await fetch(`${API}/student/my-datasets`, { headers: { Authorization: `Bearer ${token}` } })
+          const list = listRes.ok ? await listRes.json() : []
+          if (!cancelled) setMyDs(list)
+          for (const d of list) {
+            const r = await fetch(`${API}/student/my-datasets/${d.name}`, { headers: { Authorization: `Bearer ${token}` } })
+            if (!r.ok) continue
+            const full = await r.json()
+            py.globals.set('_my_json', JSON.stringify(full.rows))
+            await py.runPythonAsync(`${full.var} = pd.DataFrame(json.loads(_my_json)); mis_datasets['${full.name}'] = ${full.var}`)
+          }
+        } catch { /* la biblioteca es opcional */ }
+
         if (!cancelled) { setPyodide(py); setInitStatus('ready') }
       } catch { if (!cancelled) setInitStatus('error') }
     }
@@ -428,6 +447,26 @@ if not uploaded_df.empty:
     } finally {
       setDocUploading(false)
     }
+  }
+
+  const uploadMyDataset = async (file: File) => {
+    setMyDsError(''); setMyDsBusy(true)
+    try {
+      const form = new FormData(); form.append('file', file)
+      const res = await fetch(`${API}/student/my-datasets`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form })
+      const data = await res.json()
+      if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se pudo subir el archivo')
+      setMyDs(prev => [...prev.filter(d => d.name !== data.name), { name: data.name, var: data.var, filename: data.filename, rows: data.rows, columns: data.columns }])
+      if (pyodide) {
+        pyodide.globals.set('_my_json', JSON.stringify(data.data))
+        await pyodide.runPythonAsync(`${data.var} = pd.DataFrame(json.loads(_my_json)); mis_datasets['${data.name}'] = ${data.var}`)
+      }
+    } catch (e) { setMyDsError(String(e instanceof Error ? e.message : e)) } finally { setMyDsBusy(false) }
+  }
+  const deleteMyDataset = async (d: { name: string; var: string }) => {
+    await fetch(`${API}/student/my-datasets/${d.name}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => {})
+    setMyDs(prev => prev.filter(x => x.name !== d.name))
+    if (pyodide) await pyodide.runPythonAsync(`globals().pop('${d.var}', None); mis_datasets.pop('${d.name}', None)`).catch(() => {})
   }
 
   const askHint = async () => {
@@ -526,6 +565,39 @@ if not uploaded_df.empty:
         </div>
       )}
 
+      {/* ── Mis datasets (biblioteca personal) ──────────────────────────────── */}
+      <div className="rounded-xl p-4 space-y-3" style={{ ...glass, border: '1px solid rgba(34,211,238,0.2)' }}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-cyan-400 font-bold">📁 Mis datasets</span>
+          <span className="text-[9px] px-2 py-0.5 rounded-full font-mono" style={{ background: 'rgba(34,211,238,0.1)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.2)' }}>
+            CSV · TSV · JSON · JSONL · TXT · LOG · máx 5 MB · hasta 8
+          </span>
+        </div>
+        <p className="text-[10px] text-slate-500 leading-relaxed">
+          Sube tus propios datos para responder lo que pide el capítulo: indicadores que recolectaste, un log, un informe en texto, resultados de otra herramienta.
+          Quedan guardados y disponibles en <strong className="text-slate-400">todos los capítulos</strong> como <code className="text-cyan-400 font-mono">up_&lt;nombre&gt;</code> (DataFrame)
+          y dentro del diccionario <code className="text-cyan-400 font-mono">mis_datasets</code>. Un archivo de texto sin columnas se carga con una fila por línea (columna <code className="font-mono text-cyan-400">linea</code>).
+          Si tienes Excel, expórtalo a CSV.
+        </p>
+        {myDs.map(d => (
+          <div key={d.name} className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] text-slate-200 truncate"><code className="text-cyan-300 font-mono">{d.var}</code> <span className="text-slate-600">· {d.filename}</span></p>
+              <p className="text-[9px] text-slate-600 truncate">{d.rows} filas · {d.columns.slice(0, 8).join(', ')}{d.columns.length > 8 ? '…' : ''}</p>
+            </div>
+            <button onClick={() => deleteMyDataset(d)} className="text-[10px] text-red-400 px-2 py-1 rounded" style={{ border: '1px solid rgba(248,113,113,0.25)' }}>Quitar</button>
+          </div>
+        ))}
+        <label className={`flex items-center justify-center gap-2 rounded-lg p-3 cursor-pointer text-xs font-semibold text-cyan-300 ${myDsBusy ? 'opacity-50 pointer-events-none' : ''}`}
+               style={{ border: '1.5px dashed rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.03)' }}>
+          {myDsBusy ? 'Subiendo…' : '+ Subir un dataset'}
+          <input type="file" accept=".csv,.tsv,.json,.jsonl,.ndjson,.txt,.log" className="hidden" disabled={myDsBusy}
+                 onChange={e => { const f = e.target.files?.[0]; if (f) uploadMyDataset(f); e.target.value = '' }} />
+        </label>
+        {myDsError && <p className="text-[10px] text-red-400">{myDsError}</p>}
+      </div>
+
+      {challenge.case_key !== 'aurora' && (<>
       {/* ── Dataset turbio ────────────────────────────────────────────────── */}
       <div className="rounded-xl p-4 space-y-3" style={{ ...glass, border: '1px solid rgba(251,191,36,0.15)' }}>
         <div className="flex items-center justify-between gap-2">
@@ -666,6 +738,8 @@ if not uploaded_df.empty:
           ))}
         </div>
       </div>
+
+      </>)}
 
       {/* Python editor */}
       <div className="rounded-xl overflow-hidden" style={glass}>

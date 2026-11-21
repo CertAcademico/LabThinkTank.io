@@ -9,7 +9,7 @@ interface ProgressChapter { chapter: number; title: string; status: string; star
 interface ProgressStudent { name: string; email: string; variant: string; wall: boolean; passed: number; chapters: { chapter: number; score: number | null; submitted_at: string | null; hints_used: number }[] }
 interface Progress { chapters: ProgressChapter[]; students: ProgressStudent[] }
 interface GuideChapter {
-  chapter: number; title: string; cycle: string; difficulty: string; briefing: string; objective: string; criteria_text: string; hints: string[]
+  chapter: number; title: string; cycle: string; difficulty: string; briefing: string; objective: string; criteria_text: string; hints: string[]; hint_labels?: string[]
   challenge?: { status: string } | null
   dataset: { name: string; rows: number; columns: string[]; preview: Record<string, unknown>[] } | null
   rubric: { label: string; weight: number; hint: string; expected: string }[]
@@ -19,7 +19,6 @@ interface Guide { variant: string; variant_email: string; facts: Record<string, 
 
 const STATUS_COLOR: Record<string, string> = { draft: '#64748b', active: '#4ade80', closed: '#f87171' }
 const STATUS_LABEL: Record<string, string> = { draft: 'Borrador', active: 'Activo', closed: 'Cerrado' }
-const LEVELS = ['1 · Orientación', '2 · Método', '3 · Esqueleto de código']
 const fmt = (iso?: string | null) => iso ? new Date(iso).toLocaleString('es-CO', { timeZone: 'America/Bogota', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : null
 
 function Section({ title, children, color = '#64748b' }: { title: string; children: React.ReactNode; color?: string }) {
@@ -166,8 +165,8 @@ export default function CaseGuide() {
                         <Section title="Pistas graduales (el estudiante las pide de a una)" color="#facc15">
                           {c.hints.map((h, i) => (
                             <div key={i} className="rounded-lg p-3" style={{ background: 'rgba(250,204,21,0.04)', border: '1px solid rgba(250,204,21,0.12)' }}>
-                              <p className="text-[9px] font-bold text-yellow-600 uppercase tracking-wider mb-1">{LEVELS[i]}</p>
-                              {i === 2 ? <pre className="text-[11px] text-green-300 whitespace-pre-wrap font-mono">{h}</pre> : <p className="text-[11px] text-slate-300">{h}</p>}
+                              <p className="text-[9px] font-bold text-yellow-600 uppercase tracking-wider mb-1">{i + 1} · {c.hint_labels?.[i] ?? `Pista ${i + 1}`}</p>
+                              {c.hint_labels?.[i] === 'Esqueleto de código' ? <pre className="text-[11px] text-green-300 whitespace-pre-wrap font-mono">{h}</pre> : <p className="text-[11px] text-slate-300">{h}</p>}
                             </div>
                           ))}
                         </Section>

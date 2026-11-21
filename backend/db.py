@@ -329,6 +329,13 @@ def _migrate(conn) -> None:
         )
     """)
     conn.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')")
+    # Pistas v2 (3 -> 5 niveles): quien ya había visto el esqueleto (antes nivel 3) conserva ese acceso. Una sola vez.
+    if not conn.execute("SELECT 1 FROM app_settings WHERE key = 'hints_v2_migrated'").fetchone():
+        conn.execute("""INSERT OR IGNORE INTO hint_usage (challenge_id, user_email, level)
+                        SELECT challenge_id, user_email, 4 FROM hint_usage WHERE level = 3""")
+        conn.execute("""INSERT OR IGNORE INTO hint_usage (challenge_id, user_email, level)
+                        SELECT challenge_id, user_email, 5 FROM hint_usage WHERE level = 3""")
+        conn.execute("INSERT INTO app_settings (key, value) VALUES ('hints_v2_migrated', '1')")
     sc = {r[1] for r in conn.execute("PRAGMA table_info(submissions)").fetchall()}
     if "auto_graded" not in sc:
         conn.execute("ALTER TABLE submissions ADD COLUMN auto_graded INTEGER NOT NULL DEFAULT 0")

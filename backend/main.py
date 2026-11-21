@@ -1619,7 +1619,8 @@ def _auto_grade(conn, sub_id: int, challenge_id: int, payload: dict) -> dict | N
         from aurora.chapters import rubric as aurora_rubric
         email = conn.execute("SELECT user_email FROM submissions WHERE id = ?", (sub_id,)).fetchone()["user_email"]
         has_wall = bool(conn.execute("SELECT 1 FROM intel_reports WHERE user_email = ? AND length(title) > 0", (email,)).fetchone())
-        facts = build_case(email)["facts"]
+        case_ = build_case(email)
+        facts = case_["facts"]
         result = grading.grade(row["title"], [], payload.get("code", ""), payload.get("output", ""),
                                payload.get("notes", ""), payload.get("plots", []),
                                rubric=aurora_rubric(row["case_chapter"], facts, {"has_wall_report": has_wall}))
@@ -1640,6 +1641,11 @@ def _auto_grade(conn, sub_id: int, challenge_id: int, payload: dict) -> dict | N
     conn.execute("UPDATE submissions SET score = ?, feedback = ?, auto_graded = 1 WHERE id = ?",
                  (result["score"], "\n".join(lines), sub_id))
     if row["case_key"] == "aurora":
+        from aurora.review import review as _review
+        from aurora.chapters import CHAPTER_DATASET
+        data = {k: case_["datasets"][k] for k in CHAPTER_DATASET[:row["case_chapter"]] if k}
+        result["review"] = _review(row["case_chapter"], payload.get("code", ""), payload.get("output", ""), payload.get("notes", ""), data, facts)
+        conn.execute("UPDATE submissions SET review_json = ? WHERE id = ?", (json.dumps(result["review"], ensure_ascii=False), sub_id))
         from db import badge_flow_active, award_chapter_badge, _path_challenges, PATH_PASS_SCORE
         result["pass_score"] = PATH_PASS_SCORE
         result["passed"] = result["score"] >= PATH_PASS_SCORE
@@ -3129,6 +3135,15 @@ def admin_set_badge_flow(payload: dict = Body(...), authorization: str = Header(
     with get_conn() as conn:
         conn.execute("INSERT INTO app_settings (key, value) VALUES ('badge_flow_start', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (start,))
     return {"ok": True, "start": start}
+
+
+@app.get("/student/challenges/{challenge_id}/review")
+def student_review(challenge_id: int, authorization: str = Header(None)):
+    """La revisión de la última entrega del estudiante (qué hace su código, qué reportó y qué dicen sus datos)."""
+    user = _require_user(authorization)
+    with get_conn() as conn:
+        r = conn.execute("SELECT review_json FROM submissions WHERE challenge_id = ? AND user_email = ?", (challenge_id, user["email"])).fetchone()
+    return json.loads(r["review_json"]) if r and r["review_json"] else None
 
 
 # ── Admin: Multi-dataset for challenges ──────────────────────────────────────

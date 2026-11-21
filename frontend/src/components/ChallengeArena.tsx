@@ -235,6 +235,7 @@ function Arena({ challenge }: { challenge: Challenge }) {
   const [notes,      setNotes]      = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted,  setSubmitted]  = useState(challenge.submitted > 0)
+  const [review,     setReview]     = useState<{ steps: string[]; reported: { entity: string; kind: string; facts: string[] }[]; observations: string[]; nudges: string[] } | null>(null)
   const [hintData,   setHintData]   = useState<{ total: number; revealed: { level: number; label: string; text: string }[]; next_label: string | null } | null>(null)
   const [hintBusy,   setHintBusy]   = useState(false)
   const [myDs,       setMyDs]       = useState<{ name: string; var: string; filename: string; rows: number; columns: string[] }[]>([])
@@ -296,6 +297,10 @@ if not uploaded_df.empty:
     if (saved?.notes) setNotes(saved.notes)
     draftReady.current = true
     if (!challenge.id) return
+    if (challenge.case_key === 'aurora' && challenge.submitted > 0) {
+      fetch(`${API}/student/challenges/${challenge.id}/review`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null).then(r => { if (r) setReview(r) }).catch(() => {})
+    }
     if (challenge.hint_levels) {
       fetch(`${API}/student/challenges/${challenge.id}/hints`, { headers: { Authorization: `Bearer ${token}` } })
         .then(r => r.ok ? r.json() : null).then(setHintData).catch(() => {})
@@ -539,6 +544,7 @@ if not uploaded_df.empty:
       if (!res.ok) throw new Error('submit')
       const data = await res.json().catch(() => ({}))
       setGrading(data.grading ?? null)
+      setReview(data.grading?.review ?? null)
       setSubmitted(true)
     } catch { setSubmitError('Error al entregar. Intenta de nuevo.') }
     finally { setSubmitting(false) }
@@ -977,6 +983,36 @@ if not uploaded_df.empty:
               </div>
             ))}
             <p className="text-[9px] text-slate-700">Calificación automática provisional. Corrige lo que falta y vuelve a entregar.</p>
+          </div>
+        )}
+        {review && (review.steps.length > 0 || review.reported.length > 0 || review.observations.length > 0 || review.nudges.length > 0) && (
+          <div className="rounded-lg p-3 space-y-3" style={{ background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.18)' }}>
+            <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">🔎 Lo que revisé de tu entrega</p>
+            {review.observations.map((o, i) => <p key={i} className="text-[11px] text-red-300">⚠ {o}</p>)}
+            {review.steps.length > 0 && (
+              <div className="space-y-0.5">
+                <p className="text-[9px] uppercase tracking-wider text-slate-500">Qué hace tu código</p>
+                {review.steps.map((st, i) => <p key={i} className="text-[11px] text-slate-300"><span className="text-slate-600">{i + 1}.</span> {st}</p>)}
+              </div>
+            )}
+            {review.reported.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[9px] uppercase tracking-wider text-slate-500">Lo que reportaste y qué dicen TUS datos de eso</p>
+                {review.reported.map((r, i) => (
+                  <div key={i} className="text-[11px]">
+                    <p><span className="text-[9px] px-1.5 py-0.5 rounded mr-1.5" style={{ background: 'rgba(255,255,255,0.06)', color: '#94a3b8' }}>{r.kind}</span><code className="text-cyan-300 font-mono">{r.entity}</code></p>
+                    {r.facts.map((f, j) => <p key={j} className="ml-4 text-slate-400">↳ {f}</p>)}
+                    {r.facts.length === 0 && <p className="ml-4 text-slate-600">↳ No encontré esto en los datos de tu caso.</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {review.nudges.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[9px] uppercase tracking-wider text-yellow-600">Por dónde seguir</p>
+                {review.nudges.map((n, i) => <p key={i} className="text-[11px] text-yellow-200/90">→ {n}</p>)}
+              </div>
+            )}
           </div>
         )}
         {submitted && !grading && challenge.my_score != null && (

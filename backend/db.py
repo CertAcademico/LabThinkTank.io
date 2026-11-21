@@ -339,6 +339,8 @@ def _migrate(conn) -> None:
                         SELECT challenge_id, user_email, 5 FROM hint_usage WHERE level = 3""")
         conn.execute("INSERT INTO app_settings (key, value) VALUES ('hints_v2_migrated', '1')")
     sc = {r[1] for r in conn.execute("PRAGMA table_info(submissions)").fetchall()}
+    if "review_json" not in sc:
+        conn.execute("ALTER TABLE submissions ADD COLUMN review_json TEXT NOT NULL DEFAULT ''")
     if "auto_graded" not in sc:
         conn.execute("ALTER TABLE submissions ADD COLUMN auto_graded INTEGER NOT NULL DEFAULT 0")
     fix_demo_challenge_datasets(conn)

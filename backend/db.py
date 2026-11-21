@@ -1535,6 +1535,8 @@ def seed_aurora_challenges(conn) -> int:
     """Crea/actualiza los 7 capítulos del Caso Aurora (los datos se generan por estudiante, no se guardan)."""
     from aurora.chapters import CHAPTERS, PATH_TITLES
     n = 0
+    # El informe pasó de capítulo 7 a 8 al insertar «El agente autónomo»: conserva su fila (asignaciones, estado, horarios).
+    conn.execute("UPDATE challenges SET title = 'Caso Aurora 8 — Informe al comité' WHERE title = 'Caso Aurora 7 — Informe al comité'")
     for i, (title, ch) in enumerate(zip(PATH_TITLES, CHAPTERS), start=1):
         row = conn.execute("SELECT id FROM challenges WHERE title = ?", (title,)).fetchone()
         vals = (ch["description"], ch["objective"], ch["criteria"], ch["difficulty"])

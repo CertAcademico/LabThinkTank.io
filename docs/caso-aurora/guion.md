@@ -45,7 +45,7 @@ Seis retos individuales que dejan de ser ejercicios sueltos y pasan a ser **seis
 
 El estudiante **no recibe esta tabla**: la reconstruye capítulo a capítulo.
 
-## 4. Los seis capítulos (mapa de retos)
+## 4. Los ocho capítulos (mapa de retos)
 
 Cada capítulo reemplaza a uno de los retos actuales conservando sus habilidades y su rúbrica de autocalificación.
 
@@ -57,9 +57,10 @@ Cada capítulo reemplaza a uno de los retos actuales conservando sus habilidades
 | 4 | **La línea de tiempo** | Kill chain, Paciente Cero, tiempo hasta el cifrado | ¿Cómo entró, por dónde se movió y cuánto tardó? |
 | 5 | **Lo que dicen los informes** | NLP / extracción de entidades, grafo de relaciones | ¿Qué conexiones aparecen en los reportes que los logs no muestran? |
 | 6 | **El próximo golpe** | Clasificador de dominios (ML) | ¿Qué otros dominios de Marea Gris deberíamos bloquear antes de que ataquen? |
-| 7 | **Informe al comité** | Síntesis (nota ejecutiva en el campo de notas) | ¿Qué concluyes y qué debe hacer Aurora el lunes? |
+| 7 | **El agente autónomo** | Detección de anomalías sin etiquetas (Isolation Forest, LOF) sobre telemetría de sesiones; distinguir personas, automatización legítima y un agente ofensivo con IA (LLM + herramientas) | ¿Qué sesiones no son humanas, y cuáles son el atacante y no el monitoreo del banco? |
+| 8 | **Informe al comité** | Síntesis (nota ejecutiva en el campo de notas) | ¿Qué concluyes y qué debe hacer Aurora el lunes? |
 
-El capítulo 7 es nuevo: no tiene código obligatorio, se evalúa con criterios sobre las conclusiones (cita al menos tres evidencias de capítulos distintos, nombra el vector inicial, propone mitigaciones priorizadas).
+El capítulo 8 (informe) es nuevo: no tiene código obligatorio, se evalúa con criterios sobre las conclusiones (cita al menos tres evidencias de capítulos distintos, nombra el vector inicial, propone mitigaciones priorizadas).
 
 ## 5. Datasets y cómo se conectan
 
@@ -102,7 +103,7 @@ Cada estudiante cierra el caso publicando su reporte final en el **Muro de resul
 
 - El reporte es **privado hasta que el docente abre el muro**, para evitar copias mientras trabajan.
 - Al abrirlo, todos ven todos y se hace el diálogo. El docente puede destacar reportes y exportar todo a CSV.
-- En el capítulo 7 el reporte del muro reemplaza al campo de notas como entregable final.
+- En el capítulo 8 el reporte del muro reemplaza al campo de notas como entregable final.
 
 ## 6. Cómo es cada capítulo para el estudiante
 

@@ -14,6 +14,7 @@ import random
 from datetime import datetime, timedelta
 
 DATASETS = {
+    "telemetria": "aurora_telemetria_sesiones",
     "netflow":  "aurora_netflow",
     "ioc":      "aurora_ioc_feed",
     "malware":  "aurora_malware_lab",
@@ -212,12 +213,46 @@ def build_case(email: str) -> dict:
         dominios.append(dom(f"{r.choice(['mercado', 'clinica', 'colegio', 'taller'])}{r.randint(1, 99)}.example", r.choice(_REGISTRARS), r.randint(400, 2500), f"192.0.2.{r.randint(1, 254)}", None))
     r.shuffle(dominios)
 
+    # ── 7. Telemetría de sesiones: ¿operador humano, automatización legítima o agente autónomo con IA? ──
+    # Se genera AL FINAL para no alterar ningún dato anterior de las variantes ya entregadas.
+    cuentas = ["mparra", "lcastillo", "jrivera", "agomez", "dortega", "ncardenas", "psuarez", "fbernal", "tmora", "rvalencia", "ihenao", "cgil"]
+    ses = []
+    def _row(kind, cuenta, ppm, desv_f, cmds, err, retry, hora, pags, tool, dur):
+        inter = 60.0 / ppm
+        return {"kind": kind, "cuenta": cuenta, "hora": hora, "duracion_min": dur, "peticiones_por_min": round(ppm, 1),
+                "intervalo_medio_s": round(inter, 2), "intervalo_desv_s": round(inter * desv_f, 2), "comandos_distintos": cmds,
+                "errores_pct": round(err, 1), "reintento_tras_error_s": round(retry, 1), "paginas_distintas": pags, "herramienta": tool}
+    for _ in range(r.randint(96, 106)):                                   # operadores humanos
+        ses.append(_row("humano", r.choice(cuentas), r.uniform(2, 11), r.uniform(0.5, 1.1), r.randint(3, 14), r.uniform(0, 9),
+                        r.uniform(25, 120), r.choice(list(range(8, 19)) * 9 + [19, 20, 21]), r.randint(4, 34),
+                        r.choice(["navegador"] * 4 + ["cliente-cli"]), r.randint(5, 90)))
+    for tool in ("monitoreo", "respaldo", "reportes", "monitoreo"):       # automatización legítima (rápida y regular, pero rígida)
+        ses.append(_row("legitimo", f"svc_{tool}", r.uniform(24, 48), r.uniform(0.03, 0.2), r.randint(1, 3), r.uniform(0, 1.2),
+                        r.uniform(60, 300), r.choice([1, 2, 3, 4, 5, 22, 23]), r.randint(2, 6), "agente-" + tool, r.randint(20, 180)))
+    for _ in range(8):                                                    # agente autónomo con IA (LLM + herramientas)
+        ses.append(_row("agente", r.choice([victim, svc, r.choice(cuentas)]), r.uniform(17, 46), r.uniform(0.25, 0.55), r.randint(26, 60),
+                        r.uniform(9, 22), r.uniform(1, 6), r.choice([0, 1, 2, 3, 4, 5, 23]), r.randint(90, 260),
+                        r.choice(["python-requests", "httpx", "automatizacion"]), r.randint(10, 70)))
+    r.shuffle(ses)
+    telemetria, agent_sessions, legit_bots = [], [], []
+    t_base = d0 + timedelta(days=1)
+    for i, x in enumerate(ses, start=1):
+        sid = f"S-{i:04d}"
+        if x["kind"] == "agente":
+            agent_sessions.append(sid)
+        elif x["kind"] == "legitimo":
+            legit_bots.append(sid)
+        row = {"sesion": sid, "cuenta": x["cuenta"], "inicio": _fmt(t_base.replace(hour=x["hora"], minute=0, second=0) + timedelta(minutes=r.randint(0, 59), days=(i % 5)))}
+        row.update({k: v for k, v in x.items() if k not in ("kind", "cuenta")})
+        telemetria.append(row)
+
     facts = {
         "pz": pz, "pz_ip": pz_ip, "mid": mid, "svc": svc, "vector": vec_key, "vector_text": vec_text, "family": fam,
         "c2_ip": c2_ip, "exfil_ip": exfil_ip, "phish": phish, "alias": alias, "c2_domain": c2_domain, "persistence": persist, "evasion": evasion,
         "beacons": beacons, "exfil_bytes": exfil_allowed, "minutes_to_encrypt": minutes_to_encrypt, "minutes_from_exec": minutes_from_exec, "lateral_path": [pz, mid, "FILE-SRV-02"],
         "siblings": hermanos, "victim": victim,
+        "agent_sessions": agent_sessions, "legit_bots": legit_bots,
         "legit_candidates": [d["dominio"] for d in dominios if d["etiqueta"] is None and d["dominio"] not in hermanos],
     }
     return {"code": code, "facts": facts,
-            "datasets": {"netflow": netflow, "ioc": feed, "malware": malware, "siem": siem, "reportes": reportes, "dominios": dominios}}
+            "datasets": {"netflow": netflow, "ioc": feed, "malware": malware, "siem": siem, "reportes": reportes, "dominios": dominios, "telemetria": telemetria}}

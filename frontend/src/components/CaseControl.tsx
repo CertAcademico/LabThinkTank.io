@@ -15,7 +15,7 @@ interface Ann { id: number; title: string; body: string; publish_at: string; exp
 interface UserRow { email: string; name: string; role: string }
 
 // Ciclo de inteligencia al que apunta cada capítulo del Caso Aurora
-const CYCLE: Record<number, string> = { 1: 'Recolección', 2: 'Procesamiento', 3: 'Análisis', 4: 'Análisis', 5: 'Procesamiento', 6: 'Análisis predictivo', 7: 'Diseminación' }
+const CYCLE: Record<number, string> = { 1: 'Recolección', 2: 'Procesamiento', 3: 'Análisis', 4: 'Análisis', 5: 'Procesamiento', 6: 'Análisis predictivo', 7: 'Análisis predictivo', 8: 'Diseminación' }
 const STATUS: Record<string, { label: string; color: string }> = {
   draft: { label: 'Borrador (oculto)', color: '#64748b' }, active: { label: 'Activo', color: '#4ade80' }, closed: { label: 'Cerrado', color: '#f87171' },
 }

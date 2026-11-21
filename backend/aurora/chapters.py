@@ -12,10 +12,11 @@ PATH_TITLES = [
     "Caso Aurora 4 — La línea de tiempo",
     "Caso Aurora 5 — Lo que dicen los informes",
     "Caso Aurora 6 — El próximo golpe",
-    "Caso Aurora 7 — Informe al comité",
+    "Caso Aurora 7 — El agente autónomo",
+    "Caso Aurora 8 — Informe al comité",
 ]
 # Datasets visibles acumulativamente: el capítulo n puede cruzar los de los capítulos ≤ n.
-CHAPTER_DATASET = ["netflow", "ioc", "malware", "siem", "reportes", "dominios", None]
+CHAPTER_DATASET = ["netflow", "ioc", "malware", "siem", "reportes", "dominios", "telemetria", None]
 
 INTRO = (
     "Eres analista de inteligencia de amenazas (CTI) en Aurora Financiera, un banco regional ficticio. "
@@ -139,7 +140,29 @@ CHAPTERS = [
         ],
     ),
     dict(
-        description="CAPÍTULO 7 · Informe al comité. Es el cierre. No hay que programar: usa lo que descubriste en los seis capítulos para escribir tu informe de inteligencia y publícalo en el "
+        description="CAPÍTULO 7 · El agente autónomo. La revisión forense encontró algo inquietante: parte del reconocimiento fue demasiado rápido, demasiado sistemático y a horas absurdas para un operador humano. "
+        "Hoy los atacantes usan agentes autónomos con IA (modelos de lenguaje con herramientas): planifican, ejecutan, leen el error y se corrigen solos, sin cansarse ni dormir. "
+        "Tienes la telemetría de sesiones del banco (aurora_telemetria_sesiones). Hay tres tipos de sesión: personas, automatización legítima del banco (monitoreo, respaldos, reportes) y agentes de IA. "
+        "Ningún campo te dice cuál es cuál: tendrás que descubrirlo con detección de anomalías.",
+        objective="1) Explora la línea base: ¿cómo se comporta una sesión humana normal (ritmo, errores, horario, variedad de acciones)? "
+                  "2) Construye un detector de anomalías sin etiquetas (Isolation Forest, LOF u otra técnica) sobre variables de comportamiento y marca las sesiones sospechosas. "
+                  "3) Revisa lo marcado: no toda anomalía es un atacante. Separa la automatización legítima de los agentes de IA y justifícalo con las señales de comportamiento. "
+                  "4) Entrega la lista de sesiones que recomiendas aislar y explica en las notas qué distingue a un agente de IA de una persona y de un script rígido.",
+        criteria="Método de detección (15%) + Preparación de variables (10%) + Agentes encontrados (30%) + Precisión de la lista (15%) + Automatización legítima distinguida (15%) + Señales explicadas (15%)",
+        difficulty="avanzado",
+        hints=[
+            "Piensa en cómo trabaja un agente de IA: actúa muy rápido, prueba muchas cosas distintas, se equivoca y corrige en segundos, y no respeta el horario de oficina. "
+            "Una persona es más lenta, más irregular y se queda en lo conocido. Un script clásico es rápido y regular, pero repite siempre lo mismo.",
+            "Escala las variables numéricas (StandardScaler) antes de comparar. IsolationForest(contamination=0.12) devuelve -1 para las sesiones anómalas. "
+            "Usa variables de comportamiento: peticiones_por_min, intervalo_desv_s, comandos_distintos, errores_pct, reintento_tras_error_s, hora y paginas_distintas. No uses sesion ni cuenta.",
+            "import pandas as pd\nfrom sklearn.ensemble import IsolationForest\nfrom sklearn.preprocessing import StandardScaler\nt = aurora_telemetria_sesiones.copy()\n"
+            "cols = ['peticiones_por_min', 'intervalo_desv_s', 'comandos_distintos', 'errores_pct', 'reintento_tras_error_s', 'hora', 'paginas_distintas']\n"
+            "X = StandardScaler().fit_transform(t[cols])\nt['anomala'] = IsolationForest(contamination=___, random_state=42).fit_predict(X) == -1\n"
+            "marcadas = t[t['anomala']]\nprint(len(marcadas), 'sesiones marcadas')\nprint(marcadas[['sesion', 'cuenta', 'herramienta'] + cols].to_string())",
+        ],
+    ),
+    dict(
+        description="CAPÍTULO 8 · Informe al comité. Es el cierre. No hay que programar: usa lo que descubriste en los siete capítulos para escribir tu informe de inteligencia y publícalo en el "
         "Muro de resultados de inteligencia. Mañana el comité decide qué hacer, y tu variante del caso (código AUR-xxxx) será la base del diálogo con tus compañeros.",
         objective="En el campo de notas escribe un informe ejecutivo con: 1) cómo entró el atacante (vector), 2) qué hizo y por dónde se movió, 3) cuánto tardó y cuánto robó, "
                   "4) los indicadores clave (IPs, dominios, host, cuenta), 5) tu nivel de confianza y 6) al menos tres mitigaciones priorizadas. "
@@ -230,6 +253,35 @@ def rubric(chapter: int, facts: dict, ctx: dict | None = None) -> list:
             ("Anotaste tu conclusión", 5, g.notes_min(100), "Explica en las notas por qué recomiendas bloquear esos dominios."),
         ]
     if chapter == 7:
+        ag, bots = f["agent_sessions"], f["legit_bots"]
+        def ids(sub):
+            return set(re.findall(r"S-\d{4}", sub.output))
+        def shrink(sub):
+            """Una lista inflada (marcar casi todo) no demuestra detección: el crédito baja con el tamaño de la lista."""
+            n = len(ids(sub))
+            return 0.0 if n == 0 else min(1.0, 25 / n)
+        def found(sub, _r):
+            hit = len(ids(sub) & set(ag))
+            return min(1.0, hit / 6) * shrink(sub)                      # con 6 de 8 ya es puntaje completo
+        def precision(sub, _r):
+            listed = ids(sub)
+            if not listed or len(listed) > 40:
+                return 0.0
+            good = len(listed & set(ag))
+            return min(1.0, (good / len(listed)) / 0.5)                # mitad de la lista acertada = completo
+        def legit(sub, _r):
+            mention = g.text_matches(r"svc_|leg[ií]tim|monitor|respaldo|reporte|rígid|script|automatizaci", where="text")(sub, _r)
+            return mention * shrink(sub)
+        signals = (r"cadencia|ritmo|intervalo", r"reintent|corrig|error", r"hora|madrugada|horario|noche", r"diversidad|variedad|comandos|adapt", r"agente|llm|ia\b|inteligencia artificial|aut[oó]nom")
+        return [
+            ("Usaste un método de detección de anomalías", 15, g.code_matches(r"IsolationForest|LocalOutlierFactor|OneClassSVM|EllipticEnvelope|MLPRegressor|autoencoder|zscore|z_score|np\.abs\(.*>\s*[23]"), "Prueba Isolation Forest o LOF: no necesitan etiquetas."),
+            ("Preparaste las variables de comportamiento", 10, lambda s, r: min(1.0, (g.code_matches(r"StandardScaler|zscore|z_score|\.std\(")(s, r) + min(1.0, sum(1 for k in ("peticiones_por_min", "intervalo_desv_s", "comandos_distintos", "errores_pct", "reintento_tras_error_s") if k in s.code) / 3)) / 2), "Escala las variables y usa las de comportamiento, no los identificadores."),
+            ("Encontraste los agentes de IA", 30, found, "Imprime los identificadores (S-####) de las sesiones que marcas como sospechosas."),
+            ("Tu lista es precisa (no marcas casi todo)", 15, precision, "Una lista corta y justificada vale más que marcar muchas sesiones."),
+            ("Distinguiste la automatización legítima", 15, legit, "Hay sesiones rápidas y regulares que son monitoreo o respaldos del banco: no son el atacante. Dilo en tus notas."),
+            ("Explicaste las señales de un agente de IA", 15, lambda s, r: min(1.0, sum(1 for p in signals if re.search(p, s.low)) / 3), "Explica en notas qué distingue a un agente de IA: ritmo, reintentos, horario, variedad de acciones."),
+        ]
+    if chapter == 8:
         key = [f["c2_ip"], f["exfil_ip"], f["pz"], f["svc"], f["phish"], f["c2_domain"], f["family"], f["persistence"]]
         mins = f["minutes_to_encrypt"]
         return [

@@ -68,7 +68,21 @@ m = RandomForestClassifier(random_state=42).fit(Xtr, ytr)
 p = m.predict(Xte); print('accuracy', accuracy_score(yte, p)); print(classification_report(yte, p, zero_division=0))
 cm = confusion_matrix(yte, p); plt.imshow(cm); plt.colorbar(); plt.show()
 print('BLOQUEAR:', aurora_dominios.loc[cand.index[m.predict(cand[cols])], 'dominio'].tolist())""",
-    7: "(Sin código: informe ejecutivo en las notas + publicación en el Muro de Inteligencia.)",
+    7: """import pandas as pd
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
+t = aurora_telemetria_sesiones.copy()
+cols = ['peticiones_por_min', 'intervalo_desv_s', 'comandos_distintos', 'errores_pct', 'reintento_tras_error_s', 'hora', 'paginas_distintas']
+X = StandardScaler().fit_transform(t[cols])
+t['anomala'] = IsolationForest(contamination=0.12, random_state=42).fit_predict(X) == -1
+marcadas = t[t['anomala']]
+print(len(marcadas), 'sesiones marcadas')
+# Separar la automatización legítima (rápida y regular, pero rígida: pocas acciones distintas)
+legitimas = marcadas[(marcadas['comandos_distintos'] <= 4) & (marcadas['cuenta'].str.startswith('svc_'))]
+agentes = marcadas.drop(legitimas.index)
+print('AGENTES DE IA (aislar):', agentes['sesion'].tolist())
+print('Automatización legítima (no aislar):', legitimas['sesion'].tolist())""",
+    8: "(Sin código: informe ejecutivo en las notas + publicación en el Muro de Inteligencia.)",
 }
 
 
@@ -101,6 +115,12 @@ def expected(chapter: int, f: dict) -> list[str]:
                 "accuracy ≥ 0.75", "Dominios a bloquear (los hermanos de Marea Gris): " + ", ".join(f["siblings"]) + " — y NO: " + ", ".join(f["legit_candidates"]),
                 "Matriz de confusión", "Conclusión en las notas"]
     if chapter == 7:
+        return ["IsolationForest / LOF / otro método sin etiquetas", "StandardScaler + variables de comportamiento (peticiones_por_min, intervalo_desv_s, comandos_distintos, errores_pct, reintento_tras_error_s…)",
+                "Las 8 sesiones de agente (basta con ≥ 6): " + ", ".join(f["agent_sessions"]),
+                "Lista corta: la mitad o más de lo marcado debe ser de agentes",
+                "Las sesiones de automatización legítima NO son el atacante: " + ", ".join(f["legit_bots"]) + " (cuentas svc_, pocas acciones distintas, muy regulares)",
+                "Señales de un agente de IA: ritmo rápido, reintentos en segundos, horario de madrugada, mucha variedad de acciones y páginas"]
+    if chapter == 8:
         return [f"Cita ≥ 5 de: {f['c2_ip']}, {f['exfil_ip']}, {f['pz']}, {f['svc']}, {f['phish']}, {f['c2_domain']}, {f['family']}, {f['persistence']}",
                 f["vector_text"], f"{f['minutes_to_encrypt']} min / {_gb(f['exfil_bytes'])}", "≥ 3 medidas: bloqueo de IOC, rotación de credenciales, segmentación, respaldos fuera de línea, MFA, capacitación",
                 "≥ 600 caracteres", "Reporte publicado en el Muro"]
@@ -108,7 +128,7 @@ def expected(chapter: int, f: dict) -> list[str]:
 
 
 def reference_note(f: dict) -> str:
-    """Informe de ejemplo para el capítulo 7."""
+    """Informe de ejemplo para el capítulo 8."""
     return (f"Resumen: el atacante entró por {f['vector_text']} en {f['pz']}. Usó {f['family']} con C2 {f['c2_ip']} ({f['c2_domain']}) y persistencia '{f['persistence']}'. "
             f"Se movió con la cuenta {f['svc']} hacia {f['mid']} y FILE-SRV-02, borró respaldos y sacó {round(f['exfil_bytes'] / 1e9, 2)} GB hacia {f['exfil_ip']}. "
             f"Del primer evento al cifrado pasaron {f['minutes_to_encrypt']} minutos. Dominio de phishing: {f['phish']} (alias {f['alias']}). Confianza alta. "

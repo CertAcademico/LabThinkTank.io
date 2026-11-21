@@ -1115,7 +1115,7 @@ def admin_challenge_solution(challenge_id: int, email: str = "", authorization: 
         rub = aurora_rubric(ch["case_chapter"], case["facts"], {"has_wall_report": True})
         exp = sol.expected(ch["case_chapter"], case["facts"])
         code = sol.REFERENCE_CODE.get(ch["case_chapter"], "")
-        if ch["case_chapter"] == 7:
+        if ch["case_chapter"] == 8:
             code = sol.reference_note(case["facts"])
         return {"title": ch["title"], "variant": case["code"], "variant_email": who, "reference_code": code,
                 "criteria": [{"label": r[0], "weight": r[1], "hint": r[3], "expected": exp[i] if i < len(exp) else ""} for i, r in enumerate(rub)]}
@@ -1481,7 +1481,7 @@ def student_challenges(authorization: str = Header(None)):
             from aurora.generator import case_code, DATASETS
             from aurora.chapters import CHAPTER_DATASET
             d["case_code"] = case_code(user["email"])
-            d["no_code"] = d["case_chapter"] == 7
+            d["no_code"] = d["case_chapter"] == 8
             from aurora.learn import LEARN, CICLO
             d["learn"] = {**LEARN.get(d["case_chapter"], {}), "ciclo": CICLO}
             k = CHAPTER_DATASET[d["case_chapter"] - 1]
@@ -2869,7 +2869,7 @@ def admin_aurora_guide(email: str = "", authorization: str = Header(None)):
     who = (email or admin["email"]).strip().lower()
     case = build_case(who)
     f = case["facts"]
-    cycle = {1: "Recolección", 2: "Procesamiento", 3: "Análisis", 4: "Análisis", 5: "Procesamiento", 6: "Análisis predictivo", 7: "Diseminación"}
+    cycle = {1: "Recolección", 2: "Procesamiento", 3: "Análisis", 4: "Análisis", 5: "Procesamiento", 6: "Análisis predictivo", 7: "Análisis predictivo", 8: "Diseminación"}
     with get_conn() as conn:
         status = {r["case_chapter"]: dict(r) for r in conn.execute(
             "SELECT case_chapter, id, status, starts_at, deadline FROM challenges WHERE case_key = 'aurora'").fetchall()}
@@ -2884,7 +2884,7 @@ def admin_aurora_guide(email: str = "", authorization: str = Header(None)):
             "challenge": status.get(i), "briefing": ch["description"], "objective": ch["objective"], "criteria_text": ch["criteria"],
             "hints": hints_mod.levels_for(title), "hint_labels": [hints_mod.label_for(k, len(hints_mod.levels_for(title))) for k in range(1, len(hints_mod.levels_for(title)) + 1)], "dataset": ({"name": DATASETS[key], "rows": len(rows), "columns": list(rows[0].keys()) if rows else [], "preview": rows[:8]} if key else None),
             "rubric": [{"label": r[0], "weight": r[1], "hint": r[3], "expected": exp[j] if j < len(exp) else ""} for j, r in enumerate(rub)],
-            "reference_code": sol.reference_note(f) if i == 7 else sol.REFERENCE_CODE.get(i, ""),
+            "reference_code": sol.reference_note(f) if i == 8 else sol.REFERENCE_CODE.get(i, ""),
         })
     truth = [{"timestamp": r["timestamp"], "host": r["host"], "usuario": r["usuario"], "fase": r["fase"], "detalle": r["detalle"]}
              for r in case["datasets"]["siem"] if r["severidad"] in ("high", "critical")]

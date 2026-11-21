@@ -178,7 +178,7 @@ export default function CaseGuide() {
                             </div>
                           ))}
                         </Section>
-                        <Section title={c.chapter === 7 ? 'Informe de ejemplo' : 'Solución de referencia (Python)'} color="#4ade80">
+                        <Section title={c.chapter === 8 ? 'Informe de ejemplo' : 'Solución de referencia (Python)'} color="#4ade80">
                           <pre className="text-[11px] text-green-300 whitespace-pre-wrap font-mono rounded-lg p-3" style={{ background: '#050a14' }}>{c.reference_code}</pre>
                         </Section>
                       </div>

@@ -101,6 +101,21 @@ LEARN = {
         reflexion=["¿Qué cuesta más al banco: bloquear un dominio legítimo o dejar pasar uno malicioso?", "Con tan pocos ejemplos, ¿cuánto confías en tu modelo? ¿Cómo lo mejorarías?"],
     ),
     7: dict(
+        fase="Análisis predictivo",
+        por_que="Los atacantes ya usan agentes autónomos con IA que trabajan sin descanso. Si tu defensa solo busca firmas conocidas, no los verá: hay que detectar comportamientos raros.",
+        aprenderas=["Definir qué es «normal» en una organización (línea base) y detectar lo que se aparta", "Usar aprendizaje no supervisado (Isolation Forest, LOF) cuando no hay etiquetas", "Separar una anomalía maliciosa de una automatización legítima"],
+        conceptos=[
+            ("Agente autónomo con IA", "Programa que combina un modelo de lenguaje (LLM) con herramientas: planifica, actúa, lee el resultado y se corrige solo, sin un humano al teclado."),
+            ("Línea base", "Cómo se comporta normalmente la organización. Una anomalía es algo que se aparta de esa base."),
+            ("Aprendizaje no supervisado", "El modelo busca patrones sin que le digamos la respuesta: aquí, sin etiquetas de «atacante»."),
+            ("Isolation Forest", "Algoritmo que aísla los puntos raros: lo anómalo se separa con pocos cortes, lo normal necesita muchos."),
+            ("Automatización legítima", "Scripts del propio banco (monitoreo, respaldos). Son rápidos y regulares, pero rígidos: repiten siempre lo mismo."),
+            ("Falso positivo / negativo", "Aislar una cuenta legítima por error vs dejar libre a un agente. En seguridad, ambos errores cuestan."),
+        ],
+        exito="Sabrás que lo lograste cuando tu lista de sesiones sospechosas sea corta, esté justificada por comportamiento y no incluya al monitoreo del banco.",
+        reflexion=["Un agente de IA se corrige en segundos y no duerme. ¿Qué parte de tu defensa actual depende de que el atacante sea lento o duerma?", "¿Cómo usaría un atacante un modelo de lenguaje para parecerse más a una persona, y cómo lo detectarías entonces?"],
+    ),
+    8: dict(
         fase="Diseminación",
         por_que="Una conclusión que nadie entiende no sirve. Diseminar es traducir el análisis en una decisión para quien manda.",
         aprenderas=["Escribir un informe ejecutivo: conclusión primero, evidencia después", "Separar lo que sabes de lo que supones y declarar tu confianza", "Priorizar recomendaciones por urgencia"],

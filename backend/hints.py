@@ -56,7 +56,9 @@ EXTRA_AURORA: dict[int, tuple[str, str]] = {
         "Los dos dominios del alias aparecen en textos distintos y hay un tercer dato que los une (misma IP de alojamiento o mismo día de registro). Esa es tu prueba."),
     6: ("Entrenas con pocos ejemplos: un accuracy de 1.0 puede ser suerte. Y no entrenes con los candidatos sin etiqueta: son el examen, no el material de estudio.",
         "Los dominios que recomiendas bloquear comparten IP de alojamiento y tienen pocos días desde el registro. Si recomiendas dominios antiguos, revisa tus features."),
-    7: ("Un informe sin cifras no convence: cada afirmación necesita un dato (IP, host, minutos, GB). Y separa lo que sabes de lo que supones.",
+    7: ("No todo lo anómalo es un atacante: el banco tiene automatización legítima (monitoreo, respaldos, reportes) que es rápida y regular. Y no uses la columna sesion ni cuenta como variables: no describen comportamiento.",
+        "Deberías marcar más o menos entre 8 y 16 sesiones, no 50. Entre las marcadas, los agentes de IA tienen muchas acciones distintas, reintentan en segundos y trabajan de madrugada; el monitoreo repite siempre lo mismo."),
+    8: ("Un informe sin cifras no convence: cada afirmación necesita un dato (IP, host, minutos, GB). Y separa lo que sabes de lo que supones.",
         "Léelo como si fueras el comité: ¿se entiende sin haber visto los datos? ¿hay al menos 3 medidas ordenadas por urgencia? ¿está publicado en el Muro?"),
 }
 

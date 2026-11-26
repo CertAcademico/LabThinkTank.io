@@ -37,7 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
 from db import init_db, get_conn
-from auth import register, login, verify_token, ensure_admin
+from auth import register, login, verify_token, ensure_admin, domain_allowed, open_domains_active, open_signup_until, ALLOWED_DOMAIN
 import grading
 import hints as hints_mod
 from intelligence.threat_engine import get_threat_feed, add_uploaded_iocs
@@ -441,6 +441,16 @@ def auth_login(payload: dict = Body(...)):
         return {"token": token}
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
+
+
+@app.get("/auth/signup-policy")
+def auth_signup_policy():
+    until = open_signup_until()
+    return {
+        "domain": ALLOWED_DOMAIN,
+        "open_domains": open_domains_active(),
+        "until": until.isoformat() if until else None,
+    }
 
 
 @app.get("/auth/me")
@@ -899,7 +909,7 @@ def admin_users_auth_audit(authorization: str = Header(None)):
         else:
             if email != email.lower():
                 issues.append({"severity": "warning", "code": "email_not_normalized", "detail": "El email contiene mayúsculas."})
-            if email.split("@", 1)[1].lower() != "universidadean.edu.co":
+            if not domain_allowed(email):
                 issues.append({"severity": "error", "code": "invalid_domain", "detail": "El dominio no está permitido para login."})
 
         if role not in allowed_roles:

@@ -17,13 +17,36 @@ pwd_ctx  = CryptContext(schemes=["bcrypt"], deprecated="auto")
 EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 
 
+def open_signup_until() -> Optional[datetime]:
+    """Fin de la ventana en que se acepta cualquier dominio (OPEN_SIGNUP_UNTIL, ISO 8601)."""
+    raw = os.getenv("OPEN_SIGNUP_UNTIL", "").strip()
+    if not raw:
+        return None
+    try:
+        until = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=timezone(timedelta(hours=-5)))  # hora Colombia
+    return until
+
+
+def open_domains_active() -> bool:
+    until = open_signup_until()
+    return bool(until and datetime.now(timezone.utc) < until)
+
+
+def domain_allowed(email: str) -> bool:
+    domain = email.rsplit("@", 1)[-1].lower()
+    return domain == ALLOWED_DOMAIN or open_domains_active()
+
+
 def _validate(email: str, password: str, name: str = "") -> None:
     if name is not None and not name.strip():
         raise ValueError("El nombre es requerido")
     if not EMAIL_RE.match(email):
         raise ValueError("Formato de email inválido")
-    domain = email.split("@")[1].lower()
-    if domain != ALLOWED_DOMAIN:
+    if not domain_allowed(email):
         raise ValueError(f"Solo se permiten cuentas @{ALLOWED_DOMAIN}")
     if len(password) < 8:
         raise ValueError("La contraseña debe tener al menos 8 caracteres")

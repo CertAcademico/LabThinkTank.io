@@ -26,7 +26,7 @@ function Field({
           background: 'rgba(255,255,255,0.04)',
           border: '1px solid rgba(255,255,255,0.08)',
         }}
-        onFocus={e => (e.currentTarget.style.borderColor = 'rgba(34,211,238,0.5)')}
+        onFocus={e => (e.currentTarget.style.borderColor = 'rgba(212,189,85,0.5)')}
         onBlur={e  => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}
       />
       {hint && <p className="text-[10px] text-slate-600">{hint}</p>}
@@ -52,7 +52,16 @@ export default function AuthPage() {
     fetch(`${API_URL}/auth/open-groups`).then(r => r.ok ? r.json() : []).then(setGroups).catch(() => {})
   }, [mode])
 
-  const isEanEmail = email.trim().toLowerCase().endsWith(`@${DOMAIN}`)
+  // Ventana temporal en que el registro acepta cualquier dominio (Gmail, Hotmail...)
+  const [openDomains, setOpenDomains] = useState(false)
+  useEffect(() => {
+    fetch(`${API_URL}/auth/signup-policy`).then(r => r.ok ? r.json() : null)
+      .then(p => setOpenDomains(Boolean(p?.open_domains))).catch(() => {})
+  }, [])
+
+  const emailLc = email.trim().toLowerCase()
+  const isEanEmail = emailLc.endsWith(`@${DOMAIN}`) ||
+    (openDomains && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(emailLc))
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -100,16 +109,16 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#030712' }}>
+    <div className="min-h-screen flex" style={{ background: '#0e110a' }}>
 
       {/* ── Left: branding ───────────────────────────────────────────────── */}
       <div className="hidden lg:flex flex-col justify-between w-[480px] shrink-0 p-12 border-r"
-           style={{ background: 'rgba(8,12,25,0.97)', borderColor: 'rgba(255,255,255,0.05)' }}>
+           style={{ background: 'rgba(16,19,11,0.97)', borderColor: 'rgba(255,255,255,0.05)' }}>
         <div>
           {/* Logo */}
           <div className="flex items-center gap-3 mb-16">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                 style={{ background: 'rgba(34,211,238,0.12)', boxShadow: '0 0 24px rgba(34,211,238,0.2)' }}>
+                 style={{ background: 'rgba(212,189,85,0.12)', boxShadow: '0 0 24px rgba(212,189,85,0.2)' }}>
               <svg viewBox="0 0 24 24" className="w-5 h-5 text-cyan-400" fill="none"
                    stroke="currentColor" strokeWidth="2">
                 <polygon points="12 2 2 7 12 12 22 7 12 2" />
@@ -125,7 +134,7 @@ export default function AuthPage() {
 
           <h1 className="text-3xl font-bold text-white leading-tight mb-4">
             Aprende ciencia de datos<br />
-            <span style={{ color: '#22d3ee' }}>con datos reales de CTI</span>
+            <span style={{ color: '#d4bd55' }}>con datos reales de CTI</span>
           </h1>
           <p className="text-slate-500 text-sm leading-relaxed mb-10">
             Plataforma de aprendizaje interactivo para estudiantes de la Universidad Ean.
@@ -160,7 +169,7 @@ export default function AuthPage() {
           {/* Card */}
           <div className="rounded-2xl p-8"
                style={{
-                 background: 'rgba(15,23,42,0.7)',
+                 background: 'rgba(26,31,19,0.7)',
                  backdropFilter: 'blur(20px)',
                  border: '1px solid rgba(255,255,255,0.07)',
                }}>
@@ -172,10 +181,10 @@ export default function AuthPage() {
                 <button key={m} onClick={() => { setMode(m); setError(''); setSuccess('') }}
                         className="flex-1 py-2 rounded-lg text-sm font-medium transition-all"
                         style={mode === m ? {
-                          background: 'rgba(34,211,238,0.1)',
-                          color: '#22d3ee',
-                          border: '1px solid rgba(34,211,238,0.25)',
-                        } : { color: '#475569' }}>
+                          background: 'rgba(212,189,85,0.1)',
+                          color: '#d4bd55',
+                          border: '1px solid rgba(212,189,85,0.25)',
+                        } : { color: '#5f6646' }}>
                   {m === 'login' ? 'Iniciar sesión' : 'Registrarse'}
                 </button>
               ))}
@@ -188,20 +197,20 @@ export default function AuthPage() {
               )}
 
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-400">Email institucional</label>
+                <label className="block text-xs font-medium text-slate-400">{openDomains ? 'Correo electrónico' : 'Email institucional'}</label>
                 <div className="relative">
                   <input
                     type="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    placeholder={`estudiante@${DOMAIN}`}
+                    placeholder={openDomains ? 'tu.correo@gmail.com' : `estudiante@${DOMAIN}`}
                     required
                     className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-100 placeholder-slate-600 outline-none pr-8 transition-all"
                     style={{
                       background: 'rgba(255,255,255,0.04)',
                       border: `1px solid ${isEanEmail && email ? 'rgba(74,222,128,0.4)' : 'rgba(255,255,255,0.08)'}`,
                     }}
-                    onFocus={e => (e.currentTarget.style.borderColor = 'rgba(34,211,238,0.5)')}
+                    onFocus={e => (e.currentTarget.style.borderColor = 'rgba(212,189,85,0.5)')}
                     onBlur={e  => (e.currentTarget.style.borderColor =
                       isEanEmail && email ? 'rgba(74,222,128,0.4)' : 'rgba(255,255,255,0.08)')}
                   />
@@ -209,7 +218,11 @@ export default function AuthPage() {
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 text-xs">✓</span>
                   )}
                 </div>
-                <p className="text-[10px] text-slate-600">Solo se permiten cuentas @{DOMAIN}</p>
+                <p className="text-[10px] text-slate-600">
+                  {openDomains
+                    ? `Hoy se aceptan cuentas @${DOMAIN}, Gmail, Hotmail u otros correos`
+                    : `Solo se permiten cuentas @${DOMAIN}`}
+                </p>
               </div>
 
               <Field label="Contraseña" type="password" value={password} onChange={setPassword}
@@ -251,9 +264,9 @@ export default function AuthPage() {
               <button type="submit" disabled={loading}
                       className="w-full py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 mt-2"
                       style={{
-                        background: 'linear-gradient(135deg, rgba(34,211,238,0.2), rgba(167,139,250,0.2))',
-                        border: '1px solid rgba(34,211,238,0.3)',
-                        color: '#22d3ee',
+                        background: 'linear-gradient(135deg, rgba(212,189,85,0.2), rgba(147,169,84,0.2))',
+                        border: '1px solid rgba(212,189,85,0.3)',
+                        color: '#d4bd55',
                       }}>
                 {loading ? 'Procesando...' : mode === 'login' ? 'Entrar al Lab →' : 'Crear cuenta →'}
               </button>

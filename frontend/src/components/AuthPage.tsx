@@ -49,7 +49,11 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (mode !== 'register') return
-    fetch(`${API_URL}/auth/open-groups`).then(r => r.ok ? r.json() : []).then(setGroups).catch(() => {})
+    fetch(`${API_URL}/auth/open-groups`).then(r => r.ok ? r.json() : [])
+      .then((gs: { id: number; name: string; members: number }[]) => {
+        setGroups(gs)
+        if (gs.length === 1) setTeamId(String(gs[0].id))   // un solo grupo abierto (p. ej. ORION): preseleccionado
+      }).catch(() => {})
   }, [mode])
 
   // Ventana temporal en que el registro acepta cualquier dominio (Gmail, Hotmail...)

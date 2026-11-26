@@ -405,10 +405,15 @@ def auth_register(payload: dict = Body(...)):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     with get_conn() as conn:
-        from db import enroll_individual_path
-        enroll_individual_path(conn, user["email"])       # ruta individual solo para cuentas nuevas
-        if team_id:
+        from db import enroll_individual_path, team_auto_challenges, assign_team_auto_challenges
+        if team_id and team_auto_challenges(conn, team_id):
+            # grupo con retos propios (p. ej. ORION): cada integrante recibe ese set, no la ruta Aurora
             conn.execute("INSERT OR IGNORE INTO team_members (team_id, user_email) VALUES (?,?)", (team_id, user["email"]))
+            assign_team_auto_challenges(conn, team_id, user["email"])
+        else:
+            enroll_individual_path(conn, user["email"])   # ruta individual solo para cuentas nuevas
+            if team_id:
+                conn.execute("INSERT OR IGNORE INTO team_members (team_id, user_email) VALUES (?,?)", (team_id, user["email"]))
     return user
 
 
@@ -1551,7 +1556,7 @@ def student_challenges(authorization: str = Header(None)):
                 d.update(objective="", criteria="", hints_json="[]", schema_json=None, dataset_name=None)
                 d.pop("learn", None)
         out.append(d)
-    out.sort(key=lambda d: (d.get("path_order") is None, d.get("path_order") or 0))
+    out.sort(key=lambda d: (d.get("path_order") is None, d.get("path_order") or 0, d["id"]))
     return out
 
 
@@ -2180,11 +2185,13 @@ def admin_add_team_member(team_id: int, payload: dict = Body(...), authorization
     _require_admin(authorization)
     emails = payload.get("emails", [])
     with get_conn() as conn:
+        from db import assign_team_auto_challenges
         for email in emails:
             conn.execute(
                 "INSERT OR IGNORE INTO team_members (team_id, user_email) VALUES (?,?)",
                 (team_id, email),
             )
+            assign_team_auto_challenges(conn, team_id, email)
     return {"ok": True}
 
 

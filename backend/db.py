@@ -207,6 +207,12 @@ def init_db() -> None:
                 UNIQUE(challenge_id, dataset_id)
             );
 
+            CREATE TABLE IF NOT EXISTS team_auto_assign (
+                team_id      INTEGER NOT NULL REFERENCES teams(id),
+                challenge_id INTEGER NOT NULL REFERENCES challenges(id),
+                PRIMARY KEY (team_id, challenge_id)
+            );
+
             CREATE TABLE IF NOT EXISTS team_challenge_assignments (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
                 team_id      INTEGER NOT NULL REFERENCES teams(id),
@@ -1508,6 +1514,22 @@ def _path_challenges(conn, only_active: bool = True) -> list:
         if r:
             out.append(r)
     return out
+
+
+def team_auto_challenges(conn, team_id) -> list:
+    """Retos que se asignan individualmente a cada integrante del equipo (p. ej. grupo ORION)."""
+    if not team_id:
+        return []
+    return [r[0] for r in conn.execute(
+        "SELECT challenge_id FROM team_auto_assign WHERE team_id = ? ORDER BY challenge_id", (team_id,))]
+
+
+def assign_team_auto_challenges(conn, team_id, email: str) -> int:
+    n = 0
+    for cid in team_auto_challenges(conn, team_id):
+        n += conn.execute("INSERT OR IGNORE INTO challenge_assignments (challenge_id, user_email) VALUES (?,?)",
+                          (cid, email)).rowcount
+    return n
 
 
 def enroll_individual_path(conn, email: str) -> int:

@@ -133,22 +133,22 @@ export default function AuthPage() {
           </div>
 
           <h1 className="text-3xl font-bold text-white leading-tight mb-4">
-            Aprende ciencia de datos<br />
-            <span style={{ color: '#d4bd55' }}>con datos reales de CTI</span>
+            SandBox Entrenamiento CTI<br />
+            <span style={{ color: '#d4bd55' }}>y ORION</span>
           </h1>
           <p className="text-slate-500 text-sm leading-relaxed mb-10">
-            Plataforma de aprendizaje interactivo para estudiantes de la Universidad Ean.
-            Practica Python, ETL, Machine Learning y visualización de datos usando
-            inteligencia de amenazas cibernéticas real.
+            Entorno de entrenamiento en Ciberinteligencia (CTI) para la Universidad Ean.
+            Analiza información de amenazas, evalúa fuentes y produce inteligencia
+            con las instrucciones de la Operación ORION.
           </p>
 
           {/* Feature list */}
           {[
-            { icon: '🐍', label: 'Python interactivo en el browser — sin instalar nada' },
-            { icon: '🔧', label: 'ETL, limpieza y parseo de datos de SIEM' },
-            { icon: '📊', label: 'Visualizaciones con Matplotlib' },
-            { icon: '🤖', label: 'ML y clustering con scikit-learn' },
-            { icon: '🛡️', label: 'Datasets reales de Cyber Threat Intelligence' },
+            { icon: '🎖️', label: 'Operación ORION: instrucciones para analizar información de Ciberinteligencia' },
+            { icon: '🧭', label: 'Evaluación de fuentes con el código Admiralty (OTAN)' },
+            { icon: '🎯', label: 'Requerimientos Prioritarios de Inteligencia (PIR)' },
+            { icon: '🛡️', label: 'Mapeo de TTPs con MITRE ATT&CK y difusión con TLP' },
+            { icon: '💻', label: 'Sandbox interactivo en el navegador — sin instalar nada' },
           ].map(f => (
             <div key={f.label} className="flex items-start gap-3 mb-4">
               <span className="text-lg shrink-0">{f.icon}</span>

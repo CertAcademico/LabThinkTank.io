@@ -10,6 +10,11 @@ services:
     environment:
       - DB_PATH=/data/cti.db
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env}
+      # Cuenta admin creada/restaurada al arrancar (ver backend/auth.py:ensure_admin)
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - ADMIN_NAME=${ADMIN_NAME:-Admin Lab}
+      - ADMIN_RESET_PASSWORD=${ADMIN_RESET_PASSWORD:-false}
       # Ollama — if running on host machine use host.docker.internal
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
       - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY:-}

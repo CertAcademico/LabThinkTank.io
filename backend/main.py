@@ -37,7 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
 from db import init_db, get_conn
-from auth import register, login, verify_token
+from auth import register, login, verify_token, ensure_admin
 import grading
 import hints as hints_mod
 from intelligence.threat_engine import get_threat_feed, add_uploaded_iocs
@@ -362,6 +362,7 @@ def _scoped_campaigns(user: dict) -> list[dict]:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    ensure_admin()
     yield
 
 

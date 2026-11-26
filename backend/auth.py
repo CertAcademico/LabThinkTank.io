@@ -91,3 +91,38 @@ def verify_token(token: str) -> Optional[dict]:
         }
     except JWTError:
         return None
+
+
+def ensure_admin() -> None:
+    """Crea o restaura la cuenta admin definida en ADMIN_EMAIL / ADMIN_PASSWORD.
+
+    - Si no existe, la crea con rol admin.
+    - Si existe, garantiza que tenga rol admin (no toca la clave, para que
+      un cambio hecho desde la plataforma no se pierda al reiniciar).
+    - Con ADMIN_RESET_PASSWORD=true se fuerza la clave de .env en cada arranque.
+    """
+    email = os.getenv("ADMIN_EMAIL", "").strip().lower()
+    password = os.getenv("ADMIN_PASSWORD", "")
+    if not email or not password:
+        return
+    name = os.getenv("ADMIN_NAME", "Admin Lab").strip() or "Admin Lab"
+    reset = os.getenv("ADMIN_RESET_PASSWORD", "").strip().lower() in ("1", "true", "yes")
+
+    with get_conn() as conn:
+        row = conn.execute("SELECT id, role FROM users WHERE email = ?", (email,)).fetchone()
+        if not row:
+            conn.execute(
+                "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'admin')",
+                (name, email, pwd_ctx.hash(password)),
+            )
+            print(f"[auth] cuenta admin creada: {email}")
+            return
+        if row["role"] != "admin":
+            conn.execute("UPDATE users SET role = 'admin' WHERE id = ?", (row["id"],))
+            print(f"[auth] rol admin restaurado: {email}")
+        if reset:
+            conn.execute(
+                "UPDATE users SET password_hash = ?, password_expires_at = NULL WHERE id = ?",
+                (pwd_ctx.hash(password), row["id"]),
+            )
+            print(f"[auth] clave admin restablecida desde .env: {email}")

@@ -995,6 +995,94 @@ print("\\nClusters con muchos puertos 4444 y bytes altos = posible C2 activo.")`
       },
     ],
   },
+
+  // ── TRACK 6: Sandbox Militar · ORION ──────────────────────────────────────
+  {
+    id: 'mil', label: 'Militar · ORION', icon: '🎖️', color: '#84cc16', packages: [],
+    lessons: [
+      {
+        id: 'mil-1', title: 'Instrucciones para analizar información de Ciberinteligencia ORION',
+        concept: 'Código Admiralty (OTAN), PIR, TLP y producto de inteligencia',
+        explanation: `**Operación ORION** (escenario ficticio): un centro de ciberdefensa recibe reportes sobre una campaña contra el sector defensa. Tu tarea es convertir información cruda en **inteligencia evaluada**.
+
+**Instrucciones de análisis:**
+1. **Evaluar la fuente** con el código Admiralty (OTAN, STANAG 2511):
+   - Confiabilidad de la fuente: **A** (totalmente confiable) … **F** (no se puede juzgar)
+   - Credibilidad de la información: **1** (confirmada) … **6** (no se puede juzgar)
+2. **Descartar** lo que no es utilizable: fuentes D–F o credibilidad 4–6.
+3. **Alinear** cada reporte con los **PIR** (Requerimientos Prioritarios de Inteligencia) del mando.
+4. **Mapear** la actividad a MITRE ATT&CK para entender el *cómo*.
+5. **Clasificar la difusión** con TLP (CLEAR, GREEN, AMBER, RED).
+6. **Redactar** el producto: hallazgo, evaluación (A1–C3), PIR que responde y acción recomendada.`,
+        starterCode: `import pandas as pd
+
+# Reportes crudos recibidos por el centro de ciberdefensa (datos ficticios)
+reportes = pd.DataFrame({
+    'id':          ['OR-01','OR-02','OR-03','OR-04','OR-05','OR-06','OR-07','OR-08','OR-09','OR-10'],
+    'fuente':      ['SIGINT','OSINT','HUMINT','CERT aliado','Foro clandestino','EDR propio',
+                    'OSINT','HUMINT','CERT aliado','Redes sociales'],
+    'confiab':     ['A','C','B','A','E','A','D','F','B','E'],
+    'credib':      [1,3,2,2,5,1,4,6,2,6],
+    'pir':         ['PIR-1','PIR-2','PIR-1','PIR-3','PIR-1','PIR-3','PIR-2','PIR-1','PIR-2','PIR-3'],
+    'ttp':         ['T1566.001','T1190','T1078','T1071.001','T1486','T1059.001',
+                    'T1595','T1003','T1133','T1491'],
+    'resumen':     ['Spearphishing a oficiales de logística',
+                    'Explotación de VPN perimetral expuesta',
+                    'Uso de credenciales robadas de contratista',
+                    'Beaconing HTTPS hacia C2 externo',
+                    'Afirma tener ransomware listo para el sector',
+                    'PowerShell ofuscado en estación de mando',
+                    'Escaneo masivo a rangos del sector defensa',
+                    'Rumor de volcado de credenciales',
+                    'Acceso remoto anómalo vía servicio externo',
+                    'Amenaza de defacement sin evidencia'],
+})
+
+PIR = {
+    'PIR-1': '¿Quién apunta al personal y a la cadena logística?',
+    'PIR-2': '¿Qué vulnerabilidades perimetrales están explotando?',
+    'PIR-3': '¿Hay actividad activa dentro de la red propia?',
+}
+
+# ── Paso 1–2: evaluación Admiralty y descarte ─────────────────────────────
+reportes['admiralty'] = reportes['confiab'] + reportes['credib'].astype(str)
+utilizable = reportes['confiab'].isin(['A','B','C']) & (reportes['credib'] <= 3)
+evaluados  = reportes[utilizable].copy()
+descartados = reportes[~utilizable]
+
+print("=== REPORTES DESCARTADOS (fuente D-F o credibilidad 4-6) ===")
+print(descartados[['id','fuente','admiralty','resumen']].to_string(index=False))
+
+# ── Paso 3–5: PIR, ATT&CK y TLP ───────────────────────────────────────────
+def tlp(row):
+    if row['pir'] == 'PIR-3':       return 'TLP:RED'     # actividad interna
+    if row['confiab'] == 'A':       return 'TLP:AMBER'
+    return 'TLP:GREEN'
+
+evaluados['tlp'] = evaluados.apply(tlp, axis=1)
+
+print("\\n=== INTELIGENCIA EVALUADA ===")
+print(evaluados[['id','admiralty','pir','ttp','tlp','resumen']].to_string(index=False))
+
+# ── Paso 6: producto de inteligencia por PIR ──────────────────────────────
+print("\\n=== PRODUCTO ORION — RESPUESTA A LOS PIR ===")
+for pir, pregunta in PIR.items():
+    sub = evaluados[evaluados['pir'] == pir]
+    print(f"\\n{pir}: {pregunta}")
+    if sub.empty:
+        print("  Sin información evaluada suficiente → requerir más recolección.")
+        continue
+    for _, r in sub.iterrows():
+        print(f"  [{r['admiralty']}] [{r['tlp']}] {r['resumen']} ({r['ttp']})")`,
+        hint: 'Cambia el umbral a credibilidad <= 2: ¿qué PIR queda sin respuesta? Luego agrega una columna "accion" (bloquear, cazar, alertar) según la TTP.',
+        ctiExample: {
+          tool: 'OTAN NCIA / Comandos de Ciberdefensa',
+          description: 'Los centros de ciberdefensa militares evalúan cada reporte con el código Admiralty (STANAG 2511) antes de difundirlo: un dato "E5" de un foro no llega al mando igual que un "A1" de SIGINT. Los PIR orientan la recolección y el TLP controla quién recibe el producto, el mismo flujo que acabas de automatizar.',
+          year: '2024-2025',
+        },
+      },
+    ],
+  },
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

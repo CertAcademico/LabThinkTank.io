@@ -458,6 +458,112 @@ def auth_signup_policy():
     }
 
 
+# ── Chat del grupo (instructor ↔ integrantes) ─────────────────────────────────
+
+CHAT_MAX_LEN = 2000
+
+
+def _team_chat_access(conn, team_id: int, user: dict):
+    team = conn.execute("SELECT id, name, chat_enabled FROM teams WHERE id = ?", (team_id,)).fetchone()
+    if not team:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+    if user.get("role") == "admin":
+        return team
+    if not team["chat_enabled"]:
+        raise HTTPException(status_code=403, detail="El chat no está habilitado para este grupo")
+    member = conn.execute("SELECT 1 FROM team_members WHERE team_id = ? AND user_email = ?",
+                          (team_id, user["email"])).fetchone()
+    if not member:
+        raise HTTPException(status_code=403, detail="No perteneces a este grupo")
+    return team
+
+
+@app.get("/student/team-chat")
+def student_team_chat(authorization: str = Header(None)):
+    """Grupo con chat habilitado al que pertenece el usuario (o null)."""
+    user = _require_user(authorization)
+    with get_conn() as conn:
+        r = conn.execute("""
+            SELECT t.id, t.name, t.color FROM teams t
+            JOIN team_members tm ON tm.team_id = t.id
+            WHERE tm.user_email = ? AND t.chat_enabled = 1
+            ORDER BY t.id LIMIT 1""", (user["email"],)).fetchone()
+    return dict(r) if r else None
+
+
+@app.get("/teams/{team_id}/chat")
+def team_chat_list(team_id: int, after: int = 0, authorization: str = Header(None)):
+    user = _require_user(authorization)
+    with get_conn() as conn:
+        _team_chat_access(conn, team_id, user)
+        if after:
+            rows = conn.execute("""SELECT id, user_email, user_name, role, body, created_at FROM team_chat
+                                   WHERE team_id = ? AND id > ? ORDER BY id LIMIT 200""", (team_id, after)).fetchall()
+        else:
+            rows = conn.execute("""SELECT * FROM (SELECT id, user_email, user_name, role, body, created_at FROM team_chat
+                                   WHERE team_id = ? ORDER BY id DESC LIMIT 200) ORDER BY id""", (team_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/teams/{team_id}/chat")
+def team_chat_post(team_id: int, payload: dict = Body(...), authorization: str = Header(None)):
+    user = _require_user(authorization)
+    body = str(payload.get("body", "")).strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="El mensaje está vacío")
+    if len(body) > CHAT_MAX_LEN:
+        raise HTTPException(status_code=400, detail=f"Máximo {CHAT_MAX_LEN} caracteres")
+    with get_conn() as conn:
+        _team_chat_access(conn, team_id, user)
+        cur = conn.execute("INSERT INTO team_chat (team_id, user_email, user_name, role, body) VALUES (?,?,?,?,?)",
+                           (team_id, user["email"], user.get("name", ""), user.get("role", "student"), body))
+        row = conn.execute("SELECT id, user_email, user_name, role, body, created_at FROM team_chat WHERE id = ?",
+                           (cur.lastrowid,)).fetchone()
+    return dict(row)
+
+
+@app.delete("/admin/teams/{team_id}/chat/{msg_id}")
+def admin_team_chat_delete(team_id: int, msg_id: int, authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute("DELETE FROM team_chat WHERE id = ? AND team_id = ?", (msg_id, team_id))
+    return {"ok": True}
+
+
+@app.patch("/admin/teams/{team_id}/chat-enabled")
+def admin_team_chat_enabled(team_id: int, payload: dict = Body(...), authorization: str = Header(None)):
+    _require_admin(authorization)
+    with get_conn() as conn:
+        conn.execute("UPDATE teams SET chat_enabled = ? WHERE id = ?", (1 if payload.get("enabled") else 0, team_id))
+    return {"ok": True}
+
+
+@app.get("/admin/teams/{team_id}/overview")
+def admin_team_overview(team_id: int, authorization: str = Header(None)):
+    """Retos del grupo (los auto-asignados) y el avance de cada integrante."""
+    _require_admin(authorization)
+    with get_conn() as conn:
+        team = conn.execute("SELECT id, name, color, open_signup, chat_enabled FROM teams WHERE id = ?", (team_id,)).fetchone()
+        if not team:
+            raise HTTPException(status_code=404, detail="Grupo no encontrado")
+        retos = [dict(r) for r in conn.execute("""
+            SELECT c.id, c.title, c.description, c.objective, c.criteria, c.difficulty, c.status, c.stage,
+                   d.name AS dataset_name
+            FROM team_auto_assign ta JOIN challenges c ON c.id = ta.challenge_id
+            LEFT JOIN datasets d ON d.id = c.dataset_id
+            WHERE ta.team_id = ? ORDER BY c.id""", (team_id,))]
+        members = [dict(r) for r in conn.execute("""
+            SELECT u.name, u.email, tm.joined_at FROM team_members tm JOIN users u ON u.email = tm.user_email
+            WHERE tm.team_id = ? ORDER BY u.name""", (team_id,))]
+        for m in members:
+            subs = {r["challenge_id"]: r["score"] for r in conn.execute(
+                "SELECT challenge_id, MAX(score) AS score FROM submissions WHERE user_email = ? GROUP BY challenge_id",
+                (m["email"],))}
+            m["progress"] = {str(rt["id"]): ({"submitted": True, "score": subs[rt["id"]]} if rt["id"] in subs
+                                             else {"submitted": False, "score": None}) for rt in retos}
+    return {**dict(team), "retos": retos, "members": members}
+
+
 @app.get("/auth/me")
 def auth_me(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):

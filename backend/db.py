@@ -302,6 +302,19 @@ def _migrate(conn) -> None:
     tcols = {r[1] for r in conn.execute("PRAGMA table_info(teams)").fetchall()}
     if "open_signup" not in tcols:
         conn.execute("ALTER TABLE teams ADD COLUMN open_signup INTEGER NOT NULL DEFAULT 0")
+    if "chat_enabled" not in tcols:
+        conn.execute("ALTER TABLE teams ADD COLUMN chat_enabled INTEGER NOT NULL DEFAULT 0")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS team_chat (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            team_id    INTEGER NOT NULL REFERENCES teams(id),
+            user_email TEXT    NOT NULL,
+            user_name  TEXT    NOT NULL DEFAULT '',
+            role       TEXT    NOT NULL DEFAULT 'student',
+            body       TEXT    NOT NULL,
+            created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_team_chat_team ON team_chat(team_id, id)")
     if "onboarding_path" not in {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}:
         conn.execute("ALTER TABLE users ADD COLUMN onboarding_path INTEGER NOT NULL DEFAULT 0")
     conn.execute("""

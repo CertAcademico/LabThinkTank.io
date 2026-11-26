@@ -3,6 +3,7 @@ import IntelWall from './IntelWall'
 import CaseControl from './CaseControl'
 import CaseGuide from './CaseGuide'
 import CaseDashboard from './CaseDashboard'
+import GroupOverviewTab from './GroupOverviewTab'
 import { useAuth } from '../contexts/AuthContext'
 import { BadgeCard, TIER, type Badge } from './BadgeCard'
 
@@ -43,7 +44,7 @@ interface Stats {
   recent_submissions: { user_name: string; challenge: string; submitted_at: string; score?: number }[]
 }
 
-type Tab = 'dashboard' | 'users' | 'teams' | 'badges' | 'progreso' | 'fases' | 'datasets' | 'retos' | 'submissions' | 'fuentes' | 'muro' | 'caso' | 'guia' | 'tablero'
+type Tab = 'grupo' | 'dashboard' | 'users' | 'teams' | 'badges' | 'progreso' | 'fases' | 'datasets' | 'retos' | 'submissions' | 'fuentes' | 'muro' | 'caso' | 'guia' | 'tablero'
 
 interface CtfPhase {
   id: number; order_idx: number; name: string; category: string
@@ -2574,6 +2575,7 @@ function BadgeProgressTab({ token }: { token: string }) {
 // ── Main AdminPanel ───────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: string; badge?: number }[] = [
+  { id: 'grupo',       label: 'Grupo ORION', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
   { id: 'dashboard',   label: 'Dashboard',  icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z' },
   { id: 'users',       label: 'Usuarios',   icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' },
   { id: 'teams',       label: 'Equipos',    icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10' },
@@ -2719,6 +2721,7 @@ export default function AdminPanel({ onExitAdmin }: { onExitAdmin: () => void })
         </header>
 
         <main className="flex-1 overflow-y-auto p-6">
+          {tab === 'grupo'       && <GroupOverviewTab teams={teams} token={tk} />}
           {tab === 'dashboard'   && <DashboardTab   stats={stats} />}
           {tab === 'users'       && <UsersTab       users={users} challenges={challenges} allBadges={allBadges} token={tk} onRefresh={fetchAll} />}
           {tab === 'teams'       && <EquiposTab     teams={teams} users={users} challenges={challenges} allBadges={allBadges} token={tk} onRefresh={fetchAll} />}

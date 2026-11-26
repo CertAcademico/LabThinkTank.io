@@ -5,6 +5,7 @@ import type { PyodideInterface } from '../types/pyodide'
 
 import CasePrimer, { type Learn } from './CasePrimer'
 import { TIER } from './BadgeCard'
+import TeamChat from './TeamChat'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -1718,6 +1719,13 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
 export default function ChallengeArena() {
   const { token, user }                 = useAuth()
   const isAdmin                         = user?.role === 'admin'
+  const [chatTeam,   setChatTeam]       = useState<{ id: number; name: string } | null>(null)
+
+  useEffect(() => {
+    if (!token || isAdmin) return
+    fetch(`${API}/student/team-chat`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null).then(setChatTeam).catch(() => {})
+  }, [token, isAdmin])
   const [challenges, setChallenges]     = useState<Challenge[]>([])
   const [teamInfo,   setTeamInfo]       = useState<TeamInfo | null>(null)
   const [solved,     setSolved]         = useState<SolvedChallenge[]>([])
@@ -1775,6 +1783,8 @@ export default function ChallengeArena() {
           Las entregas y subidas de archivos están deshabilitadas para no afectar calificaciones.
         </div>
       )}
+
+      {chatTeam && <TeamChat teamId={chatTeam.id} teamName={chatTeam.name} height={260} />}
 
       {/* Reto grupal del equipo */}
       {teamInfo && <TeamChallengeCard teamInfo={teamInfo} />}

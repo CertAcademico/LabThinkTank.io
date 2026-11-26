@@ -1489,6 +1489,7 @@ def admin_stats(authorization: str = Header(None)):
 @app.get("/student/challenges")
 def student_challenges(authorization: str = Header(None)):
     user = _require_user(authorization)
+    is_admin = user.get("role") == "admin"   # vista de admin: todos los retos diseñados, para explicarlos
     with get_conn() as conn:                       # cuentas nuevas: asegurar los capítulos de la ruta antes de listar
         flag = conn.execute("SELECT onboarding_path FROM users WHERE email = ?", (user["email"],)).fetchone()
         if flag and flag["onboarding_path"]:
@@ -1512,20 +1513,24 @@ def student_challenges(authorization: str = Header(None)):
                    (SELECT 1 FROM user_badges ub
                     WHERE ub.user_email = ? AND ub.badge_id = c.badge_id) AS badge_earned
             FROM challenges c
-            JOIN challenge_assignments ca ON c.id = ca.challenge_id
             LEFT JOIN datasets d ON c.dataset_id = d.id
             LEFT JOIN badges b ON c.badge_id = b.id
-            WHERE ca.user_email = ? AND c.status != 'draft'
+            WHERE (? = 1 OR (c.status != 'draft' AND EXISTS (
+                     SELECT 1 FROM challenge_assignments ca
+                     WHERE ca.challenge_id = c.id AND ca.user_email = ?)))
             ORDER BY c.created_at DESC
-        """, (user["email"], user["email"], user["email"], user["email"])).fetchall()
+        """, (user["email"], user["email"], user["email"],
+              1 if is_admin else 0, user["email"])).fetchall()
         from db import path_status, PATH_PASS_SCORE
         pstat = path_status(conn, user["email"])
 
     out = []
     for r in rows:
-        if not _is_started(r["starts_at"]):
+        if not is_admin and not _is_started(r["starts_at"]):
             continue
         d = dict(r)
+        if is_admin:
+            d["admin_preview"] = True
         if d.get("case_key") == "aurora":
             from aurora.generator import case_code, DATASETS
             from aurora.chapters import CHAPTER_DATASET
@@ -1538,7 +1543,7 @@ def student_challenges(authorization: str = Header(None)):
         if hints_mod.levels_for(d["title"]):
             d["hints_json"] = "[]"            # las pistas se piden de a una vía /hints
             d["hint_levels"] = len(hints_mod.levels_for(d["title"]))
-        st = pstat.get(d["id"])
+        st = None if is_admin else pstat.get(d["id"])
         if st:
             d.update(path_order=st["order"], path_total=st["total"], locked=st["locked"],
                      locked_by=st["requires"], path_pass_score=PATH_PASS_SCORE)
@@ -1604,6 +1609,7 @@ def _aurora_dataset_payload(user: dict, chapter: int) -> dict:
 @app.post("/student/challenges/{challenge_id}/submit")
 def student_submit(challenge_id: int, payload: dict = Body(...), authorization: str = Header(None)):
     user = _require_user(authorization)
+    _require_not_admin_preview(user)
     with get_conn() as conn:
         ok = _has_challenge_access(conn, challenge_id, user["email"])
         if not ok:
@@ -1782,8 +1788,20 @@ def admin_hint_usage(authorization: str = Header(None)):
     return out
 
 
+def _is_admin_email(conn, user_email: str) -> bool:
+    r = conn.execute("SELECT role FROM users WHERE email = ?", (user_email,)).fetchone()
+    return bool(r and r["role"] == "admin")
+
+
+def _require_not_admin_preview(user: dict) -> None:
+    if user.get("role") == "admin":
+        raise HTTPException(status_code=403, detail="Vista de admin: los retos se pueden revisar, pero no enviar ni subir archivos.")
+
+
 def _has_challenge_access(conn, challenge_id: int, user_email: str):
     from db import path_status
+    if _is_admin_email(conn, user_email):
+        return (1,)                           # el admin puede abrir cualquier reto para explicarlo
     st0 = conn.execute("SELECT status, starts_at FROM challenges WHERE id = ?", (challenge_id,)).fetchone()
     if st0 and st0["status"] == "draft":
         return None                           # borrador: solo el admin decide cuándo se activa
@@ -1847,6 +1865,7 @@ async def student_upload_document(
     authorization: str = Header(None),
 ):
     user = _require_user(authorization)
+    _require_not_admin_preview(user)
     email = user["email"]
 
     # ── Validate type ──────────────────────────────────────────────────────
@@ -1968,6 +1987,7 @@ async def student_upload_raw_dataset(
     authorization: str = Header(None),
 ):
     user = _require_user(authorization)
+    _require_not_admin_preview(user)
     email = user["email"]
 
     with get_conn() as conn:

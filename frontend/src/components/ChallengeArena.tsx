@@ -1716,7 +1716,8 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
 // ── Challenge List ────────────────────────────────────────────────────────────
 
 export default function ChallengeArena() {
-  const { token }                       = useAuth()
+  const { token, user }                 = useAuth()
+  const isAdmin                         = user?.role === 'admin'
   const [challenges, setChallenges]     = useState<Challenge[]>([])
   const [teamInfo,   setTeamInfo]       = useState<TeamInfo | null>(null)
   const [solved,     setSolved]         = useState<SolvedChallenge[]>([])
@@ -1761,9 +1762,19 @@ export default function ChallengeArena() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-slate-100">Mis Retos</h2>
-        <p className="text-xs text-slate-500 mt-0.5">{challenges.length} retos individuales asignados</p>
+        <h2 className="text-base font-semibold text-slate-100">{isAdmin ? 'Retos diseñados' : 'Mis Retos'}</h2>
+        <p className="text-xs text-slate-500 mt-0.5">
+          {isAdmin ? `${challenges.length} retos en la plataforma (incluye borradores y programados)` : `${challenges.length} retos individuales asignados`}
+        </p>
       </div>
+
+      {isAdmin && (
+        <div className="rounded-xl px-4 py-3 text-xs"
+             style={{ background: 'rgba(212,189,85,0.08)', border: '1px solid rgba(212,189,85,0.3)', color: '#e0cf74' }}>
+          🎖️ <b>Vista de admin:</b> puedes abrir cualquier reto para explicarlo (enunciado, pistas y dataset).
+          Las entregas y subidas de archivos están deshabilitadas para no afectar calificaciones.
+        </div>
+      )}
 
       {/* Reto grupal del equipo */}
       {teamInfo && <TeamChallengeCard teamInfo={teamInfo} />}

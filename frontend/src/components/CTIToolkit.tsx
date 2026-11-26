@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
 const glass = {
-  background: 'rgba(15,23,42,0.55)',
+  background: 'rgba(26,31,19,0.55)',
   border: '1px solid rgba(255,255,255,0.07)',
   borderRadius: 12,
 }
@@ -194,7 +194,7 @@ function validateYara(rule: string) {
   return checks.map(([pattern, label]) => ({ label, ok: pattern.test(rule) }))
 }
 
-function Pill({ children, color = '#94a3b8' }: { children: React.ReactNode; color?: string }) {
+function Pill({ children, color = '#a3a27c' }: { children: React.ReactNode; color?: string }) {
   return (
     <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
           style={{ color, background: `${color}14`, border: `1px solid ${color}25` }}>
@@ -276,9 +276,9 @@ export default function CTIToolkit() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Pill color="#22d3ee">{sources.length} fuentes</Pill>
+          <Pill color="#d4bd55">{sources.length} fuentes</Pill>
           <Pill color="#f97316">{iocs.length} IOCs</Pill>
-          <Pill color="#a78bfa">{ioas.length} TTPs</Pill>
+          <Pill color="#93a954">{ioas.length} TTPs</Pill>
         </div>
       </div>
 
@@ -287,8 +287,8 @@ export default function CTIToolkit() {
           <button key={item.id} onClick={() => setTab(item.id)}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
                   style={tab === item.id
-                    ? { background: 'rgba(34,211,238,0.12)', color: '#22d3ee' }
-                    : { color: '#64748b' }}>
+                    ? { background: 'rgba(212,189,85,0.12)', color: '#d4bd55' }
+                    : { color: '#7f8360' }}>
             {item.label}
           </button>
         ))}
@@ -324,15 +324,15 @@ export default function CTIToolkit() {
                         <p className="text-[10px] text-slate-600">{source.url}</p>
                       </div>
                       <div className="flex gap-1 flex-wrap justify-end">
-                        <Pill color={source.status === 'active' ? '#4ade80' : source.status === 'needs_key' ? '#facc15' : '#94a3b8'}>
+                        <Pill color={source.status === 'active' ? '#4ade80' : source.status === 'needs_key' ? '#facc15' : '#a3a27c'}>
                           {source.status}
                         </Pill>
-                        <Pill color="#a78bfa">{source.feed_type}</Pill>
+                        <Pill color="#93a954">{source.feed_type}</Pill>
                       </div>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-relaxed">{source.description}</p>
                     <div className="flex gap-1 flex-wrap">
-                      {source.formats.split(',').filter(Boolean).map(format => <Pill key={format} color="#22d3ee">{format}</Pill>)}
+                      {source.formats.split(',').filter(Boolean).map(format => <Pill key={format} color="#d4bd55">{format}</Pill>)}
                       {source.requires_auth ? <Pill color="#f97316">API key</Pill> : <Pill color="#4ade80">sin auth</Pill>}
                     </div>
                   </div>
@@ -353,7 +353,7 @@ export default function CTIToolkit() {
             <button
               onClick={() => downloadText('cti-nexus-stix-bundle.json', JSON.stringify(stixBundle, null, 2), 'application/json;charset=utf-8')}
               className="w-full px-3 py-2 rounded-lg text-xs font-bold"
-              style={{ background: 'rgba(34,211,238,0.1)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.25)' }}>
+              style={{ background: 'rgba(212,189,85,0.1)', color: '#d4bd55', border: '1px solid rgba(212,189,85,0.25)' }}>
               Exportar STIX JSON
             </button>
             <div className="grid grid-cols-2 gap-2">
@@ -368,7 +368,7 @@ export default function CTIToolkit() {
             </div>
           </section>
           <pre className="rounded-xl p-4 overflow-auto max-h-[620px] text-[11px] text-slate-400"
-               style={{ ...glass, background: '#050a14' }}>
+               style={{ ...glass, background: '#11150c' }}>
             {JSON.stringify(stixBundle, null, 2)}
           </pre>
         </div>
@@ -381,16 +381,16 @@ export default function CTIToolkit() {
               <p className="text-[9px] text-slate-600 uppercase font-bold mb-1">IOC base</p>
               <select value={selectedIoc} onChange={e => setSelectedIoc(e.target.value)}
                       className="w-full rounded-lg px-3 py-2 text-xs outline-none"
-                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#cbd5e1' }}>
+                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#bfbb98' }}>
                 {iocs.map(ioc => <option key={ioc.ioc} value={ioc.ioc}>{ioc.ioc} · {ioc.threat_actor}</option>)}
               </select>
             </div>
             {currentIoc && (
               <div className="rounded-lg p-3 space-y-2 bg-white/[0.03]">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Pill color={severityColor[currentIoc.severity] ?? '#94a3b8'}>{currentIoc.severity}</Pill>
-                  <Pill color="#a78bfa">{currentIoc.mitre || 'sin MITRE'}</Pill>
-                  <Pill color="#22d3ee">{currentIoc.type}</Pill>
+                  <Pill color={severityColor[currentIoc.severity] ?? '#a3a27c'}>{currentIoc.severity}</Pill>
+                  <Pill color="#93a954">{currentIoc.mitre || 'sin MITRE'}</Pill>
+                  <Pill color="#d4bd55">{currentIoc.type}</Pill>
                 </div>
                 <p className="text-xs text-slate-300 font-mono break-all">{currentIoc.ioc}</p>
                 <p className="text-[11px] text-slate-500">Actor: {currentIoc.threat_actor || 'Unknown'}</p>
@@ -412,7 +412,7 @@ export default function CTIToolkit() {
                   downloadText(`${safeFilename(currentIoc?.ioc ?? tab)}.${ext}`, content, 'text/plain;charset=utf-8')
                 }}
                 className="flex-1 px-3 py-2 rounded-lg text-xs font-bold"
-                style={{ background: 'rgba(167,139,250,0.1)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.28)' }}>
+                style={{ background: 'rgba(147,169,84,0.1)', color: '#93a954', border: '1px solid rgba(147,169,84,0.28)' }}>
                 Descargar {tab === 'sigma' ? 'Sigma' : 'YARA'}
               </button>
               <button
@@ -420,7 +420,7 @@ export default function CTIToolkit() {
                 className="px-3 py-2 rounded-lg text-xs font-bold transition-colors"
                 style={copied
                   ? { background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }
-                  : { background: 'rgba(255,255,255,0.04)', color: '#64748b', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  : { background: 'rgba(255,255,255,0.04)', color: '#7f8360', border: '1px solid rgba(255,255,255,0.1)' }}>
                 {copied ? '✓' : 'Copiar'}
               </button>
             </div>
@@ -431,7 +431,7 @@ export default function CTIToolkit() {
             onChange={e => tab === 'sigma' ? setSigma(e.target.value) : setYara(e.target.value)}
             spellCheck={false}
             className="rounded-xl p-4 min-h-[620px] resize-none outline-none font-mono text-xs leading-relaxed"
-            style={{ ...glass, background: '#050a14', color: '#86efac' }}
+            style={{ ...glass, background: '#11150c', color: '#86efac' }}
           />
         </div>
       )}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
-const glass = { background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
+const glass = { background: 'rgba(26,31,19,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
 
 interface Report {
   id: number; user_email: string; user_name: string; title: string; summary: string
@@ -63,12 +63,12 @@ export default function IntelWall() {
             <span className="text-[11px] text-slate-400 flex-1">{wall.total} reporte(s) · Muro {wall.open ? 'ABIERTO: todos ven todos' : 'CERRADO: cada estudiante ve solo el suyo'}</span>
             <button onClick={() => adminCall('/admin/intel-wall/open', { method: 'POST', body: JSON.stringify({ open: !wall.open }) })}
                     className="text-[11px] px-3 py-1.5 rounded font-semibold"
-                    style={wall.open ? { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#94a3b8' }
+                    style={wall.open ? { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#a3a27c' }
                                      : { background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', color: '#4ade80' }}>
               {wall.open ? 'Cerrar muro' : 'Abrir muro a todos'}
             </button>
             <button onClick={exportCsv} className="text-[11px] px-3 py-1.5 rounded font-semibold text-cyan-300"
-                    style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)' }}>Exportar CSV</button>
+                    style={{ background: 'rgba(212,189,85,0.08)', border: '1px solid rgba(212,189,85,0.25)' }}>Exportar CSV</button>
           </div>
         )}
       </div>
@@ -88,7 +88,7 @@ export default function IntelWall() {
               <button key={c} onClick={() => { setEditing(true); setForm({ ...form, confidence: c }) }}
                       className="text-[11px] px-3 py-1 rounded font-semibold capitalize"
                       style={form.confidence === c ? { background: `${CONF[c]}22`, border: `1px solid ${CONF[c]}66`, color: CONF[c] }
-                                                   : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748b' }}>{c}</button>
+                                                   : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#7f8360' }}>{c}</button>
             ))}
           </div>
           <textarea value={form.recommendations} rows={3} maxLength={2000} onChange={e => { setEditing(true); setForm({ ...form, recommendations: e.target.value }) }}
@@ -111,7 +111,7 @@ export default function IntelWall() {
               {r.pinned ? <span title="Destacado">📌</span> : null}
               <h3 className="text-sm font-semibold text-slate-100 flex-1 min-w-40">{r.title}</h3>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded capitalize"
-                    style={{ color: CONF[r.confidence] ?? '#94a3b8', background: `${CONF[r.confidence] ?? '#94a3b8'}18` }}>confianza {r.confidence}</span>
+                    style={{ color: CONF[r.confidence] ?? '#a3a27c', background: `${CONF[r.confidence] ?? '#a3a27c'}18` }}>confianza {r.confidence}</span>
             </div>
             <p className="text-[10px] text-slate-600">{r.user_name} · {new Date(r.updated_at + 'Z').toLocaleString('es-CO')}</p>
             <p className="text-xs text-slate-300 whitespace-pre-line">{r.summary}</p>

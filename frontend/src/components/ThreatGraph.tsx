@@ -68,7 +68,7 @@ const SEV: Record<string, string> = {
   critical: '#ef4444', high: '#f97316', medium: '#facc15', low: '#4ade80',
 }
 const CLUSTER_COLORS = [
-  '#22d3ee', '#a78bfa', '#f472b6', '#4ade80', '#fb923c',
+  '#d4bd55', '#93a954', '#f472b6', '#4ade80', '#fb923c',
 ]
 
 // ── K-Means puro TypeScript ────────────────────────────────────────────────────
@@ -170,7 +170,7 @@ function buildGraph(
       x: ZONE_X.actor, y,
       w: NODE_W.actor, h: NODE_H.actor,
       country: cisa?.country ?? rawActors.find(a => a.name === name)?.country ?? '—',
-      riskLevel: risk, riskColor: RISK[risk] ?? '#94a3b8',
+      riskLevel: risk, riskColor: RISK[risk] ?? '#a3a27c',
       cisaMatch: Boolean(cisa), cisaEntry: cisa,
       iocCount,
     }
@@ -210,7 +210,7 @@ function buildGraph(
     if (src) {
       edges.push({
         id: `e-ac-${name}`, source: src.id, target: node.id,
-        color: '#a78bfa', dashed: false, animated: true,
+        color: '#93a954', dashed: false, animated: true,
       })
     }
   })
@@ -231,7 +231,7 @@ function buildGraph(
       fullLabel: ioc.ioc,
       x: ZONE_X.ioc, y,
       w: NODE_W.ioc, h: NODE_H.ioc,
-      iocType: ioc.type, severity: sev, sevColor: SEV[sev] ?? '#94a3b8',
+      iocType: ioc.type, severity: sev, sevColor: SEV[sev] ?? '#a3a27c',
       cluster, clusterColor: cColor,
       actor: ioc.threat_actor,
     }
@@ -298,17 +298,17 @@ function ActorCard({ node, selected, onClick }: {
         }}>{node.riskLevel}</span>
         {node.cisaMatch && (
           <span style={{
-            fontSize: 7, fontWeight: 700, color: '#22d3ee',
-            background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.22)',
+            fontSize: 7, fontWeight: 700, color: '#d4bd55',
+            background: 'rgba(212,189,85,0.1)', border: '1px solid rgba(212,189,85,0.22)',
             borderRadius: 4, padding: '1px 5px',
           }}>✓ CISA</span>
         )}
       </div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9', marginBottom: 1,
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#e9e6d2', marginBottom: 1,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {node.label}
       </div>
-      <div style={{ fontSize: 9, color: '#64748b', marginBottom: 2 }}>
+      <div style={{ fontSize: 9, color: '#7f8360', marginBottom: 2 }}>
         {node.country}
         {node.cisaEntry?.sponsor ? ` · ${node.cisaEntry.sponsor.split(' ')[0]}` : ''}
       </div>
@@ -317,7 +317,7 @@ function ActorCard({ node, selected, onClick }: {
           {node.cisaEntry.cisa_advisories.slice(0, 2).join(' · ')}
         </div>
       ) : null}
-      <div style={{ marginTop: 3, fontSize: 8, color: '#475569' }}>
+      <div style={{ marginTop: 3, fontSize: 8, color: '#5f6646' }}>
         {node.iocCount} IoC{node.iocCount !== 1 ? 's' : ''} detectados
       </div>
     </div>
@@ -333,12 +333,12 @@ function CampaignCard({ node, selected, onClick }: {
       onClick={onClick}
       style={{
         width: node.w, height: node.h, cursor: 'pointer', userSelect: 'none',
-        background: selected ? 'rgba(167,139,250,0.12)' : 'rgba(20,12,40,0.96)',
-        border: `${selected ? 2 : 1}px solid rgba(167,139,250,${selected ? 0.6 : 0.35})`,
+        background: selected ? 'rgba(147,169,84,0.12)' : 'rgba(20,12,40,0.96)',
+        border: `${selected ? 2 : 1}px solid rgba(147,169,84,${selected ? 0.6 : 0.35})`,
         borderRadius: 9, padding: '6px 10px', boxSizing: 'border-box',
-        boxShadow: selected ? '0 0 18px rgba(167,139,250,0.3)' : '0 0 6px rgba(167,139,250,0.1)',
+        boxShadow: selected ? '0 0 18px rgba(147,169,84,0.3)' : '0 0 6px rgba(147,169,84,0.1)',
       }}>
-      <div style={{ fontSize: 7, color: '#a78bfa', fontWeight: 700,
+      <div style={{ fontSize: 7, color: '#93a954', fontWeight: 700,
                     textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>
         Campaña
       </div>
@@ -363,7 +363,7 @@ function IocCard({ node, selected, onClick }: {
       onClick={onClick}
       style={{
         width: node.w, height: node.h, cursor: 'pointer', userSelect: 'none',
-        background: selected ? `${cc}14` : 'rgba(5,18,42,0.96)',
+        background: selected ? `${cc}14` : 'rgba(18,22,12,0.96)',
         border: `${selected ? 2 : 1}px solid ${selected ? cc : `${cc}55`}`,
         borderRadius: 8, padding: '5px 9px', boxSizing: 'border-box',
         boxShadow: selected ? `0 0 16px ${cc}35` : 'none',
@@ -371,12 +371,12 @@ function IocCard({ node, selected, onClick }: {
       }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
         <span style={{ fontSize: 7, color: sc, fontWeight: 700 }}>{node.severity?.toUpperCase()}</span>
-        <span style={{ fontSize: 7, color: '#334155' }}>·</span>
-        <span style={{ fontSize: 7, color: '#475569' }}>{node.iocType}</span>
+        <span style={{ fontSize: 7, color: '#444c32' }}>·</span>
+        <span style={{ fontSize: 7, color: '#5f6646' }}>{node.iocType}</span>
         <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%',
                        background: cc, flexShrink: 0, boxShadow: `0 0 4px ${cc}` }} />
       </div>
-      <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#67e8f9', fontWeight: 600,
+      <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#e0cf74', fontWeight: 600,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {node.label}
       </div>
@@ -394,13 +394,13 @@ function DetailPanel({ node, onClose }: { node: GNode; onClose: () => void }) {
   return (
     <div style={{
       position: 'absolute', right: 0, top: 0, bottom: 0, width: 280, zIndex: 10,
-      background: 'rgba(5,10,22,0.98)', backdropFilter: 'blur(12px)',
+      background: 'rgba(16,19,11,0.98)', backdropFilter: 'blur(12px)',
       borderLeft: '1px solid rgba(255,255,255,0.07)',
       overflowY: 'auto', padding: '16px 14px',
     }}>
       <button onClick={onClose}
         style={{ position: 'absolute', top: 10, right: 10, background: 'none',
-                 border: 'none', color: '#64748b', cursor: 'pointer', padding: 4 }}>
+                 border: 'none', color: '#7f8360', cursor: 'pointer', padding: 4 }}>
         <X size={14} />
       </button>
 
@@ -410,10 +410,10 @@ function DetailPanel({ node, onClose }: { node: GNode; onClose: () => void }) {
                         textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
             Actor de Amenaza
           </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#e9e6d2', marginBottom: 4 }}>
             {node.label}
           </div>
-          <div style={{ fontSize: 9, color: '#64748b', marginBottom: 10 }}>
+          <div style={{ fontSize: 9, color: '#7f8360', marginBottom: 10 }}>
             {cisa.aliases.slice(0, 4).join(' · ')}
           </div>
 
@@ -424,20 +424,20 @@ function DetailPanel({ node, onClose }: { node: GNode; onClose: () => void }) {
             { l: 'Riesgo',     v: cisa.risk_level },
           ].map(({ l, v }) => (
             <div key={l} style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 7, color: '#334155', textTransform: 'uppercase',
+              <div style={{ fontSize: 7, color: '#444c32', textTransform: 'uppercase',
                             fontWeight: 700, marginBottom: 1 }}>{l}</div>
-              <div style={{ fontSize: 10, color: '#cbd5e1' }}>{v}</div>
+              <div style={{ fontSize: 10, color: '#bfbb98' }}>{v}</div>
             </div>
           ))}
 
           {cisa.cisa_advisories.length > 0 && (
             <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 7, color: '#334155', textTransform: 'uppercase',
+              <div style={{ fontSize: 7, color: '#444c32', textTransform: 'uppercase',
                             fontWeight: 700, marginBottom: 4 }}>Advisories CISA</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                 {cisa.cisa_advisories.map(a => (
-                  <span key={a} style={{ fontSize: 8, color: '#22d3ee',
-                    background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)',
+                  <span key={a} style={{ fontSize: 8, color: '#d4bd55',
+                    background: 'rgba(212,189,85,0.08)', border: '1px solid rgba(212,189,85,0.2)',
                     borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{a}</span>
                 ))}
               </div>
@@ -445,29 +445,29 @@ function DetailPanel({ node, onClose }: { node: GNode; onClose: () => void }) {
           )}
 
           <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 7, color: '#334155', textTransform: 'uppercase',
+            <div style={{ fontSize: 7, color: '#444c32', textTransform: 'uppercase',
                           fontWeight: 700, marginBottom: 4 }}>Campañas conocidas</div>
             {cisa.known_campaigns.slice(0, 4).map(c => (
-              <div key={c} style={{ fontSize: 9, color: '#94a3b8', marginBottom: 2,
+              <div key={c} style={{ fontSize: 9, color: '#a3a27c', marginBottom: 2,
                                     display: 'flex', alignItems: 'center', gap: 4 }}>
-                <ChevronRight size={8} style={{ color: '#a78bfa', flexShrink: 0 }} /> {c}
+                <ChevronRight size={8} style={{ color: '#93a954', flexShrink: 0 }} /> {c}
               </div>
             ))}
           </div>
 
           <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 7, color: '#334155', textTransform: 'uppercase',
+            <div style={{ fontSize: 7, color: '#444c32', textTransform: 'uppercase',
                           fontWeight: 700, marginBottom: 4 }}>Sectores objetivo</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
               {cisa.target_sectors.slice(0, 6).map(s => (
-                <span key={s} style={{ fontSize: 7, color: '#94a3b8',
+                <span key={s} style={{ fontSize: 7, color: '#a3a27c',
                   background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
                   borderRadius: 3, padding: '2px 5px' }}>{s}</span>
               ))}
             </div>
           </div>
 
-          <div style={{ fontSize: 9, color: '#475569', lineHeight: 1.5,
+          <div style={{ fontSize: 9, color: '#5f6646', lineHeight: 1.5,
                         borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 8 }}>
             {cisa.description}
           </div>
@@ -476,15 +476,15 @@ function DetailPanel({ node, onClose }: { node: GNode; onClose: () => void }) {
 
       {node.kind === 'campaign' && (
         <>
-          <div style={{ fontSize: 8, color: '#a78bfa', fontWeight: 700,
+          <div style={{ fontSize: 8, color: '#93a954', fontWeight: 700,
                         textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
             Campaña
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#ddd6fe', marginBottom: 8 }}>
             {node.label}
           </div>
-          <div style={{ fontSize: 10, color: '#64748b' }}>Actor atribuido</div>
-          <div style={{ fontSize: 11, color: '#f1f5f9', marginTop: 2 }}>{node.actorName}</div>
+          <div style={{ fontSize: 10, color: '#7f8360' }}>Actor atribuido</div>
+          <div style={{ fontSize: 11, color: '#e9e6d2', marginTop: 2 }}>{node.actorName}</div>
         </>
       )}
 
@@ -494,7 +494,7 @@ function DetailPanel({ node, onClose }: { node: GNode; onClose: () => void }) {
                         textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
             Indicador de Compromiso
           </div>
-          <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#67e8f9',
+          <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#e0cf74',
                         wordBreak: 'break-all', marginBottom: 10, fontWeight: 600 }}>
             {node.fullLabel ?? node.label}
           </div>
@@ -505,9 +505,9 @@ function DetailPanel({ node, onClose }: { node: GNode; onClose: () => void }) {
             { l: 'Cluster ML', v: `Cluster ${node.cluster} (${node.clusterColor})` },
           ].map(({ l, v }) => (
             <div key={l} style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 7, color: '#334155', textTransform: 'uppercase',
+              <div style={{ fontSize: 7, color: '#444c32', textTransform: 'uppercase',
                             fontWeight: 700, marginBottom: 1 }}>{l}</div>
-              <div style={{ fontSize: 10, color: '#cbd5e1' }}>{v}</div>
+              <div style={{ fontSize: 10, color: '#bfbb98' }}>{v}</div>
             </div>
           ))}
           <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8,
@@ -516,7 +516,7 @@ function DetailPanel({ node, onClose }: { node: GNode; onClose: () => void }) {
             <div style={{ fontSize: 8, color: node.clusterColor, fontWeight: 700, marginBottom: 3 }}>
               Cluster {node.cluster} — K-Means (k=5)
             </div>
-            <div style={{ fontSize: 9, color: '#475569' }}>
+            <div style={{ fontSize: 9, color: '#5f6646' }}>
               Agrupado por similitud de tipo, severidad, país y actor.
             </div>
           </div>
@@ -540,45 +540,45 @@ function StatsBar({
       borderBottom: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap',
     }}>
       {[
-        { l: 'Actores', v: actors, c: '#a855f7' },
-        { l: 'Campañas', v: campaigns, c: '#a78bfa' },
-        { l: 'IoCs', v: iocs, c: '#22d3ee' },
+        { l: 'Actores', v: actors, c: '#7a903f' },
+        { l: 'Campañas', v: campaigns, c: '#93a954' },
+        { l: 'IoCs', v: iocs, c: '#d4bd55' },
         { l: '✓ CISA', v: cisaMatches, c: '#4ade80' },
       ].map(s => (
         <div key={s.l} style={{ textAlign: 'center', minWidth: 60 }}>
           <div style={{ fontSize: 18, fontWeight: 800, color: s.c, lineHeight: 1 }}>{s.v}</div>
-          <div style={{ fontSize: 8, color: '#334155', textTransform: 'uppercase',
+          <div style={{ fontSize: 8, color: '#444c32', textTransform: 'uppercase',
                         letterSpacing: '0.06em', marginTop: 2 }}>{s.l}</div>
         </div>
       ))}
 
       <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginLeft: 8 }}>
-        <Filter size={9} style={{ color: '#334155' }} />
+        <Filter size={9} style={{ color: '#444c32' }} />
         {clusterDist.map((count, ci) => (
           <div key={ci} title={`Cluster ${ci}: ${count} IoCs`}
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%',
                           background: CLUSTER_COLORS[ci % CLUSTER_COLORS.length] }} />
-            <span style={{ fontSize: 7, color: '#334155' }}>{count}</span>
+            <span style={{ fontSize: 7, color: '#444c32' }}>{count}</span>
           </div>
         ))}
       </div>
 
       <div style={{ flex: 1 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Filter size={10} style={{ color: '#334155' }} />
+        <Filter size={10} style={{ color: '#444c32' }} />
         <input
           value={filterActor}
           onChange={e => setFilterActor(e.target.value)}
           placeholder="Filtrar actor…"
           style={{
             background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 6, padding: '3px 8px', fontSize: 10, color: '#cbd5e1', outline: 'none',
+            borderRadius: 6, padding: '3px 8px', fontSize: 10, color: '#bfbb98', outline: 'none',
             width: 120,
           }}
         />
       </div>
-      <div style={{ fontSize: 8, color: '#1e293b' }}>CISA · MITRE ATT&CK · K-Means</div>
+      <div style={{ fontSize: 8, color: '#2c3320' }}>CISA · MITRE ATT&CK · K-Means</div>
     </div>
   )
 }
@@ -756,8 +756,8 @@ export default function ThreatGraph() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 24,
-                  color: '#475569', fontSize: 13 }}>
-      <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite', color: '#22d3ee' }} />
+                  color: '#5f6646', fontSize: 13 }}>
+      <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite', color: '#d4bd55' }} />
       Construyendo grafo de correlación…
     </div>
   )
@@ -771,7 +771,7 @@ export default function ThreatGraph() {
 
   return (
     <div style={{
-      background: 'rgba(5,8,20,0.98)', borderRadius: 14, overflow: 'hidden',
+      background: 'rgba(14,17,10,0.98)', borderRadius: 14, overflow: 'hidden',
       border: '1px solid rgba(255,255,255,0.06)',
       boxShadow: '0 4px 40px rgba(0,0,0,0.4)',
       position: 'relative', userSelect: 'none',
@@ -782,18 +782,18 @@ export default function ThreatGraph() {
         borderBottom: '1px solid rgba(255,255,255,0.05)',
         background: 'rgba(0,0,0,0.3)',
       }}>
-        <Shield size={14} style={{ color: '#a855f7' }} />
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0' }}>
+        <Shield size={14} style={{ color: '#7a903f' }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#d8d4b6' }}>
           Grafo de Correlación CTI
         </span>
-        <span style={{ fontSize: 9, color: '#334155', marginLeft: 4 }}>
+        <span style={{ fontSize: 9, color: '#444c32', marginLeft: 4 }}>
           Actores → Campañas → IoCs · K-Means · CISA
         </span>
         <div style={{ flex: 1 }} />
         <div style={{ position: 'relative', width: 210 }}>
           <Search size={11} style={{
             position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
-            color: '#334155', pointerEvents: 'none',
+            color: '#444c32', pointerEvents: 'none',
           }} />
           <input
             value={nodeQuery}
@@ -802,14 +802,14 @@ export default function ThreatGraph() {
             style={{
               width: '100%', height: 26, background: 'rgba(255,255,255,0.04)',
               border: '1px solid rgba(255,255,255,0.08)', borderRadius: 7,
-              color: '#cbd5e1', outline: 'none', fontSize: 10,
+              color: '#bfbb98', outline: 'none', fontSize: 10,
               padding: '0 8px 0 24px',
             }}
           />
           {nodeQuery.trim() && visibleNodes.length > 0 && (
             <div style={{
               position: 'absolute', right: 0, top: 30, width: 280, maxHeight: 260,
-              overflowY: 'auto', zIndex: 30, background: 'rgba(5,10,22,0.98)',
+              overflowY: 'auto', zIndex: 30, background: 'rgba(16,19,11,0.98)',
               border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8,
               boxShadow: '0 18px 36px rgba(0,0,0,0.4)', padding: 4,
             }}>
@@ -823,13 +823,13 @@ export default function ThreatGraph() {
                   style={{
                     width: '100%', display: 'grid', gridTemplateColumns: '54px 1fr',
                     gap: 8, alignItems: 'center', textAlign: 'left', padding: '6px 7px',
-                    border: 0, borderRadius: 6, background: selected?.id === node.id ? 'rgba(34,211,238,0.1)' : 'transparent',
-                    color: '#cbd5e1', cursor: 'pointer',
+                    border: 0, borderRadius: 6, background: selected?.id === node.id ? 'rgba(212,189,85,0.1)' : 'transparent',
+                    color: '#bfbb98', cursor: 'pointer',
                   }}
                 >
                   <span style={{
                     fontSize: 8, fontWeight: 800, textTransform: 'uppercase',
-                    color: node.kind === 'ioc' ? '#22d3ee' : node.kind === 'actor' ? '#a855f7' : '#a78bfa',
+                    color: node.kind === 'ioc' ? '#d4bd55' : node.kind === 'actor' ? '#7a903f' : '#93a954',
                   }}>{node.kind}</span>
                   <span style={{
                     fontSize: 10, fontFamily: node.kind === 'ioc' ? 'monospace' : undefined,
@@ -850,13 +850,13 @@ export default function ThreatGraph() {
           ].map((btn, i) => (
             <button key={i} onClick={btn.action} style={{
               background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: 6, padding: '4px 6px', color: '#64748b', cursor: 'pointer',
+              borderRadius: 6, padding: '4px 6px', color: '#7f8360', cursor: 'pointer',
               display: 'flex', alignItems: 'center',
             }}>{btn.icon}</button>
           ))}
           <button onClick={resetView} style={{
             background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 6, padding: '4px 7px', color: '#64748b', cursor: 'pointer',
+            borderRadius: 6, padding: '4px 7px', color: '#7f8360', cursor: 'pointer',
             fontSize: 9, fontWeight: 800,
           }}>1:1</button>
         </div>
@@ -881,13 +881,13 @@ export default function ThreatGraph() {
           <button key={item.kind} onClick={() => jumpToKind(item.kind)}
             style={{
               background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
-              borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 9,
+              borderRadius: 6, color: '#7f8360', cursor: 'pointer', fontSize: 9,
               fontWeight: 700, padding: '4px 8px',
             }}>
             {item.label}
           </button>
         ))}
-        <span style={{ marginLeft: 'auto', fontSize: 8, color: '#334155' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 8, color: '#444c32' }}>
           Rueda: desplazar · Ctrl/⌘/Alt + rueda: zoom · arrastrar: mover
         </span>
       </div>
@@ -899,9 +899,9 @@ export default function ThreatGraph() {
         borderBottom: '1px solid rgba(255,255,255,0.04)',
       }}>
         {[
-          { label: 'Actores / APTs', icon: <Shield size={9} />, color: '#a855f7', desc: `${actorCount} actores · enriquecidos CISA` },
-          { label: 'Campañas',       icon: <Layers size={9} />, color: '#a78bfa', desc: `${campaignCount} campañas atribuidas` },
-          { label: 'Indicadores',    icon: <Activity size={9} />, color: '#22d3ee', desc: `${iocCount} IoCs · ${CLUSTER_COLORS.length} clusters K-Means` },
+          { label: 'Actores / APTs', icon: <Shield size={9} />, color: '#7a903f', desc: `${actorCount} actores · enriquecidos CISA` },
+          { label: 'Campañas',       icon: <Layers size={9} />, color: '#93a954', desc: `${campaignCount} campañas atribuidas` },
+          { label: 'Indicadores',    icon: <Activity size={9} />, color: '#d4bd55', desc: `${iocCount} IoCs · ${CLUSTER_COLORS.length} clusters K-Means` },
         ].map((z, i) => (
           <div key={i} style={{ textAlign: 'center', padding: '2px 8px' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -928,7 +928,7 @@ export default function ThreatGraph() {
           <defs>
             {/* Animated edge gradient */}
             <marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L6,3 z" fill="#334155" />
+              <path d="M0,0 L0,6 L6,3 z" fill="#444c32" />
             </marker>
             {/* Zone gradients */}
             {ZONE_COLORS_DEF.map(([id, c1, c2]) => (
@@ -946,9 +946,9 @@ export default function ThreatGraph() {
           <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
             {/* Zone backgrounds */}
             {[
-              { x: ZONE_X.actor - 10,    w: NODE_W.actor + 20,    fill: 'rgba(167,139,250,0.025)' },
+              { x: ZONE_X.actor - 10,    w: NODE_W.actor + 20,    fill: 'rgba(147,169,84,0.025)' },
               { x: ZONE_X.campaign - 10, w: NODE_W.campaign + 20, fill: 'rgba(251,146,60,0.02)' },
-              { x: ZONE_X.ioc - 10,      w: NODE_W.ioc + 20,      fill: 'rgba(34,211,238,0.02)' },
+              { x: ZONE_X.ioc - 10,      w: NODE_W.ioc + 20,      fill: 'rgba(212,189,85,0.02)' },
             ].map((z, i) => (
               <rect key={i} x={z.x} y={0} width={z.w} height={svgH} fill={z.fill}
                     rx={8} />
@@ -1008,19 +1008,19 @@ export default function ThreatGraph() {
           onClick={onMiniMapClick}
           style={{
             position: 'absolute', left: 12, bottom: 12, width: 168, height: 112,
-            background: 'rgba(2,6,23,0.88)', border: '1px solid rgba(255,255,255,0.09)',
+            background: 'rgba(14,17,10,0.88)', border: '1px solid rgba(255,255,255,0.09)',
             borderRadius: 8, zIndex: 8, cursor: 'crosshair', overflow: 'hidden',
             boxShadow: '0 10px 24px rgba(0,0,0,0.35)',
           }}
         >
           <svg width="100%" height="100%" viewBox={`0 0 ${SVG_W} ${svgH}`} preserveAspectRatio="none">
-            <rect x="0" y="0" width={SVG_W} height={svgH} fill="rgba(15,23,42,0.62)" />
+            <rect x="0" y="0" width={SVG_W} height={svgH} fill="rgba(26,31,19,0.62)" />
             {nodes.map(node => (
               <rect
                 key={node.id}
                 x={node.x} y={node.y} width={node.w} height={node.h}
                 rx={4}
-                fill={node.kind === 'ioc' ? (node.clusterColor ?? '#22d3ee') : node.kind === 'actor' ? '#a855f7' : '#a78bfa'}
+                fill={node.kind === 'ioc' ? (node.clusterColor ?? '#d4bd55') : node.kind === 'actor' ? '#7a903f' : '#93a954'}
                 opacity={node.kind === 'ioc' ? 0.58 : 0.85}
               />
             ))}
@@ -1029,8 +1029,8 @@ export default function ThreatGraph() {
               y={Math.max(0, -pan.y / zoom)}
               width={SVG_W / zoom}
               height={VIEW_H / zoom}
-              fill="rgba(34,211,238,0.12)"
-              stroke="#22d3ee"
+              fill="rgba(212,189,85,0.12)"
+              stroke="#d4bd55"
               strokeWidth={8 / zoom}
             />
           </svg>
@@ -1046,18 +1046,18 @@ export default function ThreatGraph() {
         borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.2)',
       }}>
         {[
-          { c: '#a855f7', l: 'Actor APT' },
-          { c: '#a78bfa', l: 'Campaña' },
-          { c: '#22d3ee', l: 'IoC' },
+          { c: '#7a903f', l: 'Actor APT' },
+          { c: '#93a954', l: 'Campaña' },
+          { c: '#d4bd55', l: 'IoC' },
           { c: '#4ade80', l: '✓ Verificado CISA' },
         ].map(({ c, l }) => (
           <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5,
-                                fontSize: 9, color: '#475569' }}>
+                                fontSize: 9, color: '#5f6646' }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: c }} />
             {l}
           </div>
         ))}
-        <span style={{ fontSize: 8, color: '#0f172a', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 8, color: '#1a1f13', marginLeft: 'auto' }}>
           K-Means k=5 · 40 iteraciones · features: tipo · severidad · país · actor · MITRE
         </span>
       </div>
@@ -1067,7 +1067,7 @@ export default function ThreatGraph() {
 
 // helper constant (avoid object literal in JSX)
 const ZONE_COLORS_DEF: [string, string, string][] = [
-  ['zg-actor',    'rgba(167,139,250,0.05)', 'rgba(167,139,250,0)'],
+  ['zg-actor',    'rgba(147,169,84,0.05)', 'rgba(147,169,84,0)'],
   ['zg-campaign', 'rgba(251,146,60,0.04)',  'rgba(251,146,60,0)'],
-  ['zg-ioc',      'rgba(34,211,238,0.04)',  'rgba(34,211,238,0)'],
+  ['zg-ioc',      'rgba(212,189,85,0.04)',  'rgba(212,189,85,0)'],
 ]

@@ -50,7 +50,7 @@ export default function MilestoneBar() {
         <span className="text-[10px] px-2.5 py-1 rounded font-semibold" style={{ color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)' }}>✓ Tu informe está publicado</span>
       )}
       {d.wall_open_at && (
-        <span className="text-[10px] px-2.5 py-1 rounded font-semibold" style={{ color: d.wall_open ? '#4ade80' : '#94a3b8', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+        <span className="text-[10px] px-2.5 py-1 rounded font-semibold" style={{ color: d.wall_open ? '#4ade80' : '#a3a27c', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
           {d.wall_open ? '🟢 Muro abierto para todos' : `🔒 El Muro se abre a las ${fmtHM(d.wall_open_at)}${wallLeft && wallLeft > 0 ? ` (en ${Math.ceil(wallLeft / 60)} min)` : ''}`}
         </span>
       )}

@@ -1,7 +1,7 @@
 import ThreatGraph from './ThreatGraph'
 
 const glass = {
-  background: 'rgba(15,23,42,0.55)',
+  background: 'rgba(26,31,19,0.55)',
   backdropFilter: 'blur(16px)',
   border: '1px solid rgba(255,255,255,0.07)',
   borderRadius: 12,
@@ -36,10 +36,10 @@ export default function ThreatGraphView() {
       {/* Legend */}
       <div className="flex flex-wrap gap-4 px-4 py-3 rounded-lg"
            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-        <Legend color="#a855f7" label="Threat Actor" />
+        <Legend color="#7a903f" label="Threat Actor" />
         <Legend color="#ef4444" label="Critical IOC" />
         <Legend color="#f97316" label="High IOC" />
-        <Legend color="#3b82f6" label="Medium IOC" />
+        <Legend color="#7a903f" label="Medium IOC" />
         <Legend color="#22c55e" label="Low IOC" />
         <Legend color="#78716c" label="Campaign" />
       </div>
@@ -55,7 +55,7 @@ export default function ThreatGraphView() {
           <span className="text-sm font-medium text-slate-200">Correlation Network</span>
           <span className="ml-auto text-xs text-slate-600 font-mono">ReactFlow · interactive</span>
         </div>
-        <div style={{ background: 'rgba(3,7,18,0.6)' }}>
+        <div style={{ background: 'rgba(14,17,10,0.6)' }}>
           <ThreatGraph />
         </div>
       </div>
@@ -63,7 +63,7 @@ export default function ThreatGraphView() {
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'Threat Actors', value: '12', sub: '3 nation-state', color: '#a855f7' },
+          { label: 'Threat Actors', value: '12', sub: '3 nation-state', color: '#7a903f' },
           { label: 'Active IOCs', value: '847', sub: '23 critical', color: '#ef4444' },
           { label: 'Campaigns', value: '6', sub: 'last 30 days', color: '#f97316' },
         ].map(s => (

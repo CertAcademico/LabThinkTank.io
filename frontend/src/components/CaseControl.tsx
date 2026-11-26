@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
-const glass = { background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
+const glass = { background: 'rgba(26,31,19,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
 const inputStyle = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }
 
 interface Ch {
@@ -17,7 +17,7 @@ interface UserRow { email: string; name: string; role: string }
 // Ciclo de inteligencia al que apunta cada capítulo del Caso Aurora
 const CYCLE: Record<number, string> = { 1: 'Recolección', 2: 'Procesamiento', 3: 'Análisis', 4: 'Análisis', 5: 'Procesamiento', 6: 'Análisis predictivo', 7: 'Análisis predictivo', 8: 'Diseminación' }
 const STATUS: Record<string, { label: string; color: string }> = {
-  draft: { label: 'Borrador (oculto)', color: '#64748b' }, active: { label: 'Activo', color: '#4ade80' }, closed: { label: 'Cerrado', color: '#f87171' },
+  draft: { label: 'Borrador (oculto)', color: '#7f8360' }, active: { label: 'Activo', color: '#4ade80' }, closed: { label: 'Cerrado', color: '#f87171' },
 }
 
 // ISO (cualquier zona) -> valor de <input type="datetime-local"> en hora de Bogotá
@@ -104,7 +104,7 @@ export default function CaseControl() {
                onBlur={e => { if (e.target.value !== toInput(c.deadline)) patch(c.id, { deadline: fromInput(e.target.value) }) }}
                className="rounded px-2 py-1 text-[10px] text-slate-300 outline-none" style={inputStyle} />
         <button onClick={() => openSolution(c.id)} className="text-[10px] px-2.5 py-1.5 rounded font-semibold text-cyan-300 whitespace-nowrap"
-                style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)' }}>Ver soluciones</button>
+                style={{ background: 'rgba(212,189,85,0.08)', border: '1px solid rgba(212,189,85,0.25)' }}>Ver soluciones</button>
       </div>
     )
   }
@@ -153,7 +153,7 @@ export default function CaseControl() {
             {[1, 2, 3, 4, 5, 6, 7, 8].map(n => <option key={n} value={n} className="bg-slate-900">Hasta el capítulo {n}</option>)}
           </select>
           <button onClick={async () => { try { await api('/admin/path-open', { method: 'POST', body: JSON.stringify({ open_up_to: openTo }) }); setMsg(''); load() } catch (e) { setMsg(String(e instanceof Error ? e.message : e)) } }}
-                  className="text-[11px] px-3 py-1.5 rounded font-semibold text-cyan-300" style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)' }}>Guardar</button>
+                  className="text-[11px] px-3 py-1.5 rounded font-semibold text-cyan-300" style={{ background: 'rgba(212,189,85,0.1)', border: '1px solid rgba(212,189,85,0.3)' }}>Guardar</button>
         </div>
       </div>
 
@@ -173,7 +173,7 @@ export default function CaseControl() {
                     className="text-[11px] px-3 py-1.5 rounded font-semibold text-yellow-300" style={{ background: 'rgba(250,204,21,0.1)', border: '1px solid rgba(250,204,21,0.3)' }}>Guardar</button>
           </div>
           <div className="flex gap-1.5 flex-wrap">
-            {flow.badges.map(b => <span key={b.chapter} className="text-[10px] px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#94a3b8' }}>Cap {b.chapter} · {b.name}</span>)}
+            {flow.badges.map(b => <span key={b.chapter} className="text-[10px] px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#a3a27c' }}>Cap {b.chapter} · {b.name}</span>)}
           </div>
           <p className="text-[10px] text-slate-600">Antes de esa hora los capítulos siguen desbloqueándose con 50 puntos, pero la insignia no se otorga. A la hora indicada, quien ya había superado un capítulo la recibe al abrir sus retos.</p>
         </div>
@@ -218,8 +218,8 @@ export default function CaseControl() {
       </div>
 
       {sol && solFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(3,7,18,0.8)' }} onClick={() => setSol(null)}>
-          <div className="w-full max-w-4xl max-h-[88vh] overflow-y-auto rounded-xl p-5 space-y-4" style={{ ...glass, background: 'rgba(8,12,25,0.98)' }} onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(14,17,10,0.8)' }} onClick={() => setSol(null)}>
+          <div className="w-full max-w-4xl max-h-[88vh] overflow-y-auto rounded-xl p-5 space-y-4" style={{ ...glass, background: 'rgba(16,19,11,0.98)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-start gap-3">
               <div className="flex-1"><h3 className="text-sm font-bold text-slate-100">{sol.title}</h3>
                 {sol.variant && <p className="text-[11px] text-violet-300">Variante {sol.variant} · {sol.variant_email}</p>}</div>
@@ -243,7 +243,7 @@ export default function CaseControl() {
             </div>
             {sol.reference_code && (
               <div><p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Solución de referencia</p>
-                <pre className="text-[11px] text-green-300 whitespace-pre-wrap font-mono rounded-lg p-3" style={{ background: '#050a14' }}>{sol.reference_code}</pre></div>
+                <pre className="text-[11px] text-green-300 whitespace-pre-wrap font-mono rounded-lg p-3" style={{ background: '#11150c' }}>{sol.reference_code}</pre></div>
             )}
           </div>
         </div>

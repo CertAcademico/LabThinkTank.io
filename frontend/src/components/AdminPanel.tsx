@@ -53,17 +53,17 @@ interface CtfPhase {
 
 const ROLE_OPTS = ['student', 'analyst', 'senior_analyst', 'instructor', 'admin']
 const ROLE_COLOR: Record<string, string> = {
-  student:        '#22d3ee',
+  student:        '#d4bd55',
   analyst:        '#4ade80',
-  senior_analyst: '#a78bfa',
+  senior_analyst: '#93a954',
   instructor:     '#f97316',
   admin:          '#ef4444',
 }
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
-const glass = { background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
-const CYAN  = '#22d3ee'
+const glass = { background: 'rgba(26,31,19,0.6)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
+const CYAN  = '#d4bd55'
 const RED   = '#ef4444'
 
 function StatCard({ label, value, sub, color = CYAN }: { label: string; value: number | string; sub?: string; color?: string }) {
@@ -106,7 +106,7 @@ function DashboardTab({ stats }: { stats: Stats | null }) {
     <div className="space-y-6">
       {/* Access URL banner */}
       <div className="rounded-xl px-4 py-3 flex items-center gap-3"
-           style={{ background: isTunnel ? 'rgba(74,222,128,0.06)' : 'rgba(34,211,238,0.06)', border: `1px solid ${isTunnel ? 'rgba(74,222,128,0.2)' : 'rgba(34,211,238,0.15)'}` }}>
+           style={{ background: isTunnel ? 'rgba(74,222,128,0.06)' : 'rgba(212,189,85,0.06)', border: `1px solid ${isTunnel ? 'rgba(74,222,128,0.2)' : 'rgba(212,189,85,0.15)'}` }}>
         <div className="w-2 h-2 rounded-full shrink-0 animate-pulse"
              style={{ background: isTunnel ? '#4ade80' : CYAN }} />
         <div className="flex-1 min-w-0">
@@ -117,14 +117,14 @@ function DashboardTab({ stats }: { stats: Stats | null }) {
         </div>
         <button onClick={() => navigator.clipboard?.writeText(publicUrl)}
                 className="text-[9px] px-2 py-1 rounded shrink-0 transition-all hover:opacity-80"
-                style={{ background: 'rgba(255,255,255,0.06)', color: '#64748b', border: '1px solid rgba(255,255,255,0.08)' }}>
+                style={{ background: 'rgba(255,255,255,0.06)', color: '#7f8360', border: '1px solid rgba(255,255,255,0.08)' }}>
           Copiar URL
         </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Estudiantes"       value={stats.students}           color={CYAN}      />
-        <StatCard label="Retos activos"     value={stats.active_challenges}  color="#a78bfa"   />
+        <StatCard label="Retos activos"     value={stats.active_challenges}  color="#93a954"   />
         <StatCard label="Datasets"          value={stats.datasets}           color="#f97316"   />
         <StatCard label="Entregas hoy"      value={stats.submissions_today}  color="#4ade80"   />
         <StatCard label="Por calificar"     value={stats.pending_scoring}    color="#facc15"   />
@@ -136,8 +136,8 @@ function DashboardTab({ stats }: { stats: Stats | null }) {
           <p className="text-[10px] text-slate-600 mt-0.5">Actividad agregada de estudiantes, equipos, datasets, retos y feeds en vivo.</p>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="Estudiantes activos" value={stats.active_students}   color="#22d3ee" />
-          <StatCard label="Equipos"             value={stats.teams}             color="#a78bfa" />
+          <StatCard label="Estudiantes activos" value={stats.active_students}   color="#d4bd55" />
+          <StatCard label="Equipos"             value={stats.teams}             color="#93a954" />
           <StatCard label="Miembros en equipos" value={stats.team_members}      color="#818cf8" />
           <StatCard label="Entregas totales"    value={stats.total_submissions} color="#4ade80" />
           <StatCard label="Entregas calificadas" value={stats.graded_submissions} color="#86efac" />
@@ -146,7 +146,7 @@ function DashboardTab({ stats }: { stats: Stats | null }) {
           <StatCard label="Eventos live"        value={stats.live_events}       color="#ef4444" />
           <StatCard label="Datasets de logs"    value={stats.log_datasets}      color="#14b8a6" />
           <StatCard label="IOCs de feeds"       value={stats.feed_iocs}         color="#fb7185" />
-          <StatCard label="Usuarios totales"    value={stats.total_users}       color="#94a3b8" />
+          <StatCard label="Usuarios totales"    value={stats.total_users}       color="#a3a27c" />
           <StatCard label="Clientes SSE"        value={stats.live_clients}      color="#38bdf8" />
         </div>
       </div>
@@ -164,7 +164,7 @@ function DashboardTab({ stats }: { stats: Stats | null }) {
               {stats.top_students.map((s, i) => (
                 <div key={s.email} className="flex items-center gap-4 px-5 py-3">
                   <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                       style={{ background: 'rgba(34,211,238,0.14)', color: CYAN }}>
+                       style={{ background: 'rgba(212,189,85,0.14)', color: CYAN }}>
                     {i + 1}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -173,7 +173,7 @@ function DashboardTab({ stats }: { stats: Stats | null }) {
                   </div>
                   <div className="flex gap-1.5 shrink-0">
                     <Badge label={`${s.ctf_solves} solves`} color="#4ade80" />
-                    <Badge label={`${s.submissions} entregas`} color="#a78bfa" />
+                    <Badge label={`${s.submissions} entregas`} color="#93a954" />
                     <Badge label={`${s.ctf_points} pts`} color="#facc15" />
                   </div>
                 </div>
@@ -196,7 +196,7 @@ function DashboardTab({ stats }: { stats: Stats | null }) {
                   <div className="flex items-center gap-3">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: team.color || CYAN }} />
                     <p className="text-xs text-slate-200 flex-1 truncate">{team.name}</p>
-                    <Badge label={`${team.members} miembros`} color="#22d3ee" />
+                    <Badge label={`${team.members} miembros`} color="#d4bd55" />
                     <Badge label={`${team.badges} insignias`} color="#facc15" />
                     <Badge label={`${team.points} pts`} color="#4ade80" />
                   </div>
@@ -398,7 +398,7 @@ function UsersTab({ users, challenges, allBadges, token, onRefresh }: {
                                 className="text-[11px] px-3 py-1 rounded font-semibold"
                                 style={fusionOn.includes(u.email)
                                   ? { background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', color: '#4ade80' }
-                                  : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#64748b' }}>
+                                  : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#7f8360' }}>
                           {fusionOn.includes(u.email) ? 'Habilitado — clic para quitar' : 'Deshabilitado — clic para habilitar'}
                         </button>
                       </div>
@@ -418,7 +418,7 @@ function UsersTab({ users, challenges, allBadges, token, onRefresh }: {
                       <button onClick={() => changeRole(u.email)}
                               disabled={!roleSel[u.email] || roleSel[u.email] === u.role}
                               className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-30"
-                              style={{ background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.35)', color: '#a78bfa' }}>
+                              style={{ background: 'rgba(147,169,84,0.15)', border: '1px solid rgba(147,169,84,0.35)', color: '#93a954' }}>
                         Actualizar
                       </button>
                     </div>
@@ -477,9 +477,9 @@ function UsersTab({ users, challenges, allBadges, token, onRefresh }: {
 // ── Equipos Tab ───────────────────────────────────────────────────────────────
 
 const TEAM_ROLES: Record<string, { label: string; color: string; short: string }> = {
-  analista_datos:   { label: 'Analista de Datos',  color: '#22d3ee', short: 'AD' },
+  analista_datos:   { label: 'Analista de Datos',  color: '#d4bd55', short: 'AD' },
   ciberseguridad:   { label: 'Ciberseguridad',      color: '#f97316', short: 'CS' },
-  ciencia_datos:    { label: 'Ciencia de Datos',    color: '#a78bfa', short: 'CD' },
+  ciencia_datos:    { label: 'Ciencia de Datos',    color: '#93a954', short: 'CD' },
   machine_learning: { label: 'Machine Learning',    color: '#4ade80', short: 'ML' },
 }
 
@@ -487,7 +487,7 @@ function EquiposTab({ teams, users, challenges, allBadges, token, onRefresh }: {
   teams: Team[]; users: User[]; challenges: Challenge[]; allBadges: Badge[]; token: string; onRefresh: () => void
 }) {
   const [showForm,   setShowForm]   = useState(false)
-  const [form,       setForm]       = useState({ name: '', color: '#22d3ee' })
+  const [form,       setForm]       = useState({ name: '', color: '#d4bd55' })
   const [selUsers,   setSelUsers]   = useState<Record<number, string[]>>({})
   const [selChal,    setSelChal]    = useState<Record<number, number | ''>>({})
   const [loading,    setLoading]    = useState(false)
@@ -504,7 +504,7 @@ function EquiposTab({ teams, users, challenges, allBadges, token, onRefresh }: {
     setLoading(true)
     try {
       await apiFetch('/admin/teams', token, { method: 'POST', body: JSON.stringify(form) })
-      setShowForm(false); setForm({ name: '', color: '#22d3ee' }); onRefresh()
+      setShowForm(false); setForm({ name: '', color: '#d4bd55' }); onRefresh()
     } catch (e) { alert(e) } finally { setLoading(false) }
   }
 
@@ -600,7 +600,7 @@ function EquiposTab({ teams, users, challenges, allBadges, token, onRefresh }: {
         <p className="text-xs text-slate-500">{teams.length} equipos · {users.filter(u => u.role !== 'admin').length} usuarios disponibles</p>
         <button onClick={() => setShowForm(s => !s)}
                 className="px-4 py-2 rounded-lg text-xs font-bold"
-                style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: CYAN }}>
+                style={{ background: 'rgba(212,189,85,0.1)', border: '1px solid rgba(212,189,85,0.3)', color: CYAN }}>
           {showForm ? 'Cancelar' : '+ Nuevo equipo'}
         </button>
       </div>
@@ -692,7 +692,7 @@ function EquiposTab({ teams, users, challenges, allBadges, token, onRefresh }: {
                         const has = t.members.some(m => m.role === k)
                         return (
                           <span key={k} className="text-[8px] px-2 py-0.5 rounded-full"
-                                style={{ background: has ? `${v.color}15` : 'rgba(255,255,255,0.03)', color: has ? v.color : '#475569', border: `1px solid ${has ? v.color+'33' : 'rgba(255,255,255,0.06)'}` }}>
+                                style={{ background: has ? `${v.color}15` : 'rgba(255,255,255,0.03)', color: has ? v.color : '#5f6646', border: `1px solid ${has ? v.color+'33' : 'rgba(255,255,255,0.06)'}` }}>
                             {has ? '✓' : '✗'} {v.short}
                           </span>
                         )
@@ -743,7 +743,7 @@ function EquiposTab({ teams, users, challenges, allBadges, token, onRefresh }: {
                     </select>
                     <button onClick={() => assignTeamToChallenge(t.id)} disabled={!selChal[t.id]}
                             className="w-full py-1.5 rounded text-[10px] font-bold disabled:opacity-30"
-                            style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
+                            style={{ background: 'rgba(147,169,84,0.12)', border: '1px solid rgba(147,169,84,0.3)', color: '#93a954' }}>
                       Asignar a cada miembro →
                     </button>
                   </div>
@@ -770,11 +770,11 @@ function EquiposTab({ teams, users, challenges, allBadges, token, onRefresh }: {
                         const tc = gc.badge_tier ? (TIER[gc.badge_tier]?.color ?? '#facc15') : null
                         return (
                           <div key={gc.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2"
-                               style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                               style={{ background: 'rgba(26,31,19,0.5)', border: '1px solid rgba(255,255,255,0.07)' }}>
                             <div className="flex-1 min-w-0">
                               <p className="text-[10px] font-semibold text-slate-200 truncate">{gc.title}</p>
                               {gc.badge_name && tc && (
-                                <p className="text-[8px]" style={{ color: gc.badge_earned ? tc : '#475569' }}>
+                                <p className="text-[8px]" style={{ color: gc.badge_earned ? tc : '#5f6646' }}>
                                   {gc.badge_earned ? '★ Insignia ganada: ' : '○ Al completar: '}
                                   {gc.badge_name}
                                 </p>
@@ -879,9 +879,9 @@ function InsigniasTab({ allBadges, awarded, token, onRefresh }: {
   allBadges: Badge[]; awarded: AwardedBadge[]; token: string; onRefresh: () => void
 }) {
   const ORG_COLOR: Record<string, string> = {
-    CertAcademico: '#60a5fa',
+    CertAcademico: '#aec174',
     redciber:      '#f87171',
-    LabThinkTank:  '#22d3ee',
+    LabThinkTank:  '#d4bd55',
   }
 
   const revoke = async (email: string, badge_id: number) => {
@@ -978,10 +978,10 @@ function InsigniasTab({ allBadges, awarded, token, onRefresh }: {
 // ── Fases CTF Tab ────────────────────────────────────────────────────────────
 
 const CAT_CTF_COLOR: Record<string, string> = {
-  Intro: '#22d3ee', IOC: '#06b6d4', Malware: '#f97316', OSINT: '#a78bfa',
-  Network: '#4ade80', Crypto: '#facc15', 'ATT&CK': '#ef4444', Data: '#22d3ee',
+  Intro: '#d4bd55', IOC: '#bfa543', Malware: '#f97316', OSINT: '#93a954',
+  Network: '#4ade80', Crypto: '#facc15', 'ATT&CK': '#ef4444', Data: '#d4bd55',
   'Machine Learning': '#10b981', Ransomware: '#f43f5e', 'Data Engineering': '#6366f1',
-  CTI: '#64748b', Team: '#fbbf24',
+  CTI: '#7f8360', Team: '#fbbf24',
 }
 
 const DIFF_CTF: Record<string, string> = {
@@ -1068,16 +1068,16 @@ function FasesCTFTab({ phases, datasets, token, onRefresh }: {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
-        <StatCard label="Fases totales"  value={phases.length} color="#a78bfa" />
+        <StatCard label="Fases totales"  value={phases.length} color="#93a954" />
         <StatCard label="Activas"        value={active}        color="#4ade80" />
-        <StatCard label="Desactivadas"   value={phases.length - active} color="#475569" />
+        <StatCard label="Desactivadas"   value={phases.length - active} color="#5f6646" />
         <StatCard label="CTF Challenges" value={Object.values(challenges).flat().length} color="#f97316" />
       </div>
 
       <div className="flex justify-end">
         <button onClick={() => setShowPhaseForm(s => !s)}
                 className="px-4 py-2 rounded-lg text-xs font-bold"
-                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
+                style={{ background: 'rgba(147,169,84,0.12)', border: '1px solid rgba(147,169,84,0.3)', color: '#93a954' }}>
           {showPhaseForm ? 'Cancelar' : '+ Nueva fase'}
         </button>
       </div>
@@ -1111,7 +1111,7 @@ function FasesCTFTab({ phases, datasets, token, onRefresh }: {
           </div>
           <button onClick={createPhase} disabled={creating}
                   className="px-5 py-2 rounded-lg text-xs font-bold disabled:opacity-40"
-                  style={{ background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.4)', color: '#a78bfa' }}>
+                  style={{ background: 'rgba(147,169,84,0.15)', border: '1px solid rgba(147,169,84,0.4)', color: '#93a954' }}>
             {creating ? 'Creando...' : 'Crear fase →'}
           </button>
         </div>
@@ -1125,11 +1125,11 @@ function FasesCTFTab({ phases, datasets, token, onRefresh }: {
           const isOpen     = expanded === phase.id
           const chals      = challenges[phase.id] ?? []
           const totalPts   = chals.reduce((s, c) => s + c.points, 0)
-          const accentColor = isActive ? '#4ade80' : '#475569'
+          const accentColor = isActive ? '#4ade80' : '#5f6646'
 
           return (
             <div key={phase.id} className="rounded-xl overflow-hidden transition-all"
-                 style={{ ...glass, border: `1px solid ${isActive ? 'rgba(74,222,128,0.25)' : 'rgba(255,255,255,0.07)'}`, background: isActive ? 'rgba(74,222,128,0.03)' : 'rgba(15,23,42,0.6)' }}>
+                 style={{ ...glass, border: `1px solid ${isActive ? 'rgba(74,222,128,0.25)' : 'rgba(255,255,255,0.07)'}`, background: isActive ? 'rgba(74,222,128,0.03)' : 'rgba(26,31,19,0.6)' }}>
 
               {/* Phase header */}
               <div className="flex items-center gap-4 px-5 py-4">
@@ -1164,7 +1164,7 @@ function FasesCTFTab({ phases, datasets, token, onRefresh }: {
                 </div>
 
                 <div className="shrink-0 text-right mr-2">
-                  <p className="text-[10px] font-bold" style={{ color: isActive ? '#4ade80' : '#475569' }}>
+                  <p className="text-[10px] font-bold" style={{ color: isActive ? '#4ade80' : '#5f6646' }}>
                     {isActive ? 'Activo' : 'Inactivo'}
                   </p>
                   <p className="text-[9px] text-slate-700">{isActive ? 'Visible' : 'Oculto'}</p>
@@ -1174,7 +1174,7 @@ function FasesCTFTab({ phases, datasets, token, onRefresh }: {
                         className="shrink-0 relative w-12 h-6 rounded-full transition-all duration-300 disabled:opacity-50"
                         style={{ background: isActive ? 'rgba(74,222,128,0.3)' : 'rgba(255,255,255,0.1)', border: `1px solid ${isActive ? 'rgba(74,222,128,0.6)' : 'rgba(255,255,255,0.15)'}`, boxShadow: isActive ? '0 0 10px rgba(74,222,128,0.3)' : 'none' }}>
                   <span className="absolute top-0.5 w-5 h-5 rounded-full transition-all duration-300 flex items-center justify-center"
-                        style={{ left: isActive ? 'calc(100% - 22px)' : '2px', background: isActive ? '#4ade80' : '#475569', boxShadow: isActive ? '0 0 6px rgba(74,222,128,0.8)' : 'none' }}>
+                        style={{ left: isActive ? 'calc(100% - 22px)' : '2px', background: isActive ? '#4ade80' : '#5f6646', boxShadow: isActive ? '0 0 6px rgba(74,222,128,0.8)' : 'none' }}>
                     {isToggling
                       ? <span className="w-2.5 h-2.5 border border-white border-t-transparent rounded-full animate-spin block" />
                       : <span className="text-[8px] font-bold text-white">{isActive ? '✓' : '○'}</span>
@@ -1280,7 +1280,7 @@ function FasesCTFTab({ phases, datasets, token, onRefresh }: {
                                 roles: sel ? p.roles.filter(x => x !== meta.label) : [...p.roles, meta.label]
                               }))}
                                       className="text-[9px] px-2 py-1 rounded font-bold transition-all"
-                                      style={{ background: sel ? `${meta.color}20` : 'rgba(255,255,255,0.04)', color: sel ? meta.color : '#475569', border: `1px solid ${sel ? meta.color+'44' : 'rgba(255,255,255,0.08)'}` }}>
+                                      style={{ background: sel ? `${meta.color}20` : 'rgba(255,255,255,0.04)', color: sel ? meta.color : '#5f6646', border: `1px solid ${sel ? meta.color+'44' : 'rgba(255,255,255,0.08)'}` }}>
                                 {meta.short} {meta.label}
                               </button>
                             )
@@ -1303,8 +1303,8 @@ function FasesCTFTab({ phases, datasets, token, onRefresh }: {
                   {/* Challenge list */}
                   <div className="space-y-1.5">
                     {chals.map(ch => {
-                      const catColor  = CAT_CTF_COLOR[ch.category] ?? '#64748b'
-                      const diffColor = DIFF_CTF[ch.difficulty] ?? '#64748b'
+                      const catColor  = CAT_CTF_COLOR[ch.category] ?? '#7f8360'
+                      const diffColor = DIFF_CTF[ch.difficulty] ?? '#7f8360'
                       let roles: string[] = []
                       try { roles = JSON.parse(ch.roles_json) } catch { /* */ }
 
@@ -1328,7 +1328,7 @@ function FasesCTFTab({ phases, datasets, token, onRefresh }: {
                             <div className="flex items-center gap-2 flex-wrap">
                               {ch.docker_image && (
                                 <span className="text-[8px] font-mono px-1.5 py-0.5 rounded"
-                                      style={{ background: 'rgba(34,211,238,0.06)', color: '#67e8f9', border: '1px solid rgba(34,211,238,0.1)' }}>
+                                      style={{ background: 'rgba(212,189,85,0.06)', color: '#e0cf74', border: '1px solid rgba(212,189,85,0.1)' }}>
                                   {ch.docker_image}:{ch.docker_port}
                                 </span>
                               )}
@@ -1433,7 +1433,7 @@ function DatasetsTab({ datasets, token, onRefresh }: {
             <textarea value={form.data} onChange={e => setForm(p => ({ ...p, data: e.target.value }))}
                       rows={8} placeholder={'[\n  {"ip":"185.220.101.1","port":443,"action":"BLOCK"},\n  ...\n]'}
                       className="w-full rounded-lg px-3 py-2 text-xs font-mono text-green-300 outline-none resize-none"
-                      style={{ background: '#050a14', border: '1px solid rgba(255,255,255,0.08)' }} />
+                      style={{ background: '#11150c', border: '1px solid rgba(255,255,255,0.08)' }} />
           </div>
           <button onClick={create} disabled={loading}
                   className="px-5 py-2 rounded-lg text-xs font-bold disabled:opacity-40"
@@ -1458,8 +1458,8 @@ function DatasetsTab({ datasets, token, onRefresh }: {
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(schema).map(([col, type]) => (
                       <span key={col} className="text-[9px] font-mono px-1.5 py-0.5 rounded"
-                            style={{ background: 'rgba(34,211,238,0.08)', color: '#67e8f9' }}>
-                        {col}: <span style={{ color: '#94a3b8' }}>{String(type)}</span>
+                            style={{ background: 'rgba(212,189,85,0.08)', color: '#e0cf74' }}>
+                        {col}: <span style={{ color: '#a3a27c' }}>{String(type)}</span>
                       </span>
                     ))}
                   </div>
@@ -1666,7 +1666,7 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
 
       {/* ── Asignación masiva selectiva ─────────────────────────────────────── */}
       <div className="rounded-xl overflow-hidden"
-           style={{ background: 'rgba(34,211,238,0.03)', border: '1px solid rgba(34,211,238,0.12)' }}>
+           style={{ background: 'rgba(212,189,85,0.03)', border: '1px solid rgba(212,189,85,0.12)' }}>
 
         {/* Header del panel */}
         <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -1682,7 +1682,7 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
             </button>
             <button onClick={() => { setBulkOpen(o => !o); setBulkRetos(challenges.filter(c => c.status === 'active').map(c => c.id)); setBulkStudents([]) }}
                     className="text-[10px] px-3 py-1.5 rounded-lg font-bold transition-all"
-                    style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
+                    style={{ background: 'rgba(147,169,84,0.12)', border: '1px solid rgba(147,169,84,0.3)', color: '#93a954' }}>
               {bulkOpen ? 'Cerrar selector' : '+ Asignación selectiva'}
             </button>
           </div>
@@ -1705,7 +1705,7 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
                       Todos
                     </button>
                     <button onClick={() => setBulkRetos([])}
-                            className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: '#475569', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: '#5f6646', border: '1px solid rgba(255,255,255,0.08)' }}>
                       Ninguno
                     </button>
                   </div>
@@ -1713,10 +1713,10 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
                 <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
                   {challenges.map(c => {
                     const sel = bulkRetos.includes(c.id)
-                    const diffColor = DIFF_COLOR[c.difficulty] ?? '#64748b'
+                    const diffColor = DIFF_COLOR[c.difficulty] ?? '#7f8360'
                     return (
                       <label key={c.id} className="flex items-start gap-2 cursor-pointer rounded-lg px-2 py-1.5 transition-all"
-                             style={{ background: sel ? 'rgba(34,211,238,0.06)' : 'rgba(255,255,255,0.02)', border: `1px solid ${sel ? 'rgba(34,211,238,0.2)' : 'rgba(255,255,255,0.05)'}` }}>
+                             style={{ background: sel ? 'rgba(212,189,85,0.06)' : 'rgba(255,255,255,0.02)', border: `1px solid ${sel ? 'rgba(212,189,85,0.2)' : 'rgba(255,255,255,0.05)'}` }}>
                         <input type="checkbox" checked={sel} onChange={() => toggleBulkReto(c.id)} className="accent-cyan-400 mt-0.5 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-[10px] text-slate-200 leading-tight truncate">{c.title}</p>
@@ -1739,11 +1739,11 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
                   </p>
                   <div className="flex gap-1.5">
                     <button onClick={() => setBulkStudents(students.map(s => s.email))}
-                            className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)' }}>
+                            className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: '#93a954', border: '1px solid rgba(147,169,84,0.3)' }}>
                       Todos
                     </button>
                     <button onClick={() => setBulkStudents([])}
-                            className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: '#475569', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: '#5f6646', border: '1px solid rgba(255,255,255,0.08)' }}>
                       Ninguno
                     </button>
                   </div>
@@ -1753,7 +1753,7 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
                     const sel = bulkStudents.includes(s.email)
                     return (
                       <label key={s.email} className="flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1.5 transition-all"
-                             style={{ background: sel ? 'rgba(167,139,250,0.07)' : 'rgba(255,255,255,0.02)', border: `1px solid ${sel ? 'rgba(167,139,250,0.25)' : 'rgba(255,255,255,0.05)'}` }}>
+                             style={{ background: sel ? 'rgba(147,169,84,0.07)' : 'rgba(255,255,255,0.02)', border: `1px solid ${sel ? 'rgba(147,169,84,0.25)' : 'rgba(255,255,255,0.05)'}` }}>
                         <input type="checkbox" checked={sel} onChange={() => toggleBulkStudent(s.email)} className="accent-violet-400 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-[10px] text-slate-200 truncate">{s.name}</p>
@@ -1771,7 +1771,7 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
               onClick={assignBulkSelected}
               disabled={bulkLoading || !bulkRetos.length || !bulkStudents.length}
               className="w-full py-2.5 rounded-lg text-xs font-bold disabled:opacity-30 transition-all"
-              style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.35)', color: CYAN }}>
+              style={{ background: 'rgba(212,189,85,0.12)', border: '1px solid rgba(212,189,85,0.35)', color: CYAN }}>
               {bulkLoading
                 ? 'Asignando...'
                 : `Asignar ${bulkRetos.length} reto(s) → ${bulkStudents.length} estudiante(s) seleccionados`}
@@ -1791,7 +1791,7 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
           </button>
           <button onClick={() => setShowForm(s => !s)}
                   className="px-4 py-2 rounded-lg text-xs font-bold"
-                  style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
+                  style={{ background: 'rgba(147,169,84,0.12)', border: '1px solid rgba(147,169,84,0.3)', color: '#93a954' }}>
             {showForm ? 'Cancelar' : '+ Nuevo reto'}
           </button>
         </div>
@@ -1884,7 +1884,7 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
 
           <button onClick={create} disabled={loading}
                   className="px-5 py-2 rounded-lg text-xs font-bold disabled:opacity-40"
-                  style={{ background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.4)', color: '#a78bfa' }}>
+                  style={{ background: 'rgba(147,169,84,0.15)', border: '1px solid rgba(147,169,84,0.4)', color: '#93a954' }}>
             {loading ? 'Creando...' : 'Crear reto →'}
           </button>
         </div>
@@ -1896,7 +1896,7 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
           const isOpen      = expanded === c.id
           const asmts       = assignments[c.id] ?? []
           const notAssigned = students.filter(u => !asmts.find(a => a.email === u.email))
-          const diffColor   = DIFF_COLOR[c.difficulty] ?? '#64748b'
+          const diffColor   = DIFF_COLOR[c.difficulty] ?? '#7f8360'
           const tierColor   = c.badge_tier ? (TIER[c.badge_tier]?.color ?? '#facc15') : null
 
           return (
@@ -1907,7 +1907,7 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <p className="text-sm font-semibold text-slate-100 truncate">{c.title}</p>
-                    <Badge label={c.status} color={c.status === 'active' ? '#4ade80' : '#475569'} />
+                    <Badge label={c.status} color={c.status === 'active' ? '#4ade80' : '#5f6646'} />
                     {c.difficulty && <Badge label={c.difficulty} color={diffColor} />}
                     {c.dataset_name && <Badge label={c.dataset_name} color="#f97316" />}
                   </div>
@@ -1926,7 +1926,7 @@ function RetosTab({ challenges, datasets, users, allBadges, token, onRefresh }: 
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={e => { e.stopPropagation(); toggleStatus(c) }}
                           className="text-[10px] px-2.5 py-1 rounded transition-colors"
-                          style={{ border: `1px solid ${c.status === 'active' ? '#47556966' : '#4ade8066'}`, color: c.status === 'active' ? '#475569' : '#4ade80' }}>
+                          style={{ border: `1px solid ${c.status === 'active' ? '#47556966' : '#4ade8066'}`, color: c.status === 'active' ? '#5f6646' : '#4ade80' }}>
                     {c.status === 'active' ? 'Cerrar' : 'Reabrir'}
                   </button>
                   <button onClick={e => { e.stopPropagation(); del(c.id) }}
@@ -2160,7 +2160,7 @@ function SubmissionsTab({ token, challenges }: { token: string; challenges: Chal
                   <div>
                     <p className="text-[10px] text-slate-600 uppercase tracking-wider mb-2">Código</p>
                     <pre className="text-[10px] font-mono text-green-300 p-3 rounded-lg overflow-x-auto"
-                         style={{ background: '#050a14', border: '1px solid rgba(255,255,255,0.06)', maxHeight: 180 }}>
+                         style={{ background: '#11150c', border: '1px solid rgba(255,255,255,0.06)', maxHeight: 180 }}>
                       {s.code}
                     </pre>
                   </div>
@@ -2238,8 +2238,8 @@ interface FeedSource {
 }
 
 const CAT_COLOR: Record<string, string> = {
-  IOC:        '#22d3ee',
-  IoA:        '#a78bfa',
+  IOC:        '#d4bd55',
+  IoA:        '#93a954',
   Botnet:     '#f97316',
   Ransomware: '#ef4444',
   Malware:    '#facc15',
@@ -2248,7 +2248,7 @@ const CAT_COLOR: Record<string, string> = {
 const STATUS_META: Record<string, { label: string; color: string; dot: string }> = {
   active:    { label: 'Activo',      color: '#4ade80', dot: '🟢' },
   needs_key: { label: 'API Key',     color: '#facc15', dot: '🟡' },
-  manual:    { label: 'Manual',      color: '#94a3b8', dot: '⚪' },
+  manual:    { label: 'Manual',      color: '#a3a27c', dot: '⚪' },
   unavailable:{ label: 'No disp.',   color: '#ef4444', dot: '🔴' },
 }
 
@@ -2290,7 +2290,7 @@ function FuentesTab({ token }: { token: string }) {
       <div className="grid grid-cols-5 gap-3">
         {(['IOC','IoA','Botnet','Ransomware','Malware'] as const).map(cat => {
           const catSrcs = sources.filter(s => s.category === cat)
-          const color   = CAT_COLOR[cat] ?? '#64748b'
+          const color   = CAT_COLOR[cat] ?? '#7f8360'
           return (
             <button key={cat} onClick={() => setCatFilter(catFilter === cat ? 'ALL' : cat)}
                     className="rounded-xl p-3 text-left transition-all"
@@ -2315,7 +2315,7 @@ function FuentesTab({ token }: { token: string }) {
         <div key={group} className="space-y-2">
           <div className="flex items-center gap-2">
             <p className="text-[10px] font-bold uppercase tracking-wider"
-               style={{ color: CAT_COLOR[srcs[0]?.category] ?? '#64748b' }}>
+               style={{ color: CAT_COLOR[srcs[0]?.category] ?? '#7f8360' }}>
               {group}
             </p>
             <span className="text-[9px] text-slate-700">({srcs.length} fuentes)</span>
@@ -2324,7 +2324,7 @@ function FuentesTab({ token }: { token: string }) {
           <div className="space-y-1.5">
             {srcs.map(src => {
               const st      = STATUS_META[src.status] ?? STATUS_META.unavailable
-              const color   = CAT_COLOR[src.category] ?? '#64748b'
+              const color   = CAT_COLOR[src.category] ?? '#7f8360'
               const canFetch = src.status !== 'manual' && !src.requires_auth
               const res     = fetchRes[src.id]
               const isFetching = fetching === src.id
@@ -2344,7 +2344,7 @@ function FuentesTab({ token }: { token: string }) {
                           {src.category}
                         </span>
                         <span className="text-[9px] px-1.5 py-0.5 rounded"
-                              style={{ background: 'rgba(255,255,255,0.04)', color: '#64748b', border: '1px solid rgba(255,255,255,0.06)' }}>
+                              style={{ background: 'rgba(255,255,255,0.04)', color: '#7f8360', border: '1px solid rgba(255,255,255,0.06)' }}>
                           {src.feed_type}
                         </span>
                         <span className="text-[9px]" style={{ color: st.color }}>{st.dot} {st.label}</span>
@@ -2451,7 +2451,7 @@ function BadgeProgressTab({ token }: { token: string }) {
         <StatCard label="Estudiantes"      value={progress.filter(p => p.role === 'student').length} color={CYAN} />
         <StatCard label="Insignias ganadas" value={progress.reduce((s, p) => s + p.badge_count, 0)}  color="#facc15" />
         <StatCard label="CTF solves total" value={progress.reduce((s, p) => s + p.ctf_solves, 0)}    color="#4ade80" />
-        <StatCard label="CTF puntos total" value={progress.reduce((s, p) => s + p.ctf_points, 0)}    color="#a78bfa" />
+        <StatCard label="CTF puntos total" value={progress.reduce((s, p) => s + p.ctf_points, 0)}    color="#93a954" />
       </div>
 
       <div className="flex items-center gap-3">
@@ -2460,7 +2460,7 @@ function BadgeProgressTab({ token }: { token: string }) {
           {(['student', 'all'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)}
                     className="text-[10px] px-3 py-1.5 transition-all"
-                    style={{ background: filter === f ? 'rgba(249,115,22,0.15)' : 'transparent', color: filter === f ? '#f97316' : '#475569' }}>
+                    style={{ background: filter === f ? 'rgba(249,115,22,0.15)' : 'transparent', color: filter === f ? '#f97316' : '#5f6646' }}>
               {f === 'student' ? 'Solo estudiantes' : 'Todos'}
             </button>
           ))}
@@ -2479,7 +2479,7 @@ function BadgeProgressTab({ token }: { token: string }) {
             <table className="w-full text-[10px]">
               <thead>
                 <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                  <th className="px-4 py-2 text-left text-slate-500 font-medium sticky left-0" style={{ background: 'rgba(8,12,25,0.97)', minWidth: 160 }}>Estudiante</th>
+                  <th className="px-4 py-2 text-left text-slate-500 font-medium sticky left-0" style={{ background: 'rgba(16,19,11,0.97)', minWidth: 160 }}>Estudiante</th>
                   <th className="px-2 py-2 text-center text-slate-500 font-medium">CTF pts</th>
                   <th className="px-2 py-2 text-center text-slate-500 font-medium">Prom</th>
                   {orgBadges.map(b => {
@@ -2498,12 +2498,12 @@ function BadgeProgressTab({ token }: { token: string }) {
                 {shown.map(p => {
                   return (
                     <tr key={p.email} className="hover:bg-white/[0.015]">
-                      <td className="px-4 py-2 sticky left-0" style={{ background: 'rgba(8,12,25,0.97)' }}>
+                      <td className="px-4 py-2 sticky left-0" style={{ background: 'rgba(16,19,11,0.97)' }}>
                         <p className="font-medium text-slate-200 truncate max-w-36">{p.name}</p>
                         <p className="text-slate-700 truncate max-w-36">{p.email}</p>
                       </td>
                       <td className="px-2 py-2 text-center">
-                        <span className="font-bold" style={{ color: p.ctf_points > 0 ? '#4ade80' : '#475569' }}>
+                        <span className="font-bold" style={{ color: p.ctf_points > 0 ? '#4ade80' : '#5f6646' }}>
                           {p.ctf_points}
                         </span>
                         <p className="text-[8px] text-slate-700">{p.ctf_solves} solves</p>
@@ -2532,14 +2532,14 @@ function BadgeProgressTab({ token }: { token: string }) {
               </tbody>
               <tfoot>
                 <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
-                  <td className="px-4 py-2 text-slate-600 font-bold sticky left-0" style={{ background: 'rgba(8,12,25,0.97)' }}>Total ganaron</td>
+                  <td className="px-4 py-2 text-slate-600 font-bold sticky left-0" style={{ background: 'rgba(16,19,11,0.97)' }}>Total ganaron</td>
                   <td colSpan={2} />
                   {orgBadges.map(b => {
                     const count = shown.filter(p => p.badges.find(x => x.id === b.id)?.earned).length
                     const t = TIER[b.tier] ?? TIER.bronze
                     return (
                       <td key={b.id} className="px-2 py-2 text-center">
-                        <span className="font-bold text-xs" style={{ color: count > 0 ? t.color : '#475569' }}>{count}</span>
+                        <span className="font-bold text-xs" style={{ color: count > 0 ? t.color : '#5f6646' }}>{count}</span>
                       </td>
                     )
                   })}
@@ -2621,11 +2621,11 @@ export default function AdminPanel({ onExitAdmin }: { onExitAdmin: () => void })
   }, [fetchAll])
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#030712' }}>
+    <div className="min-h-screen flex" style={{ background: '#0e110a' }}>
 
       {/* ── Sidebar ──────────────────────────────────────────────────────── */}
       <aside className="w-56 shrink-0 flex flex-col border-r"
-             style={{ background: 'rgba(8,12,25,0.97)', borderColor: 'rgba(255,255,255,0.05)' }}>
+             style={{ background: 'rgba(16,19,11,0.97)', borderColor: 'rgba(255,255,255,0.05)' }}>
 
         <div className="h-14 flex items-center gap-3 px-4 border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
           <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
@@ -2649,7 +2649,7 @@ export default function AdminPanel({ onExitAdmin }: { onExitAdmin: () => void })
                       style={active ? {
                         background: 'rgba(249,115,22,0.1)', borderLeft: '2px solid #f97316',
                         paddingLeft: 10, color: '#f97316',
-                      } : { color: '#475569', borderLeft: '2px solid transparent' }}>
+                      } : { color: '#5f6646', borderLeft: '2px solid transparent' }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
                      strokeLinecap="round" strokeLinejoin="round"
                      className={`w-4 h-4 shrink-0 ${active ? 'text-orange-400' : 'text-slate-700 group-hover:text-slate-500'}`}>
@@ -2668,7 +2668,7 @@ export default function AdminPanel({ onExitAdmin }: { onExitAdmin: () => void })
                   </span>
                 ) : t.id === 'teams' && teams.length > 0 ? (
                   <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                        style={{ background: 'rgba(34,211,238,0.15)', color: CYAN }}>
+                        style={{ background: 'rgba(212,189,85,0.15)', color: CYAN }}>
                     {teams.length}
                   </span>
                 ) : null}
@@ -2700,7 +2700,7 @@ export default function AdminPanel({ onExitAdmin }: { onExitAdmin: () => void })
       {/* ── Main content ─────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-14 flex items-center justify-between px-6 border-b shrink-0"
-                 style={{ background: 'rgba(8,12,25,0.85)', backdropFilter: 'blur(20px)', borderColor: 'rgba(255,255,255,0.05)' }}>
+                 style={{ background: 'rgba(16,19,11,0.85)', backdropFilter: 'blur(20px)', borderColor: 'rgba(255,255,255,0.05)' }}>
           <div>
             <p className="text-sm font-semibold text-slate-200">
               {TABS.find(t => t.id === tab)?.label}

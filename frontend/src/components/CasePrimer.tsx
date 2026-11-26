@@ -5,7 +5,7 @@ export interface Learn {
   ciclo?: [string, string][]
 }
 
-const PHASE_COLOR = ['#64748b', '#22d3ee', '#a78bfa', '#f97316', '#4ade80', '#facc15']
+const PHASE_COLOR = ['#7f8360', '#d4bd55', '#93a954', '#f97316', '#4ade80', '#facc15']
 
 // «Antes de empezar»: dónde estás en el ciclo de inteligencia, qué vas a aprender, glosario y cómo sabrás que lo lograste.
 export default function CasePrimer({ learn, storageKey }: { learn?: Learn; storageKey: string }) {
@@ -18,7 +18,7 @@ export default function CasePrimer({ learn, storageKey }: { learn?: Learn; stora
   const phaseIdx = cycle.findIndex(([n]) => n === here)
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: 'rgba(15,23,42,0.55)', border: '1px solid rgba(167,139,250,0.25)' }}>
+    <div className="rounded-xl overflow-hidden" style={{ background: 'rgba(26,31,19,0.55)', border: '1px solid rgba(147,169,84,0.25)' }}>
       <button onClick={toggle} className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-white/[0.02]">
         <span className="text-xs font-bold text-violet-300 flex-1">📚 Antes de empezar</span>
         <span className="text-[10px] text-slate-600">{open ? 'ocultar' : 'mostrar'}</span>
@@ -34,7 +34,7 @@ export default function CasePrimer({ learn, storageKey }: { learn?: Learn; stora
                   return (
                     <div key={name} className="flex-1 min-w-24 rounded-md px-2 py-1.5 text-center text-[10px] font-semibold"
                          style={isHere ? { background: `${PHASE_COLOR[i]}22`, border: `1px solid ${PHASE_COLOR[i]}`, color: PHASE_COLOR[i] }
-                                       : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#475569' }}>
+                                       : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#5f6646' }}>
                       {i + 1}. {name}{isHere ? ' ← aquí' : ''}
                     </div>
                   )
@@ -54,11 +54,11 @@ export default function CasePrimer({ learn, storageKey }: { learn?: Learn; stora
               <div className="flex gap-1.5 flex-wrap">
                 {learn.conceptos.map(([t], i) => (
                   <button key={t} onClick={() => setTerm(term === i ? null : i)} className="text-[10px] px-2 py-1 rounded font-semibold"
-                          style={term === i ? { background: 'rgba(167,139,250,0.2)', border: '1px solid rgba(167,139,250,0.5)', color: '#c4b5fd' }
-                                            : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#94a3b8' }}>{t}</button>
+                          style={term === i ? { background: 'rgba(147,169,84,0.2)', border: '1px solid rgba(147,169,84,0.5)', color: '#c4b5fd' }
+                                            : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#a3a27c' }}>{t}</button>
                 ))}
               </div>
-              {term !== null && <p className="text-[11px] text-slate-300 rounded-lg p-3" style={{ background: 'rgba(167,139,250,0.07)' }}>{learn.conceptos[term][1]}</p>}
+              {term !== null && <p className="text-[11px] text-slate-300 rounded-lg p-3" style={{ background: 'rgba(147,169,84,0.07)' }}>{learn.conceptos[term][1]}</p>}
             </div>
           )}
           {learn.exito && <p className="text-[11px] text-green-300 rounded-lg p-3" style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)' }}>✔ {learn.exito}</p>}

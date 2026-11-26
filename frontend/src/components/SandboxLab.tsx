@@ -44,16 +44,16 @@ import pandas as pd
 import io, base64
 
 plt.rcParams.update({
-    'figure.facecolor': '#0a0f1e', 'axes.facecolor': '#0f172a',
-    'axes.edgecolor': '#1e293b', 'text.color': '#94a3b8',
-    'xtick.color': '#64748b', 'ytick.color': '#64748b',
-    'axes.labelcolor': '#94a3b8', 'grid.color': '#1e293b',
+    'figure.facecolor': '#151a0f', 'axes.facecolor': '#1a1f13',
+    'axes.edgecolor': '#2c3320', 'text.color': '#a3a27c',
+    'xtick.color': '#7f8360', 'ytick.color': '#7f8360',
+    'axes.labelcolor': '#a3a27c', 'grid.color': '#2c3320',
     'grid.linestyle': '--', 'grid.alpha': 0.6, 'font.size': 9,
 })
 
 def _mostrar():
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', facecolor='#0a0f1e', dpi=110)
+    plt.savefig(buf, format='png', bbox_inches='tight', facecolor='#151a0f', dpi=110)
     plt.close()
     buf.seek(0)
     print('__PLOT__:' + base64.b64encode(buf.read()).decode())
@@ -62,7 +62,7 @@ def _mostrar():
 const TRACKS: Track[] = [
   // ── TRACK 1: CTI & pandas ─────────────────────────────────────────────────
   {
-    id: 'cti', label: 'CTI & pandas', icon: '🔍', color: '#a78bfa', packages: [],
+    id: 'cti', label: 'CTI & pandas', icon: '🔍', color: '#93a954', packages: [],
     lessons: [
       {
         id: 'cti-1', title: 'Explorando los datos CTI',
@@ -191,7 +191,7 @@ for _, r in inmediatos.iterrows():
 
   // ── TRACK 2: ETL & Limpieza ───────────────────────────────────────────────
   {
-    id: 'etl', label: 'ETL & Limpieza', icon: '🔧', color: '#22d3ee', packages: [],
+    id: 'etl', label: 'ETL & Limpieza', icon: '🔧', color: '#d4bd55', packages: [],
     lessons: [
       {
         id: 'etl-1', title: 'Cargar datos desde texto',
@@ -361,24 +361,24 @@ colores = {'critical': '#ef4444', 'high': '#f97316', 'medium': '#facc15', 'low':
 conteo  = df['severidad'].value_counts().reindex(orden, fill_value=0)
 bars    = axes[0].bar(conteo.index, conteo.values,
                       color=[colores[s] for s in conteo.index], width=0.55, alpha=0.85)
-axes[0].set_title('IOCs por Severidad', color='#e2e8f0', fontsize=10, pad=8)
+axes[0].set_title('IOCs por Severidad', color='#d8d4b6', fontsize=10, pad=8)
 axes[0].set_ylabel('Cantidad')
 for b, v in zip(bars, conteo.values):
     if v: axes[0].text(b.get_x()+b.get_width()/2, b.get_height()+.05,
-                        str(v), ha='center', color='#e2e8f0', fontsize=9)
+                        str(v), ha='center', color='#d8d4b6', fontsize=9)
 
 # --- Barras apiladas: tipo × actor ---
 pivot  = df.groupby(['actor','tipo']).size().unstack(fill_value=0)
-colors = {'IP': '#22d3ee', 'domain': '#a78bfa', 'hash': '#f97316'}
+colors = {'IP': '#d4bd55', 'domain': '#93a954', 'hash': '#f97316'}
 bottom = np.zeros(len(pivot))
 for tipo in pivot.columns:
     vals = pivot[tipo].values
     axes[1].bar(pivot.index, vals, bottom=bottom, label=tipo,
-                color=colors.get(tipo,'#64748b'), alpha=0.85, width=0.55)
+                color=colors.get(tipo,'#7f8360'), alpha=0.85, width=0.55)
     bottom += vals
-axes[1].set_title('IOCs por Actor y Tipo', color='#e2e8f0', fontsize=10, pad=8)
+axes[1].set_title('IOCs por Actor y Tipo', color='#d8d4b6', fontsize=10, pad=8)
 axes[1].set_ylabel('Cantidad')
-axes[1].legend(facecolor='#1e293b', edgecolor='#334155', labelcolor='#94a3b8', fontsize=8)
+axes[1].legend(facecolor='#2c3320', edgecolor='#444c32', labelcolor='#a3a27c', fontsize=8)
 axes[1].tick_params(axis='x', labelrotation=15, labelsize=8)
 
 plt.tight_layout(pad=2.0)
@@ -405,8 +405,8 @@ serie.rolling(window=3, center=True, min_periods=1).mean()
 np.random.seed(42)
 dias = pd.date_range('2026-05-01', periods=28)
 actores = {
-    'APT-Shadow': {'base': 4, 'color': '#22d3ee'},
-    'Black Lynx':  {'base': 6, 'color': '#a78bfa'},
+    'APT-Shadow': {'base': 4, 'color': '#d4bd55'},
+    'Black Lynx':  {'base': 6, 'color': '#93a954'},
     'LockBit':     {'base': 8, 'color': '#ef4444'},
 }
 
@@ -418,9 +418,9 @@ for actor, cfg in actores.items():
     ax.scatter(dias, actividad, color=cfg['color'], label=actor, alpha=0.7, s=40, zorder=3)
     ax.plot(dias, media, color=cfg['color'], linewidth=1.5, alpha=0.55, linestyle='--')
 
-ax.set_title('Actividad de Amenaza por Actor — Mayo 2026', color='#e2e8f0', fontsize=11, pad=10)
+ax.set_title('Actividad de Amenaza por Actor — Mayo 2026', color='#d8d4b6', fontsize=11, pad=10)
 ax.set_xlabel('Fecha'); ax.set_ylabel('Eventos detectados')
-ax.legend(facecolor='#1e293b', edgecolor='#334155', labelcolor='#e2e8f0', fontsize=9)
+ax.legend(facecolor='#2c3320', edgecolor='#444c32', labelcolor='#d8d4b6', fontsize=9)
 ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m'))
 plt.xticks(rotation=30)
 ax.grid(True)
@@ -451,13 +451,13 @@ sev_col = {'critical':'#ef4444','high':'#f97316','medium':'#facc15','low':'#4ade
 tipos   = {'IP': 45, 'domain': 30, 'hash': 25}
 
 fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-fig.suptitle('CTI Dashboard — Mayo 2026', color='#e2e8f0', fontsize=13, y=1.01)
+fig.suptitle('CTI Dashboard — Mayo 2026', color='#d8d4b6', fontsize=13, y=1.01)
 
 # 1. Pie: distribución de tipos de IOC
 axes[0,0].pie(tipos.values(), labels=tipos.keys(), autopct='%1.0f%%',
-              colors=['#22d3ee','#a78bfa','#f97316'], startangle=90,
-              textprops={'color':'#94a3b8','fontsize':9})
-axes[0,0].set_title('Distribución de IOCs', color='#e2e8f0', fontsize=10)
+              colors=['#d4bd55','#93a954','#f97316'], startangle=90,
+              textprops={'color':'#a3a27c','fontsize':9})
+axes[0,0].set_title('Distribución de IOCs', color='#d8d4b6', fontsize=10)
 
 # 2. Barras horizontales: severidad
 sev = {'critical': 12, 'high': 18, 'medium': 8, 'low': 3}
@@ -465,8 +465,8 @@ ys  = list(sev.keys())
 xs  = list(sev.values())
 axes[0,1].barh(ys, xs, color=[sev_col[s] for s in ys], alpha=0.85, height=0.5)
 for i, v in enumerate(xs):
-    axes[0,1].text(v+0.2, i, str(v), va='center', color='#e2e8f0', fontsize=9)
-axes[0,1].set_title('IOCs por Severidad', color='#e2e8f0', fontsize=10)
+    axes[0,1].text(v+0.2, i, str(v), va='center', color='#d8d4b6', fontsize=9)
+axes[0,1].set_title('IOCs por Severidad', color='#d8d4b6', fontsize=10)
 axes[0,1].set_xlabel('Cantidad')
 
 # 3. Heatmap TTP × Actor
@@ -474,18 +474,18 @@ matrix = np.random.randint(0, 10, (len(ttps), len(actores)))
 im = axes[1,0].imshow(matrix, cmap='Blues', aspect='auto', vmin=0, vmax=10)
 axes[1,0].set_xticks(range(len(actores))); axes[1,0].set_xticklabels(actores, fontsize=8, rotation=15)
 axes[1,0].set_yticks(range(len(ttps)));   axes[1,0].set_yticklabels(ttps, fontsize=8)
-axes[1,0].set_title('Uso de TTPs por Actor', color='#e2e8f0', fontsize=10)
+axes[1,0].set_title('Uso de TTPs por Actor', color='#d8d4b6', fontsize=10)
 for i in range(len(ttps)):
     for j in range(len(actores)):
-        axes[1,0].text(j, i, matrix[i,j], ha='center', va='center', fontsize=8, color='#e2e8f0')
+        axes[1,0].text(j, i, matrix[i,j], ha='center', va='center', fontsize=8, color='#d8d4b6')
 
 # 4. Línea: tendencia 4 semanas
 semanas = ['S1','S2','S3','S4']
-for actor, color in zip(actores, ['#22d3ee','#a78bfa','#ef4444']):
+for actor, color in zip(actores, ['#d4bd55','#93a954','#ef4444']):
     vals = np.random.randint(10, 40, 4)
     axes[1,1].plot(semanas, vals, marker='o', color=color, label=actor, linewidth=2)
-axes[1,1].set_title('Tendencia Semanal (IOCs)', color='#e2e8f0', fontsize=10)
-axes[1,1].legend(facecolor='#1e293b', edgecolor='#334155', labelcolor='#e2e8f0', fontsize=8)
+axes[1,1].set_title('Tendencia Semanal (IOCs)', color='#d8d4b6', fontsize=10)
+axes[1,1].legend(facecolor='#2c3320', edgecolor='#444c32', labelcolor='#d8d4b6', fontsize=8)
 axes[1,1].grid(True)
 
 plt.tight_layout(pad=2.5)
@@ -1245,7 +1245,7 @@ sys.stdout = _cap
   if (initStatus === 'loading') {
     return (
       <div className="rounded-xl p-10 border flex items-center gap-5"
-           style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(255,255,255,0.07)' }}>
+           style={{ background: 'rgba(26,31,19,0.6)', border: '1px solid rgba(255,255,255,0.07)' }}>
         <div className="w-6 h-6 border-2 border-violet-400 border-t-transparent rounded-full animate-spin shrink-0" />
         <div>
           <p className="text-violet-400 font-semibold">Inicializando entorno Python...</p>
@@ -1258,7 +1258,7 @@ sys.stdout = _cap
   if (initStatus === 'error') {
     return (
       <div className="rounded-xl p-8 border border-red-900/50 text-red-400"
-           style={{ background: 'rgba(15,23,42,0.6)' }}>
+           style={{ background: 'rgba(26,31,19,0.6)' }}>
         <p className="font-semibold">Error cargando el entorno Python.</p>
         <p className="text-sm mt-1 text-red-500">Verifica tu conexión a internet — Pyodide carga desde CDN.</p>
       </div>
@@ -1285,7 +1285,7 @@ sys.stdout = _cap
             <div className="h-full rounded-full transition-all"
                  style={{
                    width: `${totalLessons ? (doneCount / totalLessons) * 100 : 0}%`,
-                   background: 'linear-gradient(to right, #22d3ee, #a78bfa)',
+                   background: 'linear-gradient(to right, #d4bd55, #93a954)',
                  }} />
           </div>
           <span className="text-xs text-slate-600">{Math.round(doneCount / totalLessons * 100)}%</span>
@@ -1308,14 +1308,14 @@ sys.stdout = _cap
                     } : {
                       background: 'rgba(255,255,255,0.03)',
                       border: '1px solid rgba(255,255,255,0.07)',
-                      color: '#475569',
+                      color: '#5f6646',
                     }}>
               <span>{t.icon}</span>
               <span>{t.label}</span>
               <span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
                     style={{
                       background: active ? `${t.color}22` : 'rgba(255,255,255,0.05)',
-                      color: active ? t.color : '#334155',
+                      color: active ? t.color : '#444c32',
                     }}>
                 {trackDone}/{t.lessons.length}
               </span>
@@ -1330,7 +1330,7 @@ sys.stdout = _cap
       {/* Package loading banner */}
       {pkgLoading && (
         <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-xs"
-             style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.15)' }}>
+             style={{ background: 'rgba(212,189,85,0.06)', border: '1px solid rgba(212,189,85,0.15)' }}>
           <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin shrink-0" />
           <span className="text-cyan-400">
             Descargando paquetes para este track ({track.packages.join(', ')}) — solo la primera vez...
@@ -1340,7 +1340,7 @@ sys.stdout = _cap
 
       {/* ── Editor area ────────────────────────────────────────────────────── */}
       <div className="rounded-xl overflow-hidden"
-           style={{ background: 'rgba(15,23,42,0.55)', border: '1px solid rgba(255,255,255,0.07)' }}>
+           style={{ background: 'rgba(26,31,19,0.55)', border: '1px solid rgba(255,255,255,0.07)' }}>
 
         <div className="flex" style={{ height: 640 }}>
 
@@ -1369,11 +1369,11 @@ sys.stdout = _cap
                     </span>
                     <div>
                       <p className="text-xs leading-tight"
-                         style={{ color: isActive ? '#e2e8f0' : '#475569' }}>
+                         style={{ color: isActive ? '#d8d4b6' : '#5f6646' }}>
                         {l.title}
                       </p>
                       <p className="text-[9px] mt-0.5"
-                         style={{ color: isActive ? track.color : '#1e293b' }}>
+                         style={{ color: isActive ? track.color : '#2c3320' }}>
                         {l.concept}
                       </p>
                     </div>
@@ -1397,10 +1397,10 @@ sys.stdout = _cap
 
             {/* CTI Real Example */}
             <div className="px-4 py-2.5 border-b shrink-0"
-                 style={{ borderColor: 'rgba(255,255,255,0.05)', background: 'rgba(34,211,238,0.04)' }}>
+                 style={{ borderColor: 'rgba(255,255,255,0.05)', background: 'rgba(212,189,85,0.04)' }}>
               <div className="flex items-start gap-2">
                 <span className="text-[9px] font-bold px-2 py-0.5 rounded shrink-0 mt-0.5"
-                      style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.25)', color: '#22d3ee' }}>
+                      style={{ background: 'rgba(212,189,85,0.12)', border: '1px solid rgba(212,189,85,0.25)', color: '#d4bd55' }}>
                   🌐 USO REAL · {lesson.ctiExample.year}
                 </span>
                 <div className="min-w-0">
@@ -1419,7 +1419,7 @@ sys.stdout = _cap
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowHint(h => !h)}
                         className="text-xs px-2 py-1 rounded transition-colors"
-                        style={{ color: showHint ? '#facc15' : '#475569' }}>
+                        style={{ color: showHint ? '#facc15' : '#5f6646' }}>
                   💡 {showHint ? 'Ocultar' : 'Pista'}
                 </button>
                 <button onClick={() => { setCode(lesson.starterCode); setOutput('') }}
@@ -1449,7 +1449,7 @@ sys.stdout = _cap
               onKeyDown={handleKeyDown}
               spellCheck={false}
               className="flex-1 resize-none focus:outline-none font-mono text-sm p-4 leading-relaxed"
-              style={{ background: '#050a14', color: '#86efac', minHeight: 0 }}
+              style={{ background: '#11150c', color: '#86efac', minHeight: 0 }}
             />
           </div>
         </div>

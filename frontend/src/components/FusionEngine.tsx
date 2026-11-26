@@ -42,13 +42,13 @@ interface FusionQuota {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const glass = { background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
+const glass = { background: 'rgba(26,31,19,0.6)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
 const glassRed = { background: 'rgba(30,10,12,0.6)', border: '1px solid rgba(239,68,68,0.18)', borderRadius: 12 }
 
 const SEV_COLOR: Record<string, string> = {
   Critical: '#ef4444', High: '#f97316', Medium: '#facc15', Low: '#4ade80',
 }
-const PIE_COLORS = ['#ef4444', '#f97316', '#facc15', '#4ade80', '#22d3ee']
+const PIE_COLORS = ['#ef4444', '#f97316', '#facc15', '#4ade80', '#d4bd55']
 
 import type { ReactNode } from 'react'
 const SUB_ANALYSES: { key: SubKey; label: string; icon: ReactNode; desc: string }[] = [
@@ -86,7 +86,7 @@ function apiErrorMessage(detail: unknown, fallback: string) {
   return fallback
 }
 
-function Pill({ children, color = '#94a3b8' }: { children: React.ReactNode; color?: string }) {
+function Pill({ children, color = '#a3a27c' }: { children: React.ReactNode; color?: string }) {
   return (
     <span className="text-[9px] px-2 py-0.5 rounded-full font-bold"
           style={{ color, background: `${color}16`, border: `1px solid ${color}28` }}>
@@ -95,11 +95,11 @@ function Pill({ children, color = '#94a3b8' }: { children: React.ReactNode; colo
   )
 }
 
-function Spinner({ color = '#22d3ee' }: { color?: string }) {
+function Spinner({ color = '#d4bd55' }: { color?: string }) {
   return <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: color, borderTopColor: 'transparent' }} />
 }
 
-function Section({ title, icon, open, onToggle, children, accent = '#22d3ee' }: {
+function Section({ title, icon, open, onToggle, children, accent = '#d4bd55' }: {
   title: string; icon: ReactNode; open: boolean; onToggle: () => void
   children: ReactNode; accent?: string
 }) {
@@ -197,7 +197,7 @@ function SeverityPie({ events }: { events: ThreatEvent[] }) {
             <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
           ))}
         </Pie>
-        <RTooltip contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 11 }} />
+        <RTooltip contentStyle={{ background: '#1a1f13', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 11 }} />
       </PieChart>
     </ResponsiveContainer>
   )
@@ -219,9 +219,9 @@ function TacticBar({ events }: { events: ThreatEvent[] }) {
     <ResponsiveContainer width="100%" height={180}>
       <BarChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 40 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-        <XAxis dataKey="tactic" tick={{ fill: '#64748b', fontSize: 9 }} angle={-35} textAnchor="end" />
-        <YAxis tick={{ fill: '#64748b', fontSize: 9 }} />
-        <RTooltip contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 11 }} />
+        <XAxis dataKey="tactic" tick={{ fill: '#7f8360', fontSize: 9 }} angle={-35} textAnchor="end" />
+        <YAxis tick={{ fill: '#7f8360', fontSize: 9 }} />
+        <RTooltip contentStyle={{ background: '#1a1f13', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 11 }} />
         <Bar dataKey="count" fill="#ef4444" radius={[3, 3, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
@@ -241,10 +241,10 @@ function ActorBar({ events }: { events: ThreatEvent[] }) {
     <ResponsiveContainer width="100%" height={180}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
-        <XAxis type="number" tick={{ fill: '#64748b', fontSize: 9 }} />
-        <YAxis type="category" dataKey="actor" tick={{ fill: '#94a3b8', fontSize: 9 }} width={80} />
-        <RTooltip contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 11 }} />
-        <Bar dataKey="count" fill="#22d3ee" radius={[0, 3, 3, 0]} />
+        <XAxis type="number" tick={{ fill: '#7f8360', fontSize: 9 }} />
+        <YAxis type="category" dataKey="actor" tick={{ fill: '#a3a27c', fontSize: 9 }} width={80} />
+        <RTooltip contentStyle={{ background: '#1a1f13', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, fontSize: 11 }} />
+        <Bar dataKey="count" fill="#d4bd55" radius={[0, 3, 3, 0]} />
       </BarChart>
     </ResponsiveContainer>
   )
@@ -386,7 +386,7 @@ function IntelVisibilityDashboard({ events, query }: { events: ThreatEvent[]; qu
         <div className="flex-1" />
         <button onClick={() => downloadText(`soc-brief-${Date.now()}.md`, visibility.brief, 'text/markdown;charset=utf-8')}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[10px] font-bold"
-                style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.22)' }}>
+                style={{ background: 'rgba(212,189,85,0.08)', color: '#d4bd55', border: '1px solid rgba(212,189,85,0.22)' }}>
           <Download size={10} /> Brief SOC
         </button>
       </div>
@@ -415,9 +415,9 @@ function IntelVisibilityDashboard({ events, query }: { events: ThreatEvent[]; qu
 
         <div className="xl:col-span-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
           {[
-            { label: 'Actor dominante', value: visibility.dominantActor, color: '#a78bfa' },
+            { label: 'Actor dominante', value: visibility.dominantActor, color: '#93a954' },
             { label: 'TTP dominante', value: visibility.dominantTactic, color: '#f87171' },
-            { label: 'Objetivo expuesto', value: visibility.exposedTarget, color: '#22d3ee' },
+            { label: 'Objetivo expuesto', value: visibility.exposedTarget, color: '#d4bd55' },
             { label: 'Confianza media', value: `${visibility.avgConf}%`, color: '#4ade80' },
           ].map(item => (
             <div key={item.label} className="rounded-lg px-3 py-2.5 min-w-0" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -431,7 +431,7 @@ function IntelVisibilityDashboard({ events, query }: { events: ThreatEvent[]; qu
           <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-3">Timeline ATT&CK</p>
           <div className="flex items-end gap-2 h-28 overflow-x-auto pb-1">
             {visibility.timeline.map(item => {
-              const color = SEV_COLOR[item.severity] ?? '#64748b'
+              const color = SEV_COLOR[item.severity] ?? '#7f8360'
               const height = Math.max(16, Math.min(96, item.count * 14))
               return (
                 <div key={item.tactic} className="flex flex-col items-center gap-1 min-w-16">
@@ -511,23 +511,23 @@ function PredictivePanel({ data }: { data: Record<string, unknown> }) {
         </div>
       )}
       {impact && (
-        <div className="rounded-lg p-3 space-y-1" style={{ background: `${SEV_COLOR[String(impact.severity)] ?? '#94a3b8'}0a`, border: `1px solid ${SEV_COLOR[String(impact.severity)] ?? '#94a3b8'}25` }}>
+        <div className="rounded-lg p-3 space-y-1" style={{ background: `${SEV_COLOR[String(impact.severity)] ?? '#a3a27c'}0a`, border: `1px solid ${SEV_COLOR[String(impact.severity)] ?? '#a3a27c'}25` }}>
           <div className="flex items-center gap-2">
-            <Pill color={SEV_COLOR[String(impact.severity)] ?? '#94a3b8'}>{String(impact.severity)}</Pill>
+            <Pill color={SEV_COLOR[String(impact.severity)] ?? '#a3a27c'}>{String(impact.severity)}</Pill>
             <span className="text-[10px] text-slate-500">Probabilidad: {Math.round(Number(impact.probability) * 100)}%</span>
           </div>
           <p className="text-xs text-slate-300">{String(impact.reasoning ?? '')}</p>
         </div>
       )}
       {next && (
-        <div className="rounded-lg p-3" style={{ background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.15)' }}>
+        <div className="rounded-lg p-3" style={{ background: 'rgba(147,169,84,0.06)', border: '1px solid rgba(147,169,84,0.15)' }}>
           <p className="text-[9px] font-bold text-violet-500 uppercase mb-1">Próxima táctica probable</p>
           <p className="text-xs font-bold text-slate-200">{String(next.tactic ?? '')}</p>
           <p className="text-[10px] text-slate-500 mt-1">{String(next.reasoning ?? '')}</p>
         </div>
       )}
       {attr && (
-        <div className="rounded-lg p-3" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.12)' }}>
+        <div className="rounded-lg p-3" style={{ background: 'rgba(212,189,85,0.05)', border: '1px solid rgba(212,189,85,0.12)' }}>
           <p className="text-[9px] font-bold text-cyan-600 uppercase mb-1">Atribución recalculada</p>
           <p className="text-xs font-bold text-slate-200">{String(attr.actor ?? '')}</p>
           <p className="text-[10px] text-slate-500 mt-0.5">Confianza: {Math.round(Number(attr.confidence) * 100)}% · {String(attr.reasoning ?? '')}</p>
@@ -558,9 +558,9 @@ function QuantumPanel({ data }: { data: Record<string, unknown> }) {
         </div>
       )}
       {pqc && (
-        <div className="rounded-lg p-3 space-y-2" style={{ background: 'rgba(167,139,250,0.05)', border: '1px solid rgba(167,139,250,0.12)' }}>
+        <div className="rounded-lg p-3 space-y-2" style={{ background: 'rgba(147,169,84,0.05)', border: '1px solid rgba(147,169,84,0.12)' }}>
           <div className="flex items-center gap-2 flex-wrap">
-            <Pill color="#a78bfa">Migración: {String(pqc.migrationPriority ?? '')}</Pill>
+            <Pill color="#93a954">Migración: {String(pqc.migrationPriority ?? '')}</Pill>
             {(pqc.exposedAlgorithms as string[] ?? []).map((a, i) => <Pill key={i} color="#f97316">{a}</Pill>)}
           </div>
           <p className="text-[10px] text-slate-500">{String(pqc.sectorStatus ?? '')}</p>
@@ -579,9 +579,9 @@ function QuantumPanel({ data }: { data: Record<string, unknown> }) {
 function ScenariosPanel({ data }: { data: Record<string, unknown> }) {
   const teams = [
     { key: 'redTeam',    label: 'Red Team',    color: '#ef4444' },
-    { key: 'blueTeam',   label: 'Blue Team',   color: '#3b82f6' },
-    { key: 'purpleTeam', label: 'Purple Team', color: '#a78bfa' },
-    { key: 'whiteTeam',  label: 'White Team',  color: '#e2e8f0' },
+    { key: 'blueTeam',   label: 'Blue Team',   color: '#7a903f' },
+    { key: 'purpleTeam', label: 'Purple Team', color: '#93a954' },
+    { key: 'whiteTeam',  label: 'White Team',  color: '#d8d4b6' },
   ]
   return (
     <div className="grid grid-cols-1 gap-3">
@@ -628,12 +628,12 @@ function MLPanel({ data }: { data: Record<string, unknown> }) {
       {proposals?.slice(0, 6).map((p, i) => (
         <div key={i} className="rounded-lg px-3 py-2.5 space-y-1" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
           <div className="flex items-center gap-2 flex-wrap">
-            <Pill color="#22d3ee">{String(p.suggestedModel ?? '')}</Pill>
+            <Pill color="#d4bd55">{String(p.suggestedModel ?? '')}</Pill>
             <span className="text-[10px] font-bold text-slate-300">{String(p.actor ?? '')}</span>
           </div>
           <p className="text-[9px] text-slate-500">{String(p.reasoning ?? '')}</p>
           <div className="flex flex-wrap gap-1">
-            {(p.featuresToUse as string[] ?? []).slice(0, 4).map((f, j) => <Pill key={j} color="#a78bfa">{f}</Pill>)}
+            {(p.featuresToUse as string[] ?? []).slice(0, 4).map((f, j) => <Pill key={j} color="#93a954">{f}</Pill>)}
           </div>
         </div>
       ))}
@@ -669,7 +669,7 @@ function WeeklyPanel({ data, query, events, token }: {
           {iocs?.length > 0 && (
             <button onClick={importIocs}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[10px] font-bold"
-                    style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.22)' }}>
+                    style={{ background: 'rgba(212,189,85,0.08)', color: '#d4bd55', border: '1px solid rgba(212,189,85,0.22)' }}>
               <Shield size={10} /> Importar IOCs
             </button>
           )}
@@ -688,7 +688,7 @@ function WeeklyPanel({ data, query, events, token }: {
           <p className="text-[9px] font-bold text-violet-500 uppercase">{String(t.tactic ?? '')}</p>
           <div className="flex flex-wrap gap-1">
             {(t.techniques as Record<string, unknown>[] ?? []).map((tech, j) => (
-              <span key={j} className="text-[9px] px-2 py-0.5 rounded font-mono" style={{ background: 'rgba(167,139,250,0.08)', color: '#a78bfa' }}>
+              <span key={j} className="text-[9px] px-2 py-0.5 rounded font-mono" style={{ background: 'rgba(147,169,84,0.08)', color: '#93a954' }}>
                 {String(tech.id ?? '')} {String(tech.name ?? '')}
               </span>
             ))}
@@ -700,7 +700,7 @@ function WeeklyPanel({ data, query, events, token }: {
         <div className="space-y-2">
           <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">Hunting Queries</p>
           {queries.slice(0, 4).map((q, i) => (
-            <div key={i} className="rounded-lg p-3 space-y-1" style={{ background: '#050a14', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div key={i} className="rounded-lg p-3 space-y-1" style={{ background: '#11150c', border: '1px solid rgba(255,255,255,0.06)' }}>
               <Pill color="#4ade80">{String(q.platform ?? '')}</Pill>
               <pre className="text-[9px] text-green-400 font-mono whitespace-pre-wrap mt-1">{String(q.query ?? '')}</pre>
               <p className="text-[9px] text-slate-600">{String(q.description ?? '')}</p>
@@ -731,7 +731,7 @@ function ColombiaPanel({ data }: { data: Record<string, unknown> }) {
       <p className="text-[10px] text-slate-400 leading-relaxed">{String(data.riskSummary ?? '')}</p>
       <div className="grid grid-cols-1 gap-2">
         {sectors?.map((s, i) => {
-          const color = RISK_COLOR[String(s.riskLevel)] ?? '#94a3b8'
+          const color = RISK_COLOR[String(s.riskLevel)] ?? '#a3a27c'
           return (
             <div key={i} className="rounded-lg p-3 space-y-1" style={{ background: `${color}07`, border: `1px solid ${color}22` }}>
               <div className="flex items-center gap-2">
@@ -753,7 +753,7 @@ function GeopoliticalPanel({ data }: { data: Record<string, unknown> }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <div className="rounded-lg p-3 text-center flex-1" style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.15)' }}>
+        <div className="rounded-lg p-3 text-center flex-1" style={{ background: 'rgba(212,189,85,0.06)', border: '1px solid rgba(212,189,85,0.15)' }}>
           <p className="text-2xl font-black text-cyan-400">{Number(data.regionalStabilityScore ?? 0).toFixed(1)}</p>
           <p className="text-[9px] text-slate-600 uppercase">Score de Estabilidad</p>
         </div>
@@ -788,44 +788,44 @@ const RISK_COLOR_MAP: Record<string, string> = {
 }
 
 function ActorGraphNode({ data }: NodeProps) {
-  const color = (data.riskColor as string) || RISK_COLOR_MAP[data.risk as string] || '#94a3b8'
+  const color = (data.riskColor as string) || RISK_COLOR_MAP[data.risk as string] || '#a3a27c'
   return (
     <div style={{ background: 'rgba(30,10,40,0.97)', border: `1.5px solid ${color}`, borderRadius: 10, padding: '8px 12px', minWidth: 155, maxWidth: 195, boxShadow: `0 0 14px ${color}28` }}>
       <Handle type="source" position={Position.Right} style={{ background: color }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 7, fontWeight: 700, color, background: `${color}18`, border: `1px solid ${color}30`, borderRadius: 4, padding: '1px 5px' }}>{String(data.risk ?? 'N/A')}</span>
-        {data.cisaMatch && <span style={{ fontSize: 7, fontWeight: 700, color: '#22d3ee', background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', borderRadius: 4, padding: '1px 5px' }}>✓ CISA</span>}
+        {data.cisaMatch && <span style={{ fontSize: 7, fontWeight: 700, color: '#d4bd55', background: 'rgba(212,189,85,0.1)', border: '1px solid rgba(212,189,85,0.25)', borderRadius: 4, padding: '1px 5px' }}>✓ CISA</span>}
       </div>
-      <div style={{ fontWeight: 700, fontSize: 12, color: '#e2e8f0', marginBottom: 2 }}>{String(data.label ?? '')}</div>
-      <div style={{ fontSize: 9, color: '#64748b' }}>{String(data.country ?? '')}</div>
+      <div style={{ fontWeight: 700, fontSize: 12, color: '#d8d4b6', marginBottom: 2 }}>{String(data.label ?? '')}</div>
+      <div style={{ fontSize: 9, color: '#7f8360' }}>{String(data.country ?? '')}</div>
       {(data.cisaAdvisories as string[] | undefined)?.length ? (
-        <div style={{ fontSize: 7, color: '#22d3ee', marginTop: 3 }}>{(data.cisaAdvisories as string[]).slice(0, 2).join(' · ')}</div>
+        <div style={{ fontSize: 7, color: '#d4bd55', marginTop: 3 }}>{(data.cisaAdvisories as string[]).slice(0, 2).join(' · ')}</div>
       ) : null}
-      <div style={{ marginTop: 3, fontSize: 8, color: '#94a3b8' }}>{Number(data.eventCount ?? 0)} evento{Number(data.eventCount) !== 1 ? 's' : ''}</div>
+      <div style={{ marginTop: 3, fontSize: 8, color: '#a3a27c' }}>{Number(data.eventCount ?? 0)} evento{Number(data.eventCount) !== 1 ? 's' : ''}</div>
     </div>
   )
 }
 
 function CampaignGraphNode({ data }: NodeProps) {
   return (
-    <div style={{ background: 'rgba(20,15,40,0.97)', border: '1.5px solid rgba(167,139,250,0.45)', borderRadius: 9, padding: '7px 12px', minWidth: 145, maxWidth: 185, boxShadow: '0 0 10px rgba(167,139,250,0.1)' }}>
-      <Handle type="target" position={Position.Left} style={{ background: '#a78bfa' }} />
-      <Handle type="source" position={Position.Right} style={{ background: '#a78bfa' }} />
-      <div style={{ fontSize: 7, color: '#a78bfa', fontWeight: 700, textTransform: 'uppercase', marginBottom: 3 }}>Campaña</div>
+    <div style={{ background: 'rgba(20,15,40,0.97)', border: '1.5px solid rgba(147,169,84,0.45)', borderRadius: 9, padding: '7px 12px', minWidth: 145, maxWidth: 185, boxShadow: '0 0 10px rgba(147,169,84,0.1)' }}>
+      <Handle type="target" position={Position.Left} style={{ background: '#93a954' }} />
+      <Handle type="source" position={Position.Right} style={{ background: '#93a954' }} />
+      <div style={{ fontSize: 7, color: '#93a954', fontWeight: 700, textTransform: 'uppercase', marginBottom: 3 }}>Campaña</div>
       <div style={{ fontSize: 11, color: '#ddd6fe', fontWeight: 600 }}>{String(data.label ?? '')}</div>
-      {data.timeframe ? <div style={{ fontSize: 8, color: '#64748b', marginTop: 2 }}>{String(data.timeframe)}</div> : null}
+      {data.timeframe ? <div style={{ fontSize: 8, color: '#7f8360', marginTop: 2 }}>{String(data.timeframe)}</div> : null}
     </div>
   )
 }
 
 function IocGraphNode({ data }: NodeProps) {
   return (
-    <div style={{ background: 'rgba(5,18,42,0.97)', border: '1px solid rgba(34,211,238,0.35)', borderRadius: 7, padding: '5px 10px', minWidth: 125, maxWidth: 175 }}>
-      <Handle type="target" position={Position.Left} style={{ background: '#22d3ee' }} />
-      <div style={{ fontSize: 8, color: '#22d3ee', fontWeight: 700, marginBottom: 2 }}>IOC</div>
-      <div style={{ fontFamily: 'monospace', fontSize: 9, color: '#67e8f9', wordBreak: 'break-all' }}>{String(data.label ?? '')}</div>
+    <div style={{ background: 'rgba(18,22,12,0.97)', border: '1px solid rgba(212,189,85,0.35)', borderRadius: 7, padding: '5px 10px', minWidth: 125, maxWidth: 175 }}>
+      <Handle type="target" position={Position.Left} style={{ background: '#d4bd55' }} />
+      <div style={{ fontSize: 8, color: '#d4bd55', fontWeight: 700, marginBottom: 2 }}>IOC</div>
+      <div style={{ fontFamily: 'monospace', fontSize: 9, color: '#e0cf74', wordBreak: 'break-all' }}>{String(data.label ?? '')}</div>
       {(data.usedBy as string[] | undefined)?.length ? (
-        <div style={{ fontSize: 7, color: '#475569', marginTop: 3 }}>
+        <div style={{ fontSize: 7, color: '#5f6646', marginTop: 3 }}>
           {(data.usedBy as string[]).slice(0, 2).join(', ')}
         </div>
       ) : null}
@@ -846,9 +846,9 @@ function ThreatGraphPanel({ data }: { data: Record<string, unknown> }) {
       <div className="grid grid-cols-4 gap-2">
         {(
           [
-            { label: 'Actores',   val: Number(data.totalActors   ?? 0), color: '#a855f7' },
-            { label: 'IOCs',      val: Number(data.totalIocs     ?? 0), color: '#22d3ee' },
-            { label: 'Campañas',  val: Number(data.totalCampaigns?? 0), color: '#a78bfa' },
+            { label: 'Actores',   val: Number(data.totalActors   ?? 0), color: '#7a903f' },
+            { label: 'IOCs',      val: Number(data.totalIocs     ?? 0), color: '#d4bd55' },
+            { label: 'Campañas',  val: Number(data.totalCampaigns?? 0), color: '#93a954' },
             { label: '✓ CISA',    val: Number(data.cisaMatchCount?? 0), color: '#4ade80' },
           ] as { label: string; val: number; color: string }[]
         ).map(s => (
@@ -877,11 +877,11 @@ function ThreatGraphPanel({ data }: { data: Record<string, unknown> }) {
           minZoom={0.25}
           maxZoom={2}
         >
-          <Background color="#1e293b" gap={18} />
-          <Controls style={{ background: 'rgba(15,23,42,0.9)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8 }} />
+          <Background color="#2c3320" gap={18} />
+          <Controls style={{ background: 'rgba(26,31,19,0.9)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8 }} />
           <MiniMap
-            style={{ background: 'rgba(5,10,20,0.9)', border: '1px solid rgba(255,255,255,0.07)' }}
-            nodeColor={(n) => n.type === 'actor' ? '#a855f7' : n.type === 'campaign' ? '#a78bfa' : '#22d3ee'}
+            style={{ background: 'rgba(16,19,11,0.9)', border: '1px solid rgba(255,255,255,0.07)' }}
+            nodeColor={(n) => n.type === 'actor' ? '#7a903f' : n.type === 'campaign' ? '#93a954' : '#d4bd55'}
           />
         </ReactFlow>
       </div>
@@ -889,9 +889,9 @@ function ThreatGraphPanel({ data }: { data: Record<string, unknown> }) {
       {/* Legend */}
       <div className="flex flex-wrap gap-3">
         {[
-          { color: '#a855f7', label: 'Actor / APT' },
-          { color: '#a78bfa', label: 'Campaña' },
-          { color: '#22d3ee', label: 'IOC' },
+          { color: '#7a903f', label: 'Actor / APT' },
+          { color: '#93a954', label: 'Campaña' },
+          { color: '#d4bd55', label: 'IOC' },
           { color: '#4ade80', label: 'Verificado CISA' },
         ].map(l => (
           <div key={l.label} className="flex items-center gap-1.5 text-[9px] text-slate-500">
@@ -1144,7 +1144,7 @@ export default function FusionEngine() {
           {quota?.limited && (
             <div className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-lg"
                  style={(quota.remaining ?? 0) > 0
-                   ? { background: 'rgba(34,211,238,0.07)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.2)' }
+                   ? { background: 'rgba(212,189,85,0.07)', color: '#d4bd55', border: '1px solid rgba(212,189,85,0.2)' }
                    : { background: 'rgba(239,68,68,0.07)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
               Consultas hoy: {quota.used}/{quota.limit}
             </div>
@@ -1161,7 +1161,7 @@ export default function FusionEngine() {
                     className="px-3 py-1 rounded text-[10px] font-bold transition-colors"
                     style={mode === m
                       ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
-                      : { color: '#64748b', border: '1px solid transparent' }}>
+                      : { color: '#7f8360', border: '1px solid transparent' }}>
               {m === 'simple' ? 'Consulta Táctica' : 'Ingesta de Texto'}
             </button>
           ))}
@@ -1227,9 +1227,9 @@ export default function FusionEngine() {
           {/* Stats row */}
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
             {[
-              { label: 'Eventos',      val: stats.total,           color: '#22d3ee' },
+              { label: 'Eventos',      val: stats.total,           color: '#d4bd55' },
               { label: 'Críticos',     val: stats.critical,        color: '#ef4444' },
-              { label: 'Actores únicos',val: stats.actors,          color: '#a78bfa' },
+              { label: 'Actores únicos',val: stats.actors,          color: '#93a954' },
               { label: 'Conf. media',  val: `${stats.avgConf}%`,   color: '#4ade80' },
             ].map(s => (
               <div key={s.label} className="rounded-xl p-4 text-center" style={glass}>
@@ -1277,14 +1277,14 @@ export default function FusionEngine() {
               {/* Filters */}
               <select value={filterSev} onChange={e => { setFilterSev(e.target.value); setPage(0) }}
                       className="rounded px-2 py-1 text-[10px] outline-none"
-                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#cbd5e1' }}>
+                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#bfbb98' }}>
                 <option value="">Todas las severidades</option>
                 {['Critical','High','Medium','Low'].map(s => <option key={s} value={s.toLowerCase()}>{s}</option>)}
               </select>
               <input value={filterActor} onChange={e => { setFilterActor(e.target.value); setPage(0) }}
                      placeholder="Filtrar actor..."
                      className="rounded px-2 py-1 text-[10px] outline-none w-32"
-                     style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#cbd5e1' }} />
+                     style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#bfbb98' }} />
               {/* Export buttons */}
               <button onClick={() => exportEventsXlsx(filtered)}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[10px] font-bold"
@@ -1298,12 +1298,12 @@ export default function FusionEngine() {
               </button>
               <button onClick={() => exportEventsJson(query, filtered)}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[10px] font-bold"
-                      style={{ background: 'rgba(167,139,250,0.08)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.22)' }}>
+                      style={{ background: 'rgba(147,169,84,0.08)', color: '#93a954', border: '1px solid rgba(147,169,84,0.22)' }}>
                 <Download size={10} /> JSON
               </button>
               <button onClick={importIocs} disabled={importing}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[10px] font-bold disabled:opacity-40"
-                      style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.22)' }}>
+                      style={{ background: 'rgba(212,189,85,0.08)', color: '#d4bd55', border: '1px solid rgba(212,189,85,0.22)' }}>
                 <Shield size={10} /> {importing ? 'Importando...' : 'IOCs → CTI-Lab'}
               </button>
             </div>
@@ -1319,7 +1319,7 @@ export default function FusionEngine() {
                 </thead>
                 <tbody className="divide-y divide-white/[0.03]">
                   {paginated.map((ev, i) => {
-                    const sc = SEV_COLOR[ev.severity] ?? '#94a3b8'
+                    const sc = SEV_COLOR[ev.severity] ?? '#a3a27c'
                     return (
                       <tr key={i} className="hover:bg-white/[0.02]">
                         <td className="px-3 py-1.5 font-mono text-slate-600 whitespace-nowrap">{(ev.timestamp ?? '').slice(0, 16)}</td>
@@ -1362,11 +1362,11 @@ export default function FusionEngine() {
                           style={{
                             ...glass,
                             border: isDone ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(255,255,255,0.06)',
-                            background: isOpen && isDone ? 'rgba(239,68,68,0.05)' : 'rgba(15,23,42,0.55)',
+                            background: isOpen && isDone ? 'rgba(239,68,68,0.05)' : 'rgba(26,31,19,0.55)',
                           }}>
                     <div className="flex items-center gap-1.5 w-full">
-                      <span style={{ color: isDone ? '#f87171' : '#64748b' }}>{icon}</span>
-                      <span className="text-[10px] font-bold flex-1" style={{ color: isDone ? '#f87171' : '#94a3b8' }}>{label}</span>
+                      <span style={{ color: isDone ? '#f87171' : '#7f8360' }}>{icon}</span>
+                      <span className="text-[10px] font-bold flex-1" style={{ color: isDone ? '#f87171' : '#a3a27c' }}>{label}</span>
                       {isLoading && <Spinner color="#f87171" />}
                       {isDone && !isLoading && (isOpen ? <ChevronDown size={10} className="text-red-400" /> : <ChevronRight size={10} className="text-red-400" />)}
                     </div>

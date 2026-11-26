@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
-const glass = { background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
+const glass = { background: 'rgba(26,31,19,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
 
 const TEAM_COLORS: Record<string, { label: string; color: string }> = {
   red:    { label: 'Red',    color: '#ef4444' },
-  blue:   { label: 'Blue',   color: '#3b82f6' },
-  white:  { label: 'White',  color: '#e2e8f0' },
-  purple: { label: 'Purple', color: '#a855f7' },
+  blue:   { label: 'Blue',   color: '#7a903f' },
+  white:  { label: 'White',  color: '#d8d4b6' },
+  purple: { label: 'Purple', color: '#7a903f' },
 }
 
 interface Row {
@@ -88,7 +88,7 @@ export default function CtfScoreboard() {
         {rows.map(r => {
           const mine = r.members.some(m => m.email === email)
           return (
-            <div key={r.team_id} className="px-5 py-3 space-y-2" style={mine ? { background: 'rgba(34,211,238,0.05)' } : undefined}>
+            <div key={r.team_id} className="px-5 py-3 space-y-2" style={mine ? { background: 'rgba(212,189,85,0.05)' } : undefined}>
               <button className="w-full flex items-center gap-3 text-left" onClick={() => setOpen(open === r.team_id ? null : r.team_id)}>
                 <span className="text-[10px] text-slate-600 w-5">#{r.rank}</span>
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ background: r.color }} />

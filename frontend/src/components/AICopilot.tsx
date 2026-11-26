@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
 const glass = {
-  background: 'rgba(15,23,42,0.55)',
+  background: 'rgba(26,31,19,0.55)',
   backdropFilter: 'blur(16px)',
   border: '1px solid rgba(255,255,255,0.07)',
   borderRadius: 12,
@@ -111,7 +111,7 @@ export default function AICopilot() {
         <div className="px-5 py-3.5 border-b flex items-center gap-3"
              style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
           <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-               style={{ background: 'rgba(167,139,250,0.15)', boxShadow: '0 0 16px rgba(167,139,250,0.2)' }}>
+               style={{ background: 'rgba(147,169,84,0.15)', boxShadow: '0 0 16px rgba(147,169,84,0.2)' }}>
             <svg viewBox="0 0 24 24" className="w-4 h-4 text-violet-400" fill="none"
                  stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18" />
@@ -147,8 +147,8 @@ export default function AICopilot() {
                     ? 'text-slate-100 rounded-tr-sm'
                     : 'text-slate-200 rounded-tl-sm'
                 }`} style={m.role === 'user' ? {
-                  background: 'rgba(34,211,238,0.1)',
-                  border: '1px solid rgba(34,211,238,0.2)',
+                  background: 'rgba(212,189,85,0.1)',
+                  border: '1px solid rgba(212,189,85,0.2)',
                 } : {
                   background: 'rgba(255,255,255,0.05)',
                   border: '1px solid rgba(255,255,255,0.08)',
@@ -189,7 +189,7 @@ export default function AICopilot() {
               onClick={() => send()}
               disabled={loading || !input.trim()}
               className="px-4 rounded-xl text-sm font-medium transition-all disabled:opacity-40"
-              style={{ background: 'rgba(34,211,238,0.15)', border: '1px solid rgba(34,211,238,0.3)', color: '#22d3ee' }}>
+              style={{ background: 'rgba(212,189,85,0.15)', border: '1px solid rgba(212,189,85,0.3)', color: '#d4bd55' }}>
               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
               </svg>

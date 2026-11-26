@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
 const glass = {
-  background: 'rgba(15,23,42,0.55)',
+  background: 'rgba(26,31,19,0.55)',
   backdropFilter: 'blur(16px)',
   border: '1px solid rgba(255,255,255,0.07)',
   borderRadius: 12,
@@ -132,7 +132,7 @@ export default function IOCIOABoard() {
                 <div className="flex gap-1.5">
                   {['VT', 'AIPDB', 'Shodan'].map(tag => (
                     <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded font-mono"
-                          style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.15)' }}>
+                          style={{ background: 'rgba(212,189,85,0.08)', color: '#d4bd55', border: '1px solid rgba(212,189,85,0.15)' }}>
                       {tag}
                     </span>
                   ))}
@@ -165,7 +165,7 @@ export default function IOCIOABoard() {
               <td className="px-4 py-3">
                 {ioa.source ? (
                   <span className="text-[10px] px-1.5 py-0.5 rounded font-mono"
-                        style={{ background: 'rgba(167,139,250,0.1)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.2)' }}>
+                        style={{ background: 'rgba(147,169,84,0.1)', color: '#93a954', border: '1px solid rgba(147,169,84,0.2)' }}>
                     {ioa.source}
                   </span>
                 ) : <span className="text-slate-700">—</span>}
@@ -210,11 +210,11 @@ export default function IOCIOABoard() {
             <button key={t} onClick={() => setTab(t)}
                     className="px-4 py-2 text-xs font-semibold transition-all"
                     style={tab === t ? {
-                      background: 'rgba(34,211,238,0.12)',
-                      color: '#22d3ee',
+                      background: 'rgba(212,189,85,0.12)',
+                      color: '#d4bd55',
                     } : {
                       background: 'rgba(255,255,255,0.03)',
-                      color: '#475569',
+                      color: '#5f6646',
                     }}>
               {label}
             </button>
@@ -243,11 +243,11 @@ export default function IOCIOABoard() {
                         style={severityFilter === sev ? {
                           background: st?.bg ?? 'rgba(255,255,255,0.08)',
                           border: `1px solid ${st?.border ?? 'rgba(255,255,255,0.2)'}`,
-                          color: st?.text ?? '#e2e8f0',
+                          color: st?.text ?? '#d8d4b6',
                         } : {
                           background: 'rgba(255,255,255,0.03)',
                           border: '1px solid rgba(255,255,255,0.06)',
-                          color: '#475569',
+                          color: '#5f6646',
                         }}>
                   {sev}
                 </button>

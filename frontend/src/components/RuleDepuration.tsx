@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
 const glass = {
-  background: 'rgba(15,23,42,0.55)',
+  background: 'rgba(26,31,19,0.55)',
   backdropFilter: 'blur(16px)',
   border: '1px solid rgba(255,255,255,0.07)',
   borderRadius: 12,
@@ -39,9 +39,9 @@ const STAGE_COLORS: Record<string, { color: string; bg: string; border: string }
 }
 
 const DEFEND_TYPE_COLOR: Record<string, string> = {
-  Detectar:  '#22d3ee',
+  Detectar:  '#d4bd55',
   Aislar:    '#f97316',
-  Endurecer: '#a78bfa',
+  Endurecer: '#93a954',
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -82,7 +82,7 @@ function PipelineStep({
 }) {
   const borderColor = pass === null ? 'rgba(255,255,255,0.1)'
     : pass ? 'rgba(74,222,128,0.4)' : 'rgba(239,68,68,0.4)'
-  const dotColor = pass === null ? '#475569' : pass ? '#4ade80' : '#ef4444'
+  const dotColor = pass === null ? '#5f6646' : pass ? '#4ade80' : '#ef4444'
 
   return (
     <div className="rounded-xl p-4 space-y-3" style={{ ...glass, border: `1px solid ${borderColor}` }}>
@@ -126,7 +126,7 @@ export default function RuleDepuration() {
     background: 'rgba(255,255,255,0.05)',
     border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: 8,
-    color: '#e2e8f0',
+    color: '#d8d4b6',
     outline: 'none',
     padding: '8px 12px',
     fontSize: 12,
@@ -228,10 +228,10 @@ export default function RuleDepuration() {
           {/* Selected IoA preview */}
           {selectedMeta && (
             <div className="col-span-2 rounded-lg p-3 space-y-1"
-                 style={{ background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.15)' }}>
+                 style={{ background: 'rgba(147,169,84,0.06)', border: '1px solid rgba(147,169,84,0.15)' }}>
               <div className="flex items-center gap-2">
                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase"
-                      style={{ background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}>
+                      style={{ background: 'rgba(147,169,84,0.15)', color: '#93a954' }}>
                   IoA seleccionada
                 </span>
                 <span className="text-[10px] font-mono"
@@ -248,7 +248,7 @@ export default function RuleDepuration() {
           onClick={runDepuration}
           disabled={loading || !selTtp}
           className="w-full py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40"
-          style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.3)', color: '#22d3ee' }}>
+          style={{ background: 'rgba(212,189,85,0.12)', border: '1px solid rgba(212,189,85,0.3)', color: '#d4bd55' }}>
           {loading ? 'Analizando pipeline...' : 'Ejecutar depuración →'}
         </button>
       </div>
@@ -275,7 +275,7 @@ export default function RuleDepuration() {
                          : node.pass ? 'rgba(74,222,128,0.12)' : 'rgba(239,68,68,0.12)',
                        border: `1px solid ${node.pass === null ? 'rgba(255,255,255,0.1)'
                          : node.pass ? 'rgba(74,222,128,0.35)' : 'rgba(239,68,68,0.35)'}`,
-                       color: node.pass === null ? '#475569'
+                       color: node.pass === null ? '#5f6646'
                          : node.pass ? '#4ade80' : '#ef4444',
                      }}>
                   {node.label}
@@ -367,9 +367,9 @@ export default function RuleDepuration() {
                         <span className="font-mono text-[9px] text-slate-600">{d.id}</span>
                         <span className="text-[10px] font-semibold text-slate-200">{d.name}</span>
                         <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                              style={{ background: `${DEFEND_TYPE_COLOR[d.type] ?? '#a78bfa'}15`,
-                                       color: DEFEND_TYPE_COLOR[d.type] ?? '#a78bfa',
-                                       border: `1px solid ${DEFEND_TYPE_COLOR[d.type] ?? '#a78bfa'}30` }}>
+                              style={{ background: `${DEFEND_TYPE_COLOR[d.type] ?? '#93a954'}15`,
+                                       color: DEFEND_TYPE_COLOR[d.type] ?? '#93a954',
+                                       border: `1px solid ${DEFEND_TYPE_COLOR[d.type] ?? '#93a954'}30` }}>
                           {d.type}
                         </span>
                       </div>
@@ -428,7 +428,7 @@ export default function RuleDepuration() {
               <div className="space-y-1.5">
                 <p className="text-[10px] text-slate-600 uppercase tracking-widest font-semibold">Regla de detección</p>
                 <pre className="text-[10px] leading-relaxed rounded-lg px-4 py-3 overflow-x-auto whitespace-pre-wrap break-all"
-                     style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.07)', color: '#22d3ee' }}>
+                     style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.07)', color: '#d4bd55' }}>
                   {result.detection_rule}
                 </pre>
               </div>

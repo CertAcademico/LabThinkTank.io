@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
-const glass = { background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
+const glass = { background: 'rgba(26,31,19,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
 
 interface Chapter { chapter: number; title: string; status: string; starts_at?: string | null; deadline?: string | null; assigned: number; worked: number; submitted: number; passed: number; avg_score: number | null; dist: number[]; hint_students: number; hints_total: number; weak?: { label: string; ok: number; partial: number; missed: number; n: number }[] }
 interface Row { name: string; email: string; variant: string; passed: number; current: number | null; current_hints: number; best: number | null; last_activity: string | null; status: string; wall: boolean; reason?: string }
@@ -10,7 +10,7 @@ interface Dash {
   kpis: Record<string, number>; chapters: Chapter[]; stuck: Row[]; students: Row[]; events: { t: string; who: string; what: string }[]
   flow: { start: string; active: boolean }; server_time: string; pass_score: number
 }
-const STATUS_COLOR: Record<string, string> = { draft: '#64748b', active: '#4ade80', closed: '#f87171' }
+const STATUS_COLOR: Record<string, string> = { draft: '#7f8360', active: '#4ade80', closed: '#f87171' }
 const STATUS_LABEL: Record<string, string> = { draft: 'Borrador', active: 'Activo', closed: 'Cerrado' }
 const fmt = (iso?: string | null) => iso ? new Date(iso.includes('T') || iso.includes('Z') ? iso : iso.replace(' ', 'T') + 'Z').toLocaleString('es-CO', { timeZone: 'America/Bogota', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'
 const ago = (iso?: string | null) => {
@@ -21,7 +21,7 @@ const ago = (iso?: string | null) => {
 
 function Kpi({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) {
   return (
-    <div className="rounded-xl p-4" style={{ ...glass, background: `linear-gradient(135deg, ${color}14 0%, rgba(15,23,42,0.55) 60%)` }}>
+    <div className="rounded-xl p-4" style={{ ...glass, background: `linear-gradient(135deg, ${color}14 0%, rgba(26,31,19,0.55) 60%)` }}>
       <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
       <p className="text-2xl font-bold mt-1" style={{ color }}>{value}</p>
       {sub && <p className="text-[10px] text-slate-600">{sub}</p>}
@@ -69,10 +69,10 @@ export default function CaseDashboard() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Kpi label="Estudiantes en el caso" value={k.students} sub={`${k.working} trabajando · ${k.not_started} sin empezar`} color="#22d3ee" />
+        <Kpi label="Estudiantes en el caso" value={k.students} sub={`${k.working} trabajando · ${k.not_started} sin empezar`} color="#d4bd55" />
         <Kpi label="Entregas" value={k.submissions} sub={`${k.passed_any} estudiantes ya superaron un capítulo`} color="#4ade80" />
         <Kpi label="Insignias otorgadas" value={k.badges} sub={`${k.wall} reportes en el Muro`} color="#facc15" />
-        <Kpi label="Pistas pedidas" value={k.hints} sub="en todos los capítulos" color="#a78bfa" />
+        <Kpi label="Pistas pedidas" value={k.hints} sub="en todos los capítulos" color="#93a954" />
       </div>
 
       {d.stuck.length > 0 && (
@@ -108,7 +108,7 @@ export default function CaseDashboard() {
             </div>
             {c.status !== 'draft' && (
               <div className="grid grid-cols-3 gap-3 text-[10px]">
-                {([['Trabajaron', c.worked, '#22d3ee'], ['Entregaron', c.submitted, '#facc15'], [`Superaron (≥${d.pass_score})`, c.passed, '#4ade80']] as [string, number, string][]).map(([l, v, col]) => (
+                {([['Trabajaron', c.worked, '#d4bd55'], ['Entregaron', c.submitted, '#facc15'], [`Superaron (≥${d.pass_score})`, c.passed, '#4ade80']] as [string, number, string][]).map(([l, v, col]) => (
                   <div key={l}><div className="flex justify-between text-slate-500 mb-0.5"><span>{l}</span><span className="text-slate-300">{v}/{maxAssigned}</span></div><Bar pct={(v / maxAssigned) * 100} color={col} /></div>
                 ))}
               </div>
@@ -122,7 +122,7 @@ export default function CaseDashboard() {
             {c.submitted > 0 && (
               <div className="flex items-center gap-2 text-[9px] text-slate-600">
                 <span>Notas:</span>
-                {['0–39', `40–${d.pass_score - 1}`, `${d.pass_score}–79`, '80–100'].map((l, i) => <span key={l} className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)', color: i >= 2 ? '#4ade80' : '#94a3b8' }}>{l}: {c.dist[i]}</span>)}
+                {['0–39', `40–${d.pass_score - 1}`, `${d.pass_score}–79`, '80–100'].map((l, i) => <span key={l} className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)', color: i >= 2 ? '#4ade80' : '#a3a27c' }}>{l}: {c.dist[i]}</span>)}
                 <span className="ml-auto">💡 {c.hints_total} pistas · {c.hint_students} estudiantes</span>
               </div>
             )}

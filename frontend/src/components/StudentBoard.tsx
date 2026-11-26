@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { TIER } from './BadgeCard'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
-const glass = { background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
+const glass = { background: 'rgba(26,31,19,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
 
 interface Col { name: string; kind: 'num' | 'time' | 'text'; nulls: number; distinct: number; min?: number; max?: number; mean?: number; dist?: { value: string; n: number }[]; hist?: { label: string; n: number }[] }
 interface Ds { name: string; rows: number; duplicates: number; columns: Col[] }
@@ -71,14 +71,14 @@ export default function StudentBoard() {
                   <span className="text-[11px] text-slate-200 flex-1 min-w-0 truncate">{c.locked ? '🔒 ' : ''}{c.title.replace(/^Caso Aurora \d — /, `${c.chapter}. `)}</span>
                   {c.badge && (
                     <span title={`${c.badge.name}${c.badge.earned ? ' · ganada' : ' · por ganar'}`} className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                          style={c.badge.earned ? { color: (TIER[c.badge.tier] ?? TIER.bronze).color, background: 'rgba(255,255,255,0.06)' } : { color: '#475569', background: 'rgba(255,255,255,0.02)', opacity: 0.7 }}>
+                          style={c.badge.earned ? { color: (TIER[c.badge.tier] ?? TIER.bronze).color, background: 'rgba(255,255,255,0.06)' } : { color: '#5f6646', background: 'rgba(255,255,255,0.02)', opacity: 0.7 }}>
                       {c.badge.earned ? '🏅' : '○'} {c.badge.name}
                     </span>
                   )}
                   {c.hints_used > 0 && <span className="text-[10px] text-yellow-600">💡 {c.hints_used}</span>}
                   {c.deadline && !c.locked && <span className="text-[9px] text-slate-600">cierra {fmtDate(c.deadline)}</span>}
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded min-w-12 text-center"
-                        style={c.locked ? { color: '#475569', background: 'rgba(255,255,255,0.03)' } : c.score == null ? { color: '#94a3b8', background: 'rgba(255,255,255,0.05)' }
+                        style={c.locked ? { color: '#5f6646', background: 'rgba(255,255,255,0.03)' } : c.score == null ? { color: '#a3a27c', background: 'rgba(255,255,255,0.05)' }
                           : c.score >= (board.pass_score ?? 50) ? { color: '#4ade80', background: 'rgba(74,222,128,0.12)' } : { color: '#facc15', background: 'rgba(250,204,21,0.1)' }}>
                     {c.locked ? 'bloqueado' : c.score == null ? 'sin entrega' : `${c.score}/100`}
                   </span>
@@ -92,7 +92,7 @@ export default function StudentBoard() {
                     </div>
                   )}
                   {!c.locked && c.score != null && c.checks.map((l, i) => (
-                    <p key={i} className="text-[11px]" style={{ color: l.startsWith('✓') ? '#4ade80' : l.startsWith('◐') ? '#facc15' : '#94a3b8' }}>{l}</p>
+                    <p key={i} className="text-[11px]" style={{ color: l.startsWith('✓') ? '#4ade80' : l.startsWith('◐') ? '#facc15' : '#a3a27c' }}>{l}</p>
                   ))}
                   {!c.locked && c.score == null && <p className="text-[10px] text-slate-500">Aún no entregas este capítulo. Ve a «Mis Retos» para empezar.</p>}
                 </div>
@@ -135,7 +135,7 @@ export default function StudentBoard() {
                       {c.nulls > 0 && <span className="text-amber-400"> · {c.nulls} vacíos ({Math.round(c.nulls / d.rows * 100)}%)</span>}
                     </p>
                     {c.kind === 'num' && c.min != null && <p className="text-[10px] text-slate-400">mín {fmtN(c.min)} · media {fmtN(c.mean ?? 0)} · máx {fmtN(c.max ?? 0)}</p>}
-                    {c.hist && c.hist.length > 0 && <><Bars data={c.hist} color="#22d3ee" /><p className="text-[9px] text-slate-700">{c.hist[0].label} → {c.hist[c.hist.length - 1].label}</p></>}
+                    {c.hist && c.hist.length > 0 && <><Bars data={c.hist} color="#d4bd55" /><p className="text-[9px] text-slate-700">{c.hist[0].label} → {c.hist[c.hist.length - 1].label}</p></>}
                     {c.dist && <div className="space-y-0.5">{c.dist.map(v => (
                       <div key={v.value} className="flex items-center gap-2 text-[10px]">
                         <span className="w-24 truncate text-slate-400">{v.value}</span>

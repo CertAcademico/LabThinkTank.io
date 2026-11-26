@@ -16,12 +16,12 @@ interface AdminStats { students: number; active_challenges: number; datasets: nu
 
 // ── Static data ───────────────────────────────────────────────────────────────
 
-const glass     = { background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
+const glass     = { background: 'rgba(26,31,19,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
 const TACTICS   = [
   { name: 'Acceso Inicial', color: '#ef4444', pct: 82 },
   { name: 'Ejecución',      color: '#f97316', pct: 67 },
   { name: 'Persistencia',   color: '#eab308', pct: 54 },
-  { name: 'Mov. Lateral',   color: '#a855f7', pct: 41 },
+  { name: 'Mov. Lateral',   color: '#7a903f', pct: 41 },
   { name: 'Exfiltración',   color: '#f43f5e', pct: 28 },
 ]
 const LOG_POOL  = [
@@ -43,7 +43,7 @@ const ORIGINS: [number, number, string, string][] = [
 ]
 const SEV: Record<string, string> = { critical:'#ef4444', high:'#f97316', medium:'#facc15', low:'#4ade80' }
 const TIER_COLOR: Record<string, string> = { bronze:'#cd7f32', silver:'#c0c0c0', gold:'#ffd700', platinum:'#e5e4e2', diamond:'#b9f2ff' }
-const ORG_COLOR: Record<string, string>  = { CertAcademico:'#60a5fa', redciber:'#f87171', LabThinkTank:'#22d3ee' }
+const ORG_COLOR: Record<string, string>  = { CertAcademico:'#aec174', redciber:'#f87171', LabThinkTank:'#d4bd55' }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -62,7 +62,7 @@ function ThreatGauge({ level = 74 }: { level?: number }) {
                 style={{ filter: `drop-shadow(0 0 10px ${color})`, transition: 'stroke-dashoffset 1s ease' }} />
         <text x={cx} y={cy - 8} textAnchor="middle" fill={color} fontSize="30" fontWeight="900" fontFamily="monospace">{level}</text>
         <text x={cx} y={cy + 12} textAnchor="middle" fill={color} fontSize="10" fontWeight="800" fontFamily="monospace" letterSpacing="2">{label}</text>
-        <text x={cx} y={cy + 28} textAnchor="middle" fill="#475569" fontSize="7" fontFamily="monospace" letterSpacing="1">THREAT LEVEL</text>
+        <text x={cx} y={cy + 28} textAnchor="middle" fill="#5f6646" fontSize="7" fontFamily="monospace" letterSpacing="1">THREAT LEVEL</text>
       </svg>
       <p className="text-slate-600 text-[10px] mt-1">Actualizado hace 2 min</p>
     </div>
@@ -73,7 +73,7 @@ function MiniThreatMap() {
   const W = 480, H = 240, tx = 0.23 * W, ty = 0.36 * H
   return (
     <div className="relative overflow-hidden rounded-xl h-full"
-         style={{ background: 'radial-gradient(ellipse at 30% 40%, #071826 0%, #020617 100%)', minHeight: 220 }}>
+         style={{ background: 'radial-gradient(ellipse at 30% 40%, #071826 0%, #0e110a 100%)', minHeight: 220 }}>
       <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
         <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" />
         <span className="text-cyan-400 text-[9px] font-mono tracking-widest">THREAT MAP · LIVE</span>
@@ -83,8 +83,8 @@ function MiniThreatMap() {
         <p className="text-slate-600 text-[9px]">activos</p>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full">
-        {[0.25, 0.5, 0.75].map(p => <line key={`h${p}`} x1={0} y1={p*H} x2={W} y2={p*H} stroke="#1e293b" strokeWidth="0.5" />)}
-        {[0.17, 0.33, 0.5, 0.67, 0.83].map(p => <line key={`v${p}`} x1={p*W} y1={0} x2={p*W} y2={H} stroke="#1e293b" strokeWidth="0.5" />)}
+        {[0.25, 0.5, 0.75].map(p => <line key={`h${p}`} x1={0} y1={p*H} x2={W} y2={p*H} stroke="#2c3320" strokeWidth="0.5" />)}
+        {[0.17, 0.33, 0.5, 0.67, 0.83].map(p => <line key={`v${p}`} x1={p*W} y1={0} x2={p*W} y2={H} stroke="#2c3320" strokeWidth="0.5" />)}
         {ORIGINS.map(([x, y, color], i) => (
           <line key={`l${i}`} x1={x/100*W} y1={y/100*H} x2={tx} y2={ty}
                 stroke={color} strokeWidth="0.7" strokeDasharray="5 4" opacity="0.4">
@@ -104,12 +104,12 @@ function MiniThreatMap() {
             </g>
           )
         })}
-        <circle cx={tx} cy={ty} r="8" fill="none" stroke="#22d3ee" strokeWidth="0.8">
+        <circle cx={tx} cy={ty} r="8" fill="none" stroke="#d4bd55" strokeWidth="0.8">
           <animate attributeName="r" values="6;20;6" dur="3s" repeatCount="indefinite" />
           <animate attributeName="opacity" values="0.4;0;0.4" dur="3s" repeatCount="indefinite" />
         </circle>
-        <circle cx={tx} cy={ty} r="4.5" fill="#22d3ee" style={{ filter: 'drop-shadow(0 0 5px #22d3ee)' }} />
-        <text x={tx+8} y={ty-7} fill="#22d3ee" fontSize="8" fontFamily="monospace" fontWeight="bold">TARGET</text>
+        <circle cx={tx} cy={ty} r="4.5" fill="#d4bd55" style={{ filter: 'drop-shadow(0 0 5px #d4bd55)' }} />
+        <text x={tx+8} y={ty-7} fill="#d4bd55" fontSize="8" fontFamily="monospace" fontWeight="bold">TARGET</text>
       </svg>
     </div>
   )
@@ -176,8 +176,8 @@ export default function GlobalOverview() {
   const KPIS = [
     { label: 'IOCs Activos',      value: String(iocs.length || '—'),          sub: 'en el feed', c: '#f87171', glow: 'rgba(248,113,113,0.12)' },
     { label: 'IOAs Detectados',   value: String(highIoas || '—'),             sub: 'crítico/alto', c: '#fb923c', glow: 'rgba(251,146,60,0.12)' },
-    { label: 'Actores Rastreados',value: String(actors.length || '—'),        sub: 'APT activos', c: '#c084fc', glow: 'rgba(192,132,252,0.12)' },
-    ...(showCtf ? [{ label: 'Fases CTF Activas', value: `${activePhases}/${phases.length || '—'}`, sub: 'habilitadas', c: '#22d3ee', glow: 'rgba(34,211,238,0.12)' }] : []),
+    { label: 'Actores Rastreados',value: String(actors.length || '—'),        sub: 'APT activos', c: '#aec174', glow: 'rgba(192,132,252,0.12)' },
+    ...(showCtf ? [{ label: 'Fases CTF Activas', value: `${activePhases}/${phases.length || '—'}`, sub: 'habilitadas', c: '#d4bd55', glow: 'rgba(212,189,85,0.12)' }] : []),
     { label: isAdmin ? 'Estudiantes' : 'Mis Retos', value: isAdmin ? String(adminStats?.students ?? '—') : String(myChallenges.length || '—'), sub: isAdmin ? 'registrados' : pendingRetos > 0 ? `${pendingRetos} pendiente${pendingRetos > 1 ? 's':''}` : 'asignados', c: '#4ade80', glow: 'rgba(74,222,128,0.12)' },
     { label: isAdmin ? 'Entregas Hoy' : 'Mis Insignias', value: isAdmin ? String(adminStats?.submissions_today ?? '—') : String(myBadges.length || '0'), sub: isAdmin ? 'submissions' : 'obtenidas', c: '#facc15', glow: 'rgba(250,204,21,0.12)' },
   ]
@@ -198,7 +198,7 @@ export default function GlobalOverview() {
       <div className={`grid ${showCtf ? 'grid-cols-6' : 'grid-cols-5'} gap-3`}>
         {KPIS.map(k => (
           <div key={k.label} className="rounded-xl p-4 relative overflow-hidden"
-               style={{ ...glass, background: `linear-gradient(135deg, ${k.glow} 0%, rgba(15,23,42,0.55) 60%)` }}>
+               style={{ ...glass, background: `linear-gradient(135deg, ${k.glow} 0%, rgba(26,31,19,0.55) 60%)` }}>
             <div className="absolute inset-x-0 top-0 h-px"
                  style={{ background: `linear-gradient(90deg, transparent, ${k.c}, transparent)` }} />
             <p className="text-2xl font-black tabular-nums" style={{ color: k.c, textShadow: `0 0 20px ${k.c}60` }}>{k.value}</p>
@@ -229,10 +229,10 @@ export default function GlobalOverview() {
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className="text-sm">{p.emoji}</span>
                   <span className="w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ background: p.status === 'active' ? '#4ade80' : '#334155', boxShadow: p.status === 'active' ? '0 0 4px #4ade80' : 'none' }} />
+                        style={{ background: p.status === 'active' ? '#4ade80' : '#444c32', boxShadow: p.status === 'active' ? '0 0 4px #4ade80' : 'none' }} />
                 </div>
                 <p className="text-[10px] font-semibold text-slate-300 leading-tight truncate">{p.name}</p>
-                <p className="text-[9px] truncate mt-0.5" style={{ color: p.status === 'active' ? '#86efac' : '#334155' }}>
+                <p className="text-[9px] truncate mt-0.5" style={{ color: p.status === 'active' ? '#86efac' : '#444c32' }}>
                   {p.status === 'active' ? `${p.category} · ${p.reto_count} retos` : 'Desactivado'}
                 </p>
                 {p.solves > 0 && (
@@ -310,7 +310,7 @@ export default function GlobalOverview() {
           <div className="font-mono text-[10px] space-y-2">
             {logs.map((l, i) => (
               <div key={`${i}-${l.slice(0, 10)}`} className="truncate"
-                   style={{ color: i === 0 ? '#86efac' : `rgba(100,116,139,${1 - i * 0.15})` }}>
+                   style={{ color: i === 0 ? '#86efac' : `rgba(127,131,96,${1 - i * 0.15})` }}>
                 {l}
               </div>
             ))}
@@ -323,7 +323,7 @@ export default function GlobalOverview() {
           <div className="space-y-2">
             {actors.slice(0, 3).map(a => (
               <div key={a.name} className="rounded-lg px-3 py-2.5"
-                   style={{ background: `${SEV[a.severity] ?? '#64748b'}0d`, border: `1px solid ${SEV[a.severity] ?? '#64748b'}30` }}>
+                   style={{ background: `${SEV[a.severity] ?? '#7f8360'}0d`, border: `1px solid ${SEV[a.severity] ?? '#7f8360'}30` }}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-200">{a.name}</span>
                   <span className="text-[9px] font-bold" style={{ color: SEV[a.severity] }}>{a.severity}</span>
@@ -332,7 +332,7 @@ export default function GlobalOverview() {
                 <div className="flex gap-1 mt-1 flex-wrap">
                   {a.ttps.slice(0, 3).map(t => (
                     <span key={t} className="text-[8px] font-mono px-1 py-0.5 rounded"
-                          style={{ background: 'rgba(255,255,255,0.05)', color: '#475569' }}>{t}</span>
+                          style={{ background: 'rgba(255,255,255,0.05)', color: '#5f6646' }}>{t}</span>
                   ))}
                 </div>
               </div>
@@ -381,8 +381,8 @@ export default function GlobalOverview() {
           {myBadges.length > 0 ? (
             <div className="space-y-1.5">
               {myBadges.slice(0, 4).map(b => {
-                const tc = TIER_COLOR[b.tier] ?? '#64748b'
-                const oc = ORG_COLOR[b.org]   ?? '#64748b'
+                const tc = TIER_COLOR[b.tier] ?? '#7f8360'
+                const oc = ORG_COLOR[b.org]   ?? '#7f8360'
                 return (
                   <div key={b.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5"
                        style={{ background: `${tc}0a`, border: `1px solid ${tc}22` }}>
@@ -415,7 +415,7 @@ export default function GlobalOverview() {
           {isAdmin && adminStats ? (
             <div className="space-y-2">
               {[
-                { label: 'Retos activos',    value: adminStats.active_challenges, color: '#a78bfa' },
+                { label: 'Retos activos',    value: adminStats.active_challenges, color: '#93a954' },
                 { label: 'Datasets',         value: adminStats.datasets,          color: '#f97316' },
                 { label: 'Por calificar',    value: adminStats.pending_scoring,   color: '#facc15' },
                 { label: 'Entregas hoy',     value: adminStats.submissions_today, color: '#4ade80' },
@@ -462,7 +462,7 @@ export default function GlobalOverview() {
           <div className="mt-3 space-y-1.5">
             <div className="flex items-center gap-2">
               <div className="flex-1 h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                <div className="h-full rounded-full" style={{ width: '94%', background: '#a78bfa', boxShadow: '0 0 6px #a78bfa' }} />
+                <div className="h-full rounded-full" style={{ width: '94%', background: '#93a954', boxShadow: '0 0 6px #93a954' }} />
               </div>
               <span className="text-violet-400 text-[9px] font-mono shrink-0">94% conf.</span>
             </div>

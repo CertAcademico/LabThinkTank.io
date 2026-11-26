@@ -47,7 +47,7 @@ interface DatasetMeta {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const glass = {
-  background: 'rgba(15,23,42,0.55)',
+  background: 'rgba(26,31,19,0.55)',
   border: '1px solid rgba(255,255,255,0.07)',
   borderRadius: 12,
 }
@@ -61,20 +61,20 @@ const FORMAT_LABELS: Record<string, string> = {
 }
 
 const FORMAT_COLOR: Record<string, string> = {
-  json: '#22d3ee', jsonl: '#22d3ee', csv: '#4ade80',
-  syslog: '#a78bfa', cef: '#f97316', leef: '#f97316',
-  zeek: '#facc15', w3c: '#facc15', kvpairs: '#94a3b8', text: '#64748b',
+  json: '#d4bd55', jsonl: '#d4bd55', csv: '#4ade80',
+  syslog: '#93a954', cef: '#f97316', leef: '#f97316',
+  zeek: '#facc15', w3c: '#facc15', kvpairs: '#a3a27c', text: '#7f8360',
 }
 
 const IOC_COLOR: Record<string, string> = {
-  'IP': '#f97316', 'URL': '#22d3ee', 'Domain': '#a78bfa',
+  'IP': '#f97316', 'URL': '#d4bd55', 'Domain': '#93a954',
   'Hash-SHA256': '#4ade80', 'Hash-SHA1': '#86efac', 'Hash-MD5': '#bbf7d0',
   'Email': '#facc15', 'CVE': '#ef4444',
 }
 
 const EVENT_COLOR: Record<string, string> = {
-  ioc_added: '#4ade80', log_ingested: '#22d3ee',
-  feed_synced: '#a78bfa', anomaly_detected: '#f97316', default: '#64748b',
+  ioc_added: '#4ade80', log_ingested: '#d4bd55',
+  feed_synced: '#93a954', anomaly_detected: '#f97316', default: '#7f8360',
 }
 
 const ANOMALY_COLOR = (score: number) =>
@@ -115,7 +115,7 @@ async function readApiJson<T = Record<string, unknown>>(res: Response): Promise<
   }
 }
 
-function Pill({ children, color = '#94a3b8' }: { children: React.ReactNode; color?: string }) {
+function Pill({ children, color = '#a3a27c' }: { children: React.ReactNode; color?: string }) {
   return (
     <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
           style={{ color, background: `${color}14`, border: `1px solid ${color}25` }}>
@@ -166,7 +166,7 @@ function AnomalyPanel({ anomaly }: { anomaly: AnomalyResult }) {
   if (anomaly.status === 'warming_up') {
     return (
       <div className="rounded-xl p-3 flex items-center gap-3"
-           style={{ background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.2)' }}>
+           style={{ background: 'rgba(127,131,96,0.08)', border: '1px solid rgba(127,131,96,0.2)' }}>
         <span className="text-slate-500 text-[18px]">⏳</span>
         <div>
           <p className="text-[11px] font-bold text-slate-400">ML Model — Calentando</p>
@@ -262,7 +262,7 @@ function DatasetViewer({ token }: { token: string | null | undefined }) {
         <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-2">Dataset</p>
         <select value={selected ?? ''} onChange={e => load(Number(e.target.value))}
                 className="w-full rounded-lg px-3 py-2 text-xs outline-none"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#cbd5e1' }}>
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#bfbb98' }}>
           <option value="">Selecciona un dataset...</option>
           {datasets.map(d => (
             <option key={d.id} value={d.id}>{d.name} ({d.source})</option>
@@ -285,8 +285,8 @@ function DatasetViewer({ token }: { token: string | null | undefined }) {
               <button key={t} onClick={() => setView(t)}
                       className="px-3 py-1 rounded text-[10px] font-bold transition-colors"
                       style={view === t
-                        ? { background: 'rgba(34,211,238,0.12)', color: '#22d3ee' }
-                        : { color: '#64748b' }}>
+                        ? { background: 'rgba(212,189,85,0.12)', color: '#d4bd55' }
+                        : { color: '#7f8360' }}>
                 {t === 'structured' ? 'Estructurado' : t === 'raw' ? 'Raw JSON' : `IOCs (${data.iocs.length})`}
               </button>
             ))}
@@ -299,14 +299,14 @@ function DatasetViewer({ token }: { token: string | null | undefined }) {
                 <p className="text-[10px] text-slate-600">{data.rows.length} filas · {cols.length} columnas</p>
                 <button onClick={() => downloadBlob('dataset.csv', '﻿' + rowsToCsv(data.rows), 'text/csv;charset=utf-8')}
                         className="px-2 py-1 rounded text-[9px] font-bold"
-                        style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.22)' }}>
+                        style={{ background: 'rgba(212,189,85,0.08)', color: '#d4bd55', border: '1px solid rgba(212,189,85,0.22)' }}>
                   CSV ↓
                 </button>
               </div>
               <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.06)', maxHeight: 320 }}>
                 <table className="w-full text-[9px]">
                   <thead style={{ position: 'sticky', top: 0 }}>
-                    <tr style={{ background: 'rgba(15,23,42,0.9)' }}>
+                    <tr style={{ background: 'rgba(26,31,19,0.9)' }}>
                       {cols.map(c => <th key={c} className="px-2 py-1.5 text-left text-slate-500 font-mono">{c}</th>)}
                     </tr>
                   </thead>
@@ -335,12 +335,12 @@ function DatasetViewer({ token }: { token: string | null | undefined }) {
               <div className="flex justify-end">
                 <button onClick={() => downloadBlob('dataset.json', JSON.stringify(data.rows, null, 2), 'application/json')}
                         className="px-2 py-1 rounded text-[9px] font-bold"
-                        style={{ background: 'rgba(167,139,250,0.08)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.22)' }}>
+                        style={{ background: 'rgba(147,169,84,0.08)', color: '#93a954', border: '1px solid rgba(147,169,84,0.22)' }}>
                   JSON ↓
                 </button>
               </div>
               <pre className="rounded-xl p-4 overflow-auto text-[10px] text-slate-400 font-mono leading-relaxed"
-                   style={{ ...glass, background: '#050a14', maxHeight: 320 }}>
+                   style={{ ...glass, background: '#11150c', maxHeight: 320 }}>
                 {JSON.stringify(data.rows.slice(0, 50), null, 2)}
               </pre>
             </div>
@@ -363,7 +363,7 @@ function DatasetViewer({ token }: { token: string | null | undefined }) {
                   </div>
                   <div className="space-y-1 max-h-72 overflow-y-auto">
                     {data.iocs.map((ioc, i) => {
-                      const col = IOC_COLOR[ioc.type] ?? '#94a3b8'
+                      const col = IOC_COLOR[ioc.type] ?? '#a3a27c'
                       return (
                         <div key={i} className="flex items-center gap-2 rounded px-2.5 py-1.5"
                              style={{ background: `${col}08`, border: `1px solid ${col}20` }}>
@@ -549,7 +549,7 @@ export default function LogIngest() {
             {liveConnected ? 'SSE conectado' : 'SSE desconectado'}
           </span>
           {liveEvents.length > 0 && (
-            <Pill color="#a78bfa">{liveEvents.length} eventos</Pill>
+            <Pill color="#93a954">{liveEvents.length} eventos</Pill>
           )}
         </div>
       </div>
@@ -564,8 +564,8 @@ export default function LogIngest() {
           <button key={t.id} onClick={() => setTab(t.id as typeof tab)}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
                   style={tab === t.id
-                    ? { background: 'rgba(34,211,238,0.12)', color: '#22d3ee' }
-                    : { color: '#64748b' }}>
+                    ? { background: 'rgba(212,189,85,0.12)', color: '#d4bd55' }
+                    : { color: '#7f8360' }}>
             {t.label}
           </button>
         ))}
@@ -586,8 +586,8 @@ export default function LogIngest() {
               onClick={() => fileInputRef.current?.click()}
               className="rounded-xl p-4 text-center cursor-pointer transition-all"
               style={{
-                border: `2px dashed ${dragging ? '#22d3ee' : 'rgba(255,255,255,0.1)'}`,
-                background: dragging ? 'rgba(34,211,238,0.05)' : 'rgba(255,255,255,0.02)',
+                border: `2px dashed ${dragging ? '#d4bd55' : 'rgba(255,255,255,0.1)'}`,
+                background: dragging ? 'rgba(212,189,85,0.05)' : 'rgba(255,255,255,0.02)',
               }}>
               <p className="text-xs text-slate-500">
                 Arrastra un archivo o <span className="text-cyan-400">haz clic para seleccionar</span>
@@ -600,14 +600,14 @@ export default function LogIngest() {
             </div>
 
             {/* Paste area */}
-            <div className="rounded-xl overflow-hidden" style={{ ...glass, background: '#050a14' }}>
+            <div className="rounded-xl overflow-hidden" style={{ ...glass, background: '#11150c' }}>
               {/* Toolbar */}
               <div className="flex items-center gap-2 px-3 py-1.5 border-b"
                    style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                 {liveFormat ? (
                   <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded"
-                        style={{ color: FORMAT_COLOR[liveFormat] ?? '#94a3b8',
-                                 background: `${FORMAT_COLOR[liveFormat] ?? '#94a3b8'}14` }}>
+                        style={{ color: FORMAT_COLOR[liveFormat] ?? '#a3a27c',
+                                 background: `${FORMAT_COLOR[liveFormat] ?? '#a3a27c'}14` }}>
                     {FORMAT_LABELS[liveFormat] ?? liveFormat}
                   </span>
                 ) : (
@@ -617,16 +617,16 @@ export default function LogIngest() {
                 {(liveFormat === 'json' || liveFormat === 'jsonl') && (
                   <button onClick={formatJson}
                           className="px-2 py-0.5 rounded text-[9px] font-bold transition-colors"
-                          style={{ color: '#22d3ee', background: 'rgba(34,211,238,0.08)',
-                                   border: '1px solid rgba(34,211,238,0.2)' }}>
+                          style={{ color: '#d4bd55', background: 'rgba(212,189,85,0.08)',
+                                   border: '1px solid rgba(212,189,85,0.2)' }}>
                     { } Formatear JSON
                   </button>
                 )}
                 {!rawText.trim() && (
                   <button onClick={() => { setRawText(JSON_EXAMPLE); setFormatHint('json') }}
                           className="px-2 py-0.5 rounded text-[9px] font-bold transition-colors"
-                          style={{ color: '#a78bfa', background: 'rgba(167,139,250,0.08)',
-                                   border: '1px solid rgba(167,139,250,0.2)' }}>
+                          style={{ color: '#93a954', background: 'rgba(147,169,84,0.08)',
+                                   border: '1px solid rgba(147,169,84,0.2)' }}>
                     Ejemplo JSON
                   </button>
                 )}
@@ -647,7 +647,7 @@ export default function LogIngest() {
                 <span className="text-[10px] text-slate-500">Formato:</span>
                 <select value={formatHint} onChange={e => setFormatHint(e.target.value)}
                         className="rounded-lg px-2 py-1 text-[10px] outline-none"
-                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#cbd5e1' }}>
+                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#bfbb98' }}>
                   <option value="">Auto-detectar</option>
                   {Object.entries(FORMAT_LABELS).filter(([k]) => k !== 'empty').map(([k, v]) => (
                     <option key={k} value={k}>{v}</option>
@@ -667,7 +667,7 @@ export default function LogIngest() {
                 <input value={datasetName} onChange={e => setDatasetName(e.target.value)}
                        placeholder="Nombre del dataset..."
                        className="rounded-lg px-2 py-1 text-[10px] outline-none flex-1"
-                       style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#cbd5e1' }} />
+                       style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#bfbb98' }} />
               )}
             </div>
 
@@ -675,7 +675,7 @@ export default function LogIngest() {
 
             <button onClick={ingest} disabled={ingesting || !rawText.trim()}
                     className="w-full py-2.5 rounded-xl text-sm font-bold disabled:opacity-40"
-                    style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.3)', color: '#22d3ee' }}>
+                    style={{ background: 'rgba(212,189,85,0.12)', border: '1px solid rgba(212,189,85,0.3)', color: '#d4bd55' }}>
               {ingesting ? 'Procesando...' : 'Analizar logs →'}
             </button>
           </div>
@@ -688,7 +688,7 @@ export default function LogIngest() {
                 <div className="rounded-xl p-4 space-y-3" style={glass}>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-bold text-slate-200">Resultado</span>
-                    <Pill color={FORMAT_COLOR[result.format] ?? '#94a3b8'}>
+                    <Pill color={FORMAT_COLOR[result.format] ?? '#a3a27c'}>
                       {FORMAT_LABELS[result.format] ?? result.format}
                     </Pill>
                   </div>
@@ -715,7 +715,7 @@ export default function LogIngest() {
                     <div className="flex flex-wrap gap-1">
                       {cols.map(c => (
                         <span key={c} className="text-[9px] font-mono px-1.5 py-0.5 rounded"
-                              style={{ background: 'rgba(34,211,238,0.08)', color: '#67e8f9' }}>
+                              style={{ background: 'rgba(212,189,85,0.08)', color: '#e0cf74' }}>
                           {c}: <span className="text-slate-500">{result.schema[c]}</span>
                         </span>
                       ))}
@@ -729,16 +729,16 @@ export default function LogIngest() {
                     <button key={t} onClick={() => setResultView(t)}
                             className="px-3 py-1 rounded text-[10px] font-bold transition-colors"
                             style={resultView === t
-                              ? { background: 'rgba(34,211,238,0.12)', color: '#22d3ee' }
-                              : { color: '#64748b' }}>
+                              ? { background: 'rgba(212,189,85,0.12)', color: '#d4bd55' }
+                              : { color: '#7f8360' }}>
                       {t === 'rows' ? `Filas (${Math.min(result.rows.length, 500)})` : `IOCs (${result.iocs.length})`}
                     </button>
                   ))}
                   <button onClick={() => setResultView('ai')}
                           className="px-3 py-1 rounded text-[10px] font-bold transition-colors"
                           style={resultView === 'ai'
-                            ? { background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }
-                            : { color: '#64748b' }}>
+                            ? { background: 'rgba(147,169,84,0.15)', color: '#93a954' }
+                            : { color: '#7f8360' }}>
                     {aiAnalysis ? '✦ Análisis AI' : '✦ AI'}
                   </button>
                   {resultView === 'iocs' && result.iocs.length > 0 && (
@@ -746,7 +746,7 @@ export default function LogIngest() {
                             className="ml-auto px-2 py-1 rounded text-[9px] font-bold transition-colors"
                             style={copied
                               ? { background: 'rgba(74,222,128,0.1)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }
-                              : { color: '#64748b', border: '1px solid rgba(255,255,255,0.08)' }}>
+                              : { color: '#7f8360', border: '1px solid rgba(255,255,255,0.08)' }}>
                       {copied ? '✓ Copiado' : 'Copiar'}
                     </button>
                   )}
@@ -757,7 +757,7 @@ export default function LogIngest() {
                     {cols.length > 0 ? (
                       <table className="w-full text-[9px]">
                         <thead style={{ position: 'sticky', top: 0 }}>
-                          <tr style={{ background: 'rgba(15,23,42,0.9)' }}>
+                          <tr style={{ background: 'rgba(26,31,19,0.9)' }}>
                             {cols.map(c => <th key={c} className="px-2 py-1.5 text-left text-slate-500 font-mono">{c}</th>)}
                           </tr>
                         </thead>
@@ -786,7 +786,7 @@ export default function LogIngest() {
                     {result.iocs.length === 0 ? (
                       <p className="text-xs text-slate-600 py-3">No se detectaron IOCs.</p>
                     ) : result.iocs.map((ioc, i) => {
-                      const col = IOC_COLOR[ioc.type] ?? '#94a3b8'
+                      const col = IOC_COLOR[ioc.type] ?? '#a3a27c'
                       return (
                         <div key={i} className="flex items-center gap-2 rounded px-2.5 py-1.5"
                              style={{ background: `${col}08`, border: `1px solid ${col}20` }}>
@@ -808,7 +808,7 @@ export default function LogIngest() {
                         {aiError && <p className="text-[11px] text-red-400">{aiError}</p>}
                         <button onClick={analyzeWithAI}
                                 className="px-4 py-2 rounded-lg text-xs font-bold transition-colors"
-                                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
+                                style={{ background: 'rgba(147,169,84,0.12)', border: '1px solid rgba(147,169,84,0.3)', color: '#93a954' }}>
                           ✦ Analizar con IA →
                         </button>
                       </div>
@@ -822,10 +822,10 @@ export default function LogIngest() {
                     {aiAnalysis && !analyzing && (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <Pill color="#a78bfa">✦ {aiAnalysis.engine === 'claude' ? 'Claude' : aiAnalysis.engine === 'ollama' ? 'Ollama' : 'AI'}</Pill>
+                          <Pill color="#93a954">✦ {aiAnalysis.engine === 'claude' ? 'Claude' : aiAnalysis.engine === 'ollama' ? 'Ollama' : 'AI'}</Pill>
                           <button onClick={analyzeWithAI}
                                   className="px-2 py-0.5 rounded text-[9px] font-bold"
-                                  style={{ color: '#64748b', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                  style={{ color: '#7f8360', border: '1px solid rgba(255,255,255,0.08)' }}>
                             Regenerar
                           </button>
                         </div>
@@ -868,8 +868,8 @@ export default function LogIngest() {
             <div className="space-y-2">
               {[
                 { fmt: 'CSV estructurado', desc: 'Columnas parseadas, listo para pandas / Excel', color: '#4ade80' },
-                { fmt: 'JSON raw', desc: 'Filas como objetos JSON, sin transformación', color: '#22d3ee' },
-                { fmt: 'IOCs extraídos', desc: 'Lista deduplcada con tipo: IP, URL, Domain, Hash, Email, CVE', color: '#a78bfa' },
+                { fmt: 'JSON raw', desc: 'Filas como objetos JSON, sin transformación', color: '#d4bd55' },
+                { fmt: 'IOCs extraídos', desc: 'Lista deduplcada con tipo: IP, URL, Domain, Hash, Email, CVE', color: '#93a954' },
               ].map(f => (
                 <div key={f.fmt} className="flex items-start gap-3 rounded-lg p-3"
                      style={{ background: `${f.color}07`, border: `1px solid ${f.color}1a` }}>
@@ -916,7 +916,7 @@ export default function LogIngest() {
                     </button>
                     <button onClick={() => exportLiveEvents(liveEvents, 'json')}
                             className="text-[9px] font-bold text-violet-400 px-2 py-1 rounded"
-                            style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)' }}>
+                            style={{ background: 'rgba(147,169,84,0.08)', border: '1px solid rgba(147,169,84,0.2)' }}>
                       JSON
                     </button>
                     <button onClick={() => setLiveEvents([])}
@@ -979,7 +979,7 @@ export default function LogIngest() {
                 Se puede consumir desde Python, Node.js o cualquier cliente SSE.
                 Incluye replay de los últimos 100 eventos al conectar.
               </p>
-              <div className="rounded-lg p-2.5" style={{ background: '#050a14', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="rounded-lg p-2.5" style={{ background: '#11150c', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <pre className="text-[9px] text-green-400 font-mono">{`import sseclient, requests
 r = requests.get("${API}/live/feed", stream=True)
 for ev in sseclient.SSEClient(r):

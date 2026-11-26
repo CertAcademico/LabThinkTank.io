@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 const glass = {
-  background: 'rgba(15,23,42,0.55)',
+  background: 'rgba(26,31,19,0.55)',
   backdropFilter: 'blur(16px)',
   border: '1px solid rgba(255,255,255,0.07)',
   borderRadius: 12,
@@ -64,7 +64,7 @@ const TACTICS: Tactic[] = [
     { id: 'T1056', name: 'Input Capture' },
     { id: 'T1558', name: 'Steal Kerberos Ticket', active: true, severity: 'high' },
   ]},
-  { id: 'TA0007', name: 'Discovery', color: '#22d3ee', techniques: [
+  { id: 'TA0007', name: 'Discovery', color: '#d4bd55', techniques: [
     { id: 'T1087', name: 'Account Discovery' },
     { id: 'T1083', name: 'File Discovery', active: true, severity: 'low' },
     { id: 'T1046', name: 'Network Scan', active: true, severity: 'medium' },
@@ -78,7 +78,7 @@ const TACTICS: Tactic[] = [
     { id: 'T1563', name: 'Remote Hijacking' },
     { id: 'T1570', name: 'Lateral Tool Transfer' },
   ]},
-  { id: 'TA0009', name: 'Collection', color: '#c084fc', techniques: [
+  { id: 'TA0009', name: 'Collection', color: '#aec174', techniques: [
     { id: 'T1560', name: 'Archive Collected' },
     { id: 'T1213', name: 'Data from Info Repos', active: true, severity: 'medium' },
     { id: 'T1005', name: 'Data from Local', active: true, severity: 'high' },
@@ -135,7 +135,7 @@ export default function ATTCKMatrix() {
           {[
             { label: 'Active TTPs', value: activeCount, color: '#ef4444' },
             { label: 'Critical', value: criticalCount, color: '#f97316' },
-            { label: 'Tactics', value: 12, color: '#22d3ee' },
+            { label: 'Tactics', value: 12, color: '#d4bd55' },
           ].map(s => (
             <div key={s.label} className="text-center px-3 py-2 rounded-lg"
                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
@@ -198,7 +198,7 @@ export default function ATTCKMatrix() {
                             } : {
                               background: 'rgba(255,255,255,0.03)',
                               border: '1px solid rgba(255,255,255,0.05)',
-                              color: '#475569',
+                              color: '#5f6646',
                             }}>
                       <div className="font-mono text-[8px] opacity-70">{tech.id}</div>
                       <div className="font-medium leading-tight">{tech.name}</div>
@@ -213,7 +213,7 @@ export default function ATTCKMatrix() {
 
       {/* Selected technique detail */}
       {selected && (
-        <div className="rounded-xl p-4" style={{ ...glass, borderColor: 'rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.05)' }}>
+        <div className="rounded-xl p-4" style={{ ...glass, borderColor: 'rgba(212,189,85,0.3)', background: 'rgba(212,189,85,0.05)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2">

@@ -40,7 +40,7 @@ function highlight(text: string, q: string) {
   return (
     <>
       {text.slice(0, idx)}
-      <mark className="rounded px-0.5" style={{ background: 'rgba(34,211,238,0.3)', color: '#22d3ee' }}>
+      <mark className="rounded px-0.5" style={{ background: 'rgba(212,189,85,0.3)', color: '#d4bd55' }}>
         {text.slice(idx, idx + q.length)}
       </mark>
       {text.slice(idx + q.length)}
@@ -145,7 +145,7 @@ export default function IOCSearch({ onNavigate }: Props) {
       <button
         onClick={() => { setOpen(true); setTimeout(() => inputRef.current?.focus(), 50) }}
         className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs text-slate-500 transition-colors hover:border-cyan-500/30 hover:text-slate-400"
-        style={{ background: 'rgba(255,255,255,0.03)', borderColor: open ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.06)', minWidth: 200 }}>
+        style={{ background: 'rgba(255,255,255,0.03)', borderColor: open ? 'rgba(212,189,85,0.3)' : 'rgba(255,255,255,0.06)', minWidth: 200 }}>
         <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
         </svg>
@@ -160,8 +160,8 @@ export default function IOCSearch({ onNavigate }: Props) {
       {open && (
         <div className="absolute top-full right-0 mt-2 w-[520px] rounded-2xl overflow-hidden shadow-2xl z-50"
              style={{
-               background: 'rgba(8,12,25,0.98)',
-               border: '1px solid rgba(34,211,238,0.2)',
+               background: 'rgba(16,19,11,0.98)',
+               border: '1px solid rgba(212,189,85,0.2)',
                backdropFilter: 'blur(24px)',
              }}>
 
@@ -212,7 +212,7 @@ export default function IOCSearch({ onNavigate }: Props) {
 
               {/* ── IOCs ────────────────────────────────────────────────── */}
               {results!.iocs.length > 0 && (
-                <Section label="IOCs" count={results!.iocs.length} color="#22d3ee">
+                <Section label="IOCs" count={results!.iocs.length} color="#d4bd55">
                   {results!.iocs.map((ioc, i) => {
                     const flatIdx = i
                     return (
@@ -226,7 +226,7 @@ export default function IOCSearch({ onNavigate }: Props) {
                             {highlight(ioc.ioc, query)}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <span className="text-[9px]" style={{ color: SEV[ioc.severity] ?? '#64748b' }}>
+                            <span className="text-[9px]" style={{ color: SEV[ioc.severity] ?? '#7f8360' }}>
                               ● {ioc.severity}
                             </span>
                             <span className="text-[9px] text-slate-600">{ioc.type}</span>
@@ -247,7 +247,7 @@ export default function IOCSearch({ onNavigate }: Props) {
                           style={{
                             background: copied === ioc.ioc ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.05)',
                             border: '1px solid rgba(255,255,255,0.08)',
-                            color: copied === ioc.ioc ? '#4ade80' : '#475569',
+                            color: copied === ioc.ioc ? '#4ade80' : '#5f6646',
                           }}>
                           {copied === ioc.ioc ? '✓ Copiado' : 'Copiar'}
                         </button>
@@ -259,7 +259,7 @@ export default function IOCSearch({ onNavigate }: Props) {
 
               {/* ── Actores ─────────────────────────────────────────────── */}
               {results!.actors.length > 0 && (
-                <Section label="Actores de Amenaza" count={results!.actors.length} color="#a78bfa">
+                <Section label="Actores de Amenaza" count={results!.actors.length} color="#93a954">
                   {results!.actors.map((a, i) => {
                     const flatIdx = results!.iocs.length + i
                     return (
@@ -273,7 +273,7 @@ export default function IOCSearch({ onNavigate }: Props) {
                             {highlight(a.name, query)}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[9px]" style={{ color: SEV[a.severity] ?? '#64748b' }}>
+                            <span className="text-[9px]" style={{ color: SEV[a.severity] ?? '#7f8360' }}>
                               ● {a.severity}
                             </span>
                             <span className="text-[9px] text-slate-600">{a.country}</span>
@@ -281,7 +281,7 @@ export default function IOCSearch({ onNavigate }: Props) {
                           </div>
                         </div>
                         <span className="text-[9px] px-1.5 py-0.5 rounded shrink-0"
-                              style={{ background: 'rgba(167,139,250,0.1)', color: '#a78bfa' }}>
+                              style={{ background: 'rgba(147,169,84,0.1)', color: '#93a954' }}>
                           → Threat Graph
                         </span>
                       </ResultRow>
@@ -308,7 +308,7 @@ export default function IOCSearch({ onNavigate }: Props) {
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[9px] text-slate-600">{highlight(c.actor, query)}</span>
                             <span className="text-[9px]"
-                                  style={{ color: c.status === 'active' ? '#4ade80' : '#475569' }}>
+                                  style={{ color: c.status === 'active' ? '#4ade80' : '#5f6646' }}>
                               {c.status}
                             </span>
                             <span className="text-[9px] text-slate-700">{c.ioc_count} IOCs</span>
@@ -349,7 +349,7 @@ export default function IOCSearch({ onNavigate }: Props) {
                             <span className="text-[9px] text-slate-600">
                               {highlight(t.tactic, query)}
                             </span>
-                            <span className="text-[9px]" style={{ color: SEV[t.priority] ?? '#64748b' }}>
+                            <span className="text-[9px]" style={{ color: SEV[t.priority] ?? '#7f8360' }}>
                               ● {t.priority}
                             </span>
                             <span className="text-[9px] text-slate-700">{t.attributed_actor}</span>
@@ -414,7 +414,7 @@ function ResultRow({ children, active, onClick }: {
     <div
       onClick={onClick}
       className="flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors"
-      style={{ background: active ? 'rgba(34,211,238,0.06)' : 'transparent' }}
+      style={{ background: active ? 'rgba(212,189,85,0.06)' : 'transparent' }}
       onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)' }}
       onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
       {children}

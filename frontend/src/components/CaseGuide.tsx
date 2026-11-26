@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
-const glass = { background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
+const glass = { background: 'rgba(26,31,19,0.55)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
 const inputStyle = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }
 
 interface ProgressChapter { chapter: number; title: string; status: string; starts_at?: string | null; deadline?: string | null }
@@ -17,11 +17,11 @@ interface GuideChapter {
 }
 interface Guide { variant: string; variant_email: string; facts: Record<string, unknown>; truth: { timestamp: string; host: string; usuario: string; fase: string; detalle: string }[]; chapters: GuideChapter[] }
 
-const STATUS_COLOR: Record<string, string> = { draft: '#64748b', active: '#4ade80', closed: '#f87171' }
+const STATUS_COLOR: Record<string, string> = { draft: '#7f8360', active: '#4ade80', closed: '#f87171' }
 const STATUS_LABEL: Record<string, string> = { draft: 'Borrador', active: 'Activo', closed: 'Cerrado' }
 const fmt = (iso?: string | null) => iso ? new Date(iso).toLocaleString('es-CO', { timeZone: 'America/Bogota', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : null
 
-function Section({ title, children, color = '#64748b' }: { title: string; children: React.ReactNode; color?: string }) {
+function Section({ title, children, color = '#7f8360' }: { title: string; children: React.ReactNode; color?: string }) {
   return <div className="space-y-1.5"><p className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>{title}</p>{children}</div>
 }
 
@@ -52,7 +52,7 @@ export default function CaseGuide() {
   const chip = (score: number | null, hints: number) => (
     <div className="flex items-center justify-center gap-1">
       <span className="text-[11px] font-bold px-2 py-0.5 rounded min-w-9 text-center"
-            style={score == null ? { color: '#475569', background: 'rgba(255,255,255,0.03)' }
+            style={score == null ? { color: '#5f6646', background: 'rgba(255,255,255,0.03)' }
               : score >= pass ? { color: '#4ade80', background: 'rgba(74,222,128,0.12)' } : { color: '#facc15', background: 'rgba(250,204,21,0.1)' }}>{score ?? '—'}</span>
       {hints > 0 && <span title={`${hints} pista(s) pedidas`} className="text-[9px] text-yellow-600">💡{hints}</span>}
     </div>
@@ -69,7 +69,7 @@ export default function CaseGuide() {
           {(['avance', 'guia'] as const).map(v => (
             <button key={v} onClick={() => setView(v)} className="text-xs px-4 py-2 rounded-lg font-semibold"
                     style={view === v ? { background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.4)', color: '#f97316' }
-                                      : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748b' }}>
+                                      : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#7f8360' }}>
               {v === 'avance' ? 'Avance de estudiantes' : 'Guía y soluciones'}
             </button>
           ))}
@@ -128,7 +128,7 @@ export default function CaseGuide() {
                   <div className="overflow-x-auto"><table className="w-full text-[11px]"><thead><tr className="text-[9px] uppercase text-slate-600 text-left"><th className="pr-3">Hora</th><th className="pr-3">Host</th><th className="pr-3">Cuenta</th><th className="pr-3">Fase</th><th>Detalle</th></tr></thead>
                     <tbody>{guide.truth.map((t, i) => <tr key={i} className="border-t border-white/5 text-slate-300 align-top"><td className="pr-3 py-1 whitespace-nowrap text-slate-500">{t.timestamp}</td><td className="pr-3 font-mono text-cyan-300">{t.host}</td><td className="pr-3 font-mono">{t.usuario}</td><td className="pr-3 text-orange-300">{t.fase}</td><td className="text-slate-400">{t.detalle}</td></tr>)}</tbody></table></div>
                 </Section>
-                <Section title="Datos clave de esta variante" color="#a78bfa">
+                <Section title="Datos clave de esta variante" color="#93a954">
                   <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-[11px]">
                     {Object.entries(guide.facts).filter(([k]) => !['siblings', 'lateral_path', 'vector_text'].includes(k)).map(([k, v]) => (
                       <div key={k} className="flex gap-2 border-b border-white/5 py-0.5"><span className="text-slate-600 w-40 shrink-0">{k}</span><span className="text-slate-300 font-mono break-all">{String(v)}</span></div>
@@ -155,8 +155,8 @@ export default function CaseGuide() {
                         <Section title="Expediente (lo que lee el estudiante)"><p className="text-xs text-slate-300 whitespace-pre-line">{c.briefing}</p></Section>
                         <Section title="Misión"><p className="text-xs text-slate-400 whitespace-pre-line">{c.objective}</p></Section>
                         {c.dataset && (
-                          <Section title={`Datos de este capítulo · ${c.dataset.name} (${c.dataset.rows} filas)`} color="#22d3ee">
-                            <div className="overflow-x-auto rounded-lg" style={{ background: '#050a14' }}>
+                          <Section title={`Datos de este capítulo · ${c.dataset.name} (${c.dataset.rows} filas)`} color="#d4bd55">
+                            <div className="overflow-x-auto rounded-lg" style={{ background: '#11150c' }}>
                               <table className="text-[10px] w-full"><thead><tr className="text-slate-500 text-left">{c.dataset.columns.map(k => <th key={k} className="px-2 py-1.5 whitespace-nowrap">{k}</th>)}</tr></thead>
                                 <tbody>{c.dataset.preview.map((r, i) => <tr key={i} className="border-t border-white/5 text-slate-300">{c.dataset!.columns.map(k => <td key={k} className="px-2 py-1 whitespace-nowrap max-w-64 truncate">{String(r[k] ?? '')}</td>)}</tr>)}</tbody></table>
                             </div>
@@ -180,7 +180,7 @@ export default function CaseGuide() {
                           ))}
                         </Section>
                         <Section title={c.chapter === 8 ? 'Informe de ejemplo' : 'Solución de referencia (Python)'} color="#4ade80">
-                          <pre className="text-[11px] text-green-300 whitespace-pre-wrap font-mono rounded-lg p-3" style={{ background: '#050a14' }}>{c.reference_code}</pre>
+                          <pre className="text-[11px] text-green-300 whitespace-pre-wrap font-mono rounded-lg p-3" style={{ background: '#11150c' }}>{c.reference_code}</pre>
                         </Section>
                       </div>
                     )}

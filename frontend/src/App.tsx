@@ -87,7 +87,7 @@ function LoadingPanel({ label = 'Cargando módulo' }: { label?: string }) {
   return (
     <div className="min-h-[320px] flex items-center justify-center">
       <div className="flex items-center gap-3 rounded-lg border px-4 py-3"
-           style={{ background: 'rgba(8,12,25,0.86)', borderColor: 'rgba(255,255,255,0.06)' }}>
+           style={{ background: 'rgba(16,19,11,0.86)', borderColor: 'rgba(255,255,255,0.06)' }}>
         <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
         <span className="text-xs font-mono text-slate-500">{label}</span>
       </div>
@@ -159,15 +159,15 @@ function Shell() {
   const groups = [...new Set(visibleNav.map(n => n.group))]
 
   return (
-    <div className="flex h-screen text-white overflow-hidden" style={{ background: '#030712' }}>
+    <div className="flex h-screen text-white overflow-hidden" style={{ background: '#0e110a' }}>
 
       {/* ══ Sidebar ════════════════════════════════════════════════════════ */}
       <aside className="w-56 shrink-0 flex flex-col border-r"
-             style={{ background: 'rgba(8,12,25,0.97)', borderColor: 'rgba(255,255,255,0.05)' }}>
+             style={{ background: 'rgba(16,19,11,0.97)', borderColor: 'rgba(255,255,255,0.05)' }}>
 
         <div className="h-14 flex items-center gap-3 px-4 border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
           <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-               style={{ background: 'rgba(34,211,238,0.12)', boxShadow: '0 0 16px rgba(34,211,238,0.25)' }}>
+               style={{ background: 'rgba(212,189,85,0.12)', boxShadow: '0 0 16px rgba(212,189,85,0.25)' }}>
             <svg viewBox="0 0 24 24" className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" strokeWidth="2">
               <polygon points="12 2 2 7 12 12 22 7 12 2" />
               <polyline points="2 17 12 22 22 17" />
@@ -190,12 +190,12 @@ function Shell() {
                   <button key={item.id} onClick={() => setView(item.id)}
                           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-all group"
                           style={active ? {
-                            background: 'rgba(34,211,238,0.08)',
-                            borderLeft: '2px solid #22d3ee',
+                            background: 'rgba(212,189,85,0.08)',
+                            borderLeft: '2px solid #d4bd55',
                             paddingLeft: '10px',
-                            color: '#22d3ee',
+                            color: '#d4bd55',
                           } : {
-                            color: '#475569',
+                            color: '#5f6646',
                             borderLeft: '2px solid transparent',
                           }}>
                     <span className={active ? 'text-cyan-400' : 'text-slate-700 group-hover:text-slate-500'}>
@@ -211,7 +211,7 @@ function Shell() {
                             : item.id === 'retos'   ? { background: 'rgba(250,204,21,0.12)',   color: '#facc15' }
                             : item.id === 'logs'    ? { background: 'rgba(239,68,68,0.12)',    color: '#f87171' }
                             : item.id === 'fusion'  ? { background: 'rgba(239,68,68,0.18)',    color: '#ef4444' }
-                            :                         { background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }
+                            :                         { background: 'rgba(147,169,84,0.15)', color: '#93a954' }
                             }>
                         {item.tag}
                       </span>
@@ -276,7 +276,7 @@ function Shell() {
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
         <header className="h-14 flex items-center justify-between px-6 border-b shrink-0"
-                 style={{ background: 'rgba(8,12,25,0.85)', backdropFilter: 'blur(20px)', borderColor: 'rgba(255,255,255,0.05)' }}>
+                 style={{ background: 'rgba(16,19,11,0.85)', backdropFilter: 'blur(20px)', borderColor: 'rgba(255,255,255,0.05)' }}>
           <div>
             <p className="text-sm font-semibold text-slate-200">
               {NAV.find(n => n.id === activeView)?.label}
@@ -318,7 +318,7 @@ function AppGate() {
   const { user, loading } = useAuth()
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#030712' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0e110a' }}>
         <div className="w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
       </div>
     )

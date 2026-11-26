@@ -29,9 +29,9 @@ export const TIER: Record<string, { color: string; glow: string; label: string }
 // ── Org palette ───────────────────────────────────────────────────────────────
 
 const ORG: Record<string, { bg: string; border: string; accent: string; abbr: string }> = {
-  CertAcademico: { bg: 'rgba(59,130,246,0.08)',  border: 'rgba(59,130,246,0.3)',  accent: '#60a5fa', abbr: 'CA' },
+  CertAcademico: { bg: 'rgba(122,144,63,0.08)',  border: 'rgba(122,144,63,0.3)',  accent: '#aec174', abbr: 'CA' },
   redciber:      { bg: 'rgba(239,68,68,0.08)',   border: 'rgba(239,68,68,0.3)',   accent: '#f87171', abbr: 'RC' },
-  LabThinkTank:  { bg: 'rgba(34,211,238,0.08)',  border: 'rgba(34,211,238,0.3)',  accent: '#22d3ee', abbr: 'LT' },
+  LabThinkTank:  { bg: 'rgba(212,189,85,0.08)',  border: 'rgba(212,189,85,0.3)',  accent: '#d4bd55', abbr: 'LT' },
 }
 
 const ORG_LABEL: Record<string, string> = {
@@ -100,8 +100,8 @@ function badgeSvgMarkup(badge: Badge) {
   <defs>
     <filter id="glow"><feGaussianBlur stdDeviation="14" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#020617"/>
-      <stop offset="58%" stop-color="#0f172a"/>
+      <stop offset="0%" stop-color="#0e110a"/>
+      <stop offset="58%" stop-color="#1a1f13"/>
       <stop offset="100%" stop-color="#111827"/>
     </linearGradient>
     <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -133,19 +133,19 @@ function badgeSvgMarkup(badge: Badge) {
     ${dots}
   </g>
 
-  <text x="410" y="202" class="body" fill="#94a3b8">Credencial otorgada a</text>
+  <text x="410" y="202" class="body" fill="#a3a27c">Credencial otorgada a</text>
   <text x="410" y="284" class="name" fill="#f8fafc">${escapeSvg(owner)}</text>
   <line x1="410" y1="324" x2="1280" y2="324" stroke="${t.color}" stroke-opacity="0.45" stroke-width="2"/>
   <text x="410" y="385" class="title" fill="${t.color}">${escapeSvg(badge.name)}</text>
-  <text x="410" y="438" class="body" fill="#cbd5e1">La presente credencial certifica que la persona titular completó</text>
-  <text x="410" y="478" class="body" fill="#cbd5e1">satisfactoriamente las evidencias y criterios del reto indicado.</text>
-  ${challengeLines.map((line, i) => `<text x="410" y="${538 + i * 38}" class="body" fill="#cbd5e1">${escapeSvg(line)}</text>`).join('')}
-  ${badge.team_name ? `<text x="410" y="624" class="body" fill="#94a3b8">Equipo: ${escapeSvg(badge.team_name)}</text>` : ''}
-  <text x="410" y="668" class="body" fill="#94a3b8">${escapeSvg(issuer)}</text>
-  <text x="410" y="702" class="body" fill="#94a3b8">Fecha de emisión: ${escapeSvg(date)}</text>
+  <text x="410" y="438" class="body" fill="#bfbb98">La presente credencial certifica que la persona titular completó</text>
+  <text x="410" y="478" class="body" fill="#bfbb98">satisfactoriamente las evidencias y criterios del reto indicado.</text>
+  ${challengeLines.map((line, i) => `<text x="410" y="${538 + i * 38}" class="body" fill="#bfbb98">${escapeSvg(line)}</text>`).join('')}
+  ${badge.team_name ? `<text x="410" y="624" class="body" fill="#a3a27c">Equipo: ${escapeSvg(badge.team_name)}</text>` : ''}
+  <text x="410" y="668" class="body" fill="#a3a27c">${escapeSvg(issuer)}</text>
+  <text x="410" y="702" class="body" fill="#a3a27c">Fecha de emisión: ${escapeSvg(date)}</text>
   <rect x="410" y="724" width="430" height="46" rx="12" fill="${t.color}" fill-opacity="0.10" stroke="${t.color}" stroke-opacity="0.28"/>
   <text x="432" y="754" class="mono" fill="${t.color}">${escapeSvg(code)}</text>
-  <text x="1235" y="754" class="mono" fill="#64748b" text-anchor="end">CTI-Lab Challenge Platform</text>
+  <text x="1235" y="754" class="mono" fill="#7f8360" text-anchor="end">CTI-Lab Challenge Platform</text>
 </svg>`
 }
 

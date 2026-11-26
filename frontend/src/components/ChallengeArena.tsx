@@ -41,7 +41,7 @@ interface OutputPart { type: 'text' | 'plot'; content: string }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const glass = { background: 'rgba(15,23,42,0.55)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
+const glass = { background: 'rgba(26,31,19,0.55)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
 
 // En los retos, plt.show() debe mostrar la gráfica en el panel de salida y adjuntarla a la entrega (igual que en el Sandbox Lab).
 const PLT_HOOK = `import matplotlib
@@ -50,8 +50,8 @@ import matplotlib.pyplot as _plt
 import io as _io, base64 as _b64
 if not getattr(_plt, '_cti_patched', False):
     _plt.rcParams.update({
-        'figure.facecolor': '#0a0f1e', 'axes.facecolor': '#0f172a', 'axes.edgecolor': '#1e293b', 'text.color': '#94a3b8',
-        'xtick.color': '#64748b', 'ytick.color': '#64748b', 'axes.labelcolor': '#94a3b8', 'grid.color': '#1e293b',
+        'figure.facecolor': '#151a0f', 'axes.facecolor': '#1a1f13', 'axes.edgecolor': '#2c3320', 'text.color': '#a3a27c',
+        'xtick.color': '#7f8360', 'ytick.color': '#7f8360', 'axes.labelcolor': '#a3a27c', 'grid.color': '#2c3320',
         'grid.linestyle': '--', 'grid.alpha': 0.6, 'font.size': 9,
     })
     def _cti_show(*a, **k):
@@ -137,8 +137,8 @@ async function exportChallengeDataset(challengeId: number, token: string | null 
 
 function DatasetDiagram({ schema, name }: { schema: Record<string, string>; name: string }) {
   const TYPE_COLOR: Record<string, string> = {
-    str: '#22d3ee', int: '#4ade80', float: '#f97316',
-    bool: '#a78bfa', object: '#facc15', string: '#22d3ee',
+    str: '#d4bd55', int: '#4ade80', float: '#f97316',
+    bool: '#93a954', object: '#facc15', string: '#d4bd55',
   }
   const CTI_USE: Record<string, string> = {
     ip:          'Indicador de Compromiso (IOC) — se cruza con listas de reputación',
@@ -176,7 +176,7 @@ function DatasetDiagram({ schema, name }: { schema: Record<string, string>; name
       <div className="overflow-x-auto">
         <div className="flex items-stretch gap-0 min-w-max">
           {entries.map(([col, type], i) => {
-            const color = TYPE_COLOR[type] ?? '#64748b'
+            const color = TYPE_COLOR[type] ?? '#7f8360'
             return (
               <div key={col} className="flex flex-col items-center relative">
                 {/* Connector */}
@@ -190,7 +190,7 @@ function DatasetDiagram({ schema, name }: { schema: Record<string, string>; name
                     {col}
                   </span>
                   <span className="text-[8px] px-1.5 py-0.5 rounded font-mono"
-                        style={{ background: `${color}18`, color: '#64748b' }}>
+                        style={{ background: `${color}18`, color: '#7f8360' }}>
                     {type}
                   </span>
                 </div>
@@ -207,7 +207,7 @@ function DatasetDiagram({ schema, name }: { schema: Record<string, string>; name
         </p>
         {entries.map(([col, type]) => {
           const hint = CTI_USE[col.toLowerCase()] ?? `Campo "${col}" — analiza su distribución y valores atípicos`
-          const color = TYPE_COLOR[type] ?? '#64748b'
+          const color = TYPE_COLOR[type] ?? '#7f8360'
           return (
             <div key={col} className="flex items-start gap-2">
               <span className="text-[9px] font-mono font-bold shrink-0 w-20 truncate" style={{ color }}>
@@ -565,7 +565,7 @@ if not uploaded_df.empty:
               <h3 className="text-base font-bold text-slate-100">{challenge.title}</h3>
               {challenge.case_code && (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded"
-                      style={{ background: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)' }}>
+                      style={{ background: 'rgba(147,169,84,0.12)', color: '#93a954', border: '1px solid rgba(147,169,84,0.3)' }}>
                   Variante {challenge.case_code}
                 </span>
               )}
@@ -589,13 +589,13 @@ if not uploaded_df.empty:
         </div>
         <div className="grid grid-cols-2 gap-3">
           {challenge.objective && (
-            <div className="rounded-lg p-3" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.1)' }}>
+            <div className="rounded-lg p-3" style={{ background: 'rgba(212,189,85,0.05)', border: '1px solid rgba(212,189,85,0.1)' }}>
               <p className="text-[9px] text-cyan-700 font-bold uppercase mb-1">Objetivo</p>
               <p className="text-xs text-slate-400">{challenge.objective}</p>
             </div>
           )}
           {challenge.criteria && (
-            <div className="rounded-lg p-3" style={{ background: 'rgba(167,139,250,0.05)', border: '1px solid rgba(167,139,250,0.1)' }}>
+            <div className="rounded-lg p-3" style={{ background: 'rgba(147,169,84,0.05)', border: '1px solid rgba(147,169,84,0.1)' }}>
               <p className="text-[9px] text-violet-700 font-bold uppercase mb-1">Criterios</p>
               <p className="text-xs text-slate-400">{challenge.criteria}</p>
             </div>
@@ -629,10 +629,10 @@ if not uploaded_df.empty:
       )}
 
       {/* ── Mis datasets (biblioteca personal) ──────────────────────────────── */}
-      <div className="rounded-xl p-4 space-y-3" style={{ ...glass, border: '1px solid rgba(34,211,238,0.2)' }}>
+      <div className="rounded-xl p-4 space-y-3" style={{ ...glass, border: '1px solid rgba(212,189,85,0.2)' }}>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-cyan-400 font-bold">📁 Mis datasets</span>
-          <span className="text-[9px] px-2 py-0.5 rounded-full font-mono" style={{ background: 'rgba(34,211,238,0.1)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.2)' }}>
+          <span className="text-[9px] px-2 py-0.5 rounded-full font-mono" style={{ background: 'rgba(212,189,85,0.1)', color: '#d4bd55', border: '1px solid rgba(212,189,85,0.2)' }}>
             CSV · TSV · JSON · JSONL · TXT · LOG · máx 5 MB · hasta 8
           </span>
         </div>
@@ -652,7 +652,7 @@ if not uploaded_df.empty:
           </div>
         ))}
         <label className={`flex items-center justify-center gap-2 rounded-lg p-3 cursor-pointer text-xs font-semibold text-cyan-300 ${myDsBusy ? 'opacity-50 pointer-events-none' : ''}`}
-               style={{ border: '1.5px dashed rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.03)' }}>
+               style={{ border: '1.5px dashed rgba(212,189,85,0.3)', background: 'rgba(212,189,85,0.03)' }}>
           {myDsBusy ? 'Subiendo…' : '+ Subir un dataset'}
           <input type="file" accept=".csv,.tsv,.json,.jsonl,.ndjson,.txt,.log" className="hidden" disabled={myDsBusy}
                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadMyDataset(f); e.target.value = '' }} />
@@ -714,7 +714,7 @@ if not uploaded_df.empty:
                         const isEmpty = val == null || val === '' || val === 'null' || val === 'NaN'
                         return (
                           <td key={c} className="px-2 py-1 max-w-[120px] truncate"
-                              style={{ color: isEmpty ? '#475569' : '#94a3b8' }}>
+                              style={{ color: isEmpty ? '#5f6646' : '#a3a27c' }}>
                             {isEmpty ? '∅' : String(val)}
                           </td>
                         )
@@ -749,11 +749,11 @@ if not uploaded_df.empty:
       </div>
 
       {/* ── Misión de exploración ML ────────────────────────────────────────── */}
-      <div className="rounded-xl p-4 space-y-3" style={{ ...glass, border: '1px solid rgba(167,139,250,0.15)' }}>
+      <div className="rounded-xl p-4 space-y-3" style={{ ...glass, border: '1px solid rgba(147,169,84,0.15)' }}>
         <div className="flex items-center gap-2">
           <span className="text-xs text-violet-400 font-bold">Misión: Descubre el análisis correcto</span>
           <span className="text-[9px] px-2 py-0.5 rounded-full font-mono"
-                style={{ background: 'rgba(167,139,250,0.1)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.2)' }}>
+                style={{ background: 'rgba(147,169,84,0.1)', color: '#93a954', border: '1px solid rgba(147,169,84,0.2)' }}>
             No hay una respuesta única
           </span>
         </div>
@@ -764,7 +764,7 @@ if not uploaded_df.empty:
         <div className="grid grid-cols-2 gap-2">
           {[
             {
-              phase: '01', color: '#22d3ee', label: 'Reconocimiento',
+              phase: '01', color: '#d4bd55', label: 'Reconocimiento',
               tasks: ['df.shape, df.dtypes, df.head()', 'df.describe(include="all")', 'df.isnull().sum()', 'df.duplicated().sum()'],
             },
             {
@@ -827,7 +827,7 @@ if not uploaded_df.empty:
                 </button>
                 <button onClick={runCode} disabled={running}
                         className="text-xs font-semibold px-3 py-1.5 rounded disabled:opacity-40"
-                        style={{ background: 'rgba(167,139,250,0.2)', border: '1px solid rgba(167,139,250,0.4)', color: '#a78bfa' }}>
+                        style={{ background: 'rgba(147,169,84,0.2)', border: '1px solid rgba(147,169,84,0.4)', color: '#93a954' }}>
                   {running ? 'Ejecutando...' : '▶ Ejecutar (Ctrl+Enter)'}
                 </button>
               </div>
@@ -836,7 +836,7 @@ if not uploaded_df.empty:
                       onChange={e => setCode(e.target.value)}
                       onKeyDown={handleKeyDown} spellCheck={false}
                       className="w-full resize-none focus:outline-none font-mono text-sm p-4 leading-relaxed"
-                      style={{ background: '#050a14', color: '#86efac', height: 280 }} />
+                      style={{ background: '#11150c', color: '#86efac', height: 280 }} />
           </>
         )}
       </div>
@@ -860,7 +860,7 @@ if not uploaded_df.empty:
       )}
 
       {challenge.no_code && (
-        <div className="rounded-xl p-4" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.2)' }}>
+        <div className="rounded-xl p-4" style={{ background: 'rgba(212,189,85,0.05)', border: '1px solid rgba(212,189,85,0.2)' }}>
           <p className="text-xs text-cyan-300 font-semibold">Este capítulo no requiere código</p>
           <p className="text-[11px] text-slate-400 mt-1">Redacta tu informe ejecutivo en las notas de abajo y publícalo también en el <strong>Muro de Inteligencia</strong> (menú lateral): ese paso suma a tu nota.</p>
         </div>
@@ -920,7 +920,7 @@ if not uploaded_df.empty:
           ) : (
             <div className="flex items-center gap-2 flex-wrap">
               <label className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs cursor-pointer transition-all"
-                     style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: '#22d3ee' }}>
+                     style={{ background: 'rgba(212,189,85,0.08)', border: '1px solid rgba(212,189,85,0.2)', color: '#d4bd55' }}>
                 {docUploading ? 'Subiendo...' : (docFile ? `${docFile.name}` : 'Seleccionar archivo...')}
                 <input type="file" accept=".pdf,.docx,.doc" className="hidden" disabled={docUploading}
                        onChange={e => { const f = e.target.files?.[0]; if (f) { setDocFile(f); setDocError('') } }} />
@@ -928,7 +928,7 @@ if not uploaded_df.empty:
               {docFile && !docUploading && (
                 <button onClick={() => uploadDoc(docFile)}
                         className="px-3 py-1.5 rounded-lg text-xs font-bold"
-                        style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.35)', color: '#22d3ee' }}>
+                        style={{ background: 'rgba(212,189,85,0.12)', border: '1px solid rgba(212,189,85,0.35)', color: '#d4bd55' }}>
                   Subir →
                 </button>
               )}
@@ -1004,7 +1004,7 @@ if not uploaded_df.empty:
           </div>
         )}
         {review && ((review.steps?.length ?? 0) > 0 || (review.reported?.length ?? 0) > 0 || (review.observations?.length ?? 0) > 0 || (review.nudges?.length ?? 0) > 0) && (
-          <div className="rounded-lg p-3 space-y-3" style={{ background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.18)' }}>
+          <div className="rounded-lg p-3 space-y-3" style={{ background: 'rgba(212,189,85,0.04)', border: '1px solid rgba(212,189,85,0.18)' }}>
             <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">🔎 Lo que revisé de tu entrega</p>
             {(review.observations ?? []).map((o, i) => <p key={i} className="text-[11px] text-red-300">⚠ {o}</p>)}
             {(review.steps?.length ?? 0) > 0 && (
@@ -1018,7 +1018,7 @@ if not uploaded_df.empty:
                 <p className="text-[9px] uppercase tracking-wider text-slate-500">Lo que reportaste y qué dicen TUS datos de eso</p>
                 {(review.reported ?? []).map((r, i) => (
                   <div key={i} className="text-[11px]">
-                    <p><span className="text-[9px] px-1.5 py-0.5 rounded mr-1.5" style={{ background: 'rgba(255,255,255,0.06)', color: '#94a3b8' }}>{r.kind}</span><code className="text-cyan-300 font-mono">{r.entity}</code></p>
+                    <p><span className="text-[9px] px-1.5 py-0.5 rounded mr-1.5" style={{ background: 'rgba(255,255,255,0.06)', color: '#a3a27c' }}>{r.kind}</span><code className="text-cyan-300 font-mono">{r.entity}</code></p>
                     {r.facts.map((f, j) => <p key={j} className="ml-4 text-slate-400">↳ {f}</p>)}
                     {r.facts.length === 0 && <p className="ml-4 text-slate-600">↳ No encontré esto en los datos de tu caso.</p>}
                   </div>
@@ -1078,9 +1078,9 @@ interface TeamInfo {
 }
 
 const ROLE_META: Record<string, { label: string; color: string; short: string }> = {
-  analista_datos:   { label: 'Analista de Datos',  color: '#22d3ee', short: 'AD' },
+  analista_datos:   { label: 'Analista de Datos',  color: '#d4bd55', short: 'AD' },
   ciberseguridad:   { label: 'Ciberseguridad',      color: '#f97316', short: 'CS' },
-  ciencia_datos:    { label: 'Ciencia de Datos',    color: '#a78bfa', short: 'CD' },
+  ciencia_datos:    { label: 'Ciencia de Datos',    color: '#93a954', short: 'CD' },
   machine_learning: { label: 'Machine Learning',    color: '#4ade80', short: 'ML' },
   all:              { label: 'Todos',               color: '#facc15', short: '★'  },
 }
@@ -1204,7 +1204,7 @@ function TeamChallengeCard({ teamInfo }: { teamInfo: TeamInfo }) {
     const reportText = reports[challenge.id] || 'Informe pendiente de completar.'
     const html = `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><title>${escapeHtml(challenge.title)}</title>
-<style>body{font-family:Arial,sans-serif;line-height:1.5;color:#0f172a;margin:32px}h1{font-size:24px}h2{font-size:16px;margin-top:24px}table{border-collapse:collapse;width:100%;font-size:12px}td,th{border:1px solid #cbd5e1;padding:6px;text-align:left}pre{white-space:pre-wrap;background:#f8fafc;border:1px solid #cbd5e1;padding:12px}</style></head>
+<style>body{font-family:Arial,sans-serif;line-height:1.5;color:#1a1f13;margin:32px}h1{font-size:24px}h2{font-size:16px;margin-top:24px}table{border-collapse:collapse;width:100%;font-size:12px}td,th{border:1px solid #bfbb98;padding:6px;text-align:left}pre{white-space:pre-wrap;background:#f8fafc;border:1px solid #bfbb98;padding:12px}</style></head>
 <body><h1>${escapeHtml(challenge.title)}</h1><p><strong>Equipo:</strong> ${escapeHtml(team.name)} · <strong>Estudiante:</strong> ${escapeHtml(user?.name ?? '')}</p>
 <h2>Roles y tareas</h2><ul>${steps.map(s => `<li><strong>${escapeHtml(ROLE_META[s.roleKey]?.label ?? 'Equipo')}:</strong> ${escapeHtml(s.task)}</li>`).join('')}</ul>
 <h2>Criterios</h2><p>${escapeHtml(challenge.criteria)}</p>
@@ -1323,7 +1323,7 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
                       {rm.short}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[10px] font-semibold truncate" style={{ color: isMe ? rm.color : '#94a3b8' }}>
+                      <p className="text-[10px] font-semibold truncate" style={{ color: isMe ? rm.color : '#a3a27c' }}>
                         {m.name.split(' ').slice(0, 2).join(' ')} {isMe && '(yo)'}
                       </p>
                       <p className="text-[8px] truncate" style={{ color: rm.color + '99' }}>{rm.label}</p>
@@ -1352,7 +1352,7 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
           {/* ── Retos del equipo ──────────────────────────────────────── */}
           {challenges.map(c => {
             const tc     = c.badge_tier ? (TIER_COLOR[c.badge_tier] ?? '#facc15') : undefined
-            const dc     = DIFF_COLOR[c.difficulty] ?? '#64748b'
+            const dc     = DIFF_COLOR[c.difficulty] ?? '#7f8360'
             const earned = Boolean(c.badge_earned)
             const steps  = parseRoleSteps(c.objective)
             const criteriaItems = parseCriteria(c.criteria)
@@ -1366,7 +1366,7 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
 
             return (
               <div key={c.id} className="rounded-xl overflow-hidden"
-                   style={{ background: 'rgba(10,15,30,0.7)', border: `1px solid ${team.color}28` }}>
+                   style={{ background: 'rgba(21,26,15,0.7)', border: `1px solid ${team.color}28` }}>
 
                 {/* Badge ganada */}
                 {earned && tc && (
@@ -1403,9 +1403,9 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
                         {remaining && (
                           <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
                                 style={{
-                                  background: remaining.expired ? 'rgba(239,68,68,0.1)' : 'rgba(34,211,238,0.08)',
-                                  color: remaining.expired ? '#ef4444' : '#22d3ee',
-                                  border: `1px solid ${remaining.expired ? 'rgba(239,68,68,0.24)' : 'rgba(34,211,238,0.22)'}`,
+                                  background: remaining.expired ? 'rgba(239,68,68,0.1)' : 'rgba(212,189,85,0.08)',
+                                  color: remaining.expired ? '#ef4444' : '#d4bd55',
+                                  border: `1px solid ${remaining.expired ? 'rgba(239,68,68,0.24)' : 'rgba(212,189,85,0.22)'}`,
                                 }}>
                             ⏱ {remaining.label}
                           </span>
@@ -1473,7 +1473,7 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
                                 {assigned.length > 0 ? assigned.map(m => (
                                   <p key={m.email}
                                      className="text-[9px] font-medium truncate"
-                                     style={{ color: m.email === user?.email ? rm.color : '#64748b' }}>
+                                     style={{ color: m.email === user?.email ? rm.color : '#7f8360' }}>
                                     {m.name.split(' ')[0]}
                                     {m.email === user?.email ? ' ✓' : ''}
                                   </p>
@@ -1484,7 +1484,7 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
 
                               {/* Tarea de análisis */}
                               <p className="flex-1 text-[10px] leading-relaxed"
-                                 style={{ color: isMyStep ? '#cbd5e1' : '#64748b' }}>
+                                 style={{ color: isMyStep ? '#bfbb98' : '#7f8360' }}>
                                 {step.task}
                               </p>
                             </div>
@@ -1520,7 +1520,7 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
                       <div className="flex flex-wrap gap-1.5">
                         {criteriaItems.map((cr, i) => (
                           <span key={i} className="text-[9px] px-2 py-1 rounded"
-                                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', color: '#94a3b8' }}>
+                                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', color: '#a3a27c' }}>
                             <span className="font-bold text-slate-300">{cr.pct}</span>
                             {cr.pct && ' '}
                             {cr.label}
@@ -1544,7 +1544,7 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
                           <button onClick={() => exportChallengeDataset(c.id, token, c.dataset_name ?? c.title)
                                   .catch(err => alert(String(err)))}
                                   className="px-2.5 py-1 rounded text-[10px] font-bold"
-                                  style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.22)' }}>
+                                  style={{ background: 'rgba(212,189,85,0.08)', color: '#d4bd55', border: '1px solid rgba(212,189,85,0.22)' }}>
                             Descargar CSV
                           </button>
                           <button onClick={() => loadDataset(c.id)}
@@ -1563,7 +1563,7 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
                               <div className="flex flex-wrap gap-1.5">
                                 {Object.entries(JSON.parse(ds.schema_json || '{}')).map(([col, type]) => (
                                   <span key={col} className="text-[8px] font-mono px-1.5 py-0.5 rounded"
-                                        style={{ background: 'rgba(34,211,238,0.08)', color: '#67e8f9' }}>
+                                        style={{ background: 'rgba(212,189,85,0.08)', color: '#e0cf74' }}>
                                     {col}: <span className="text-slate-500">{String(type)}</span>
                                   </span>
                                 ))}
@@ -1610,7 +1610,7 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
                       </div>
                       <button onClick={() => exportReport(c, steps)}
                               className="px-2.5 py-1 rounded text-[10px] font-bold"
-                              style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.22)' }}>
+                              style={{ background: 'rgba(212,189,85,0.08)', color: '#d4bd55', border: '1px solid rgba(212,189,85,0.22)' }}>
                         Exportar informe
                       </button>
                     </div>
@@ -1623,7 +1623,7 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
                       style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }} />
                     <div className="flex items-center gap-3 flex-wrap">
                       <label className="px-2.5 py-1.5 rounded text-[10px] font-bold cursor-pointer"
-                             style={{ background: 'rgba(255,255,255,0.04)', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.09)' }}>
+                             style={{ background: 'rgba(255,255,255,0.04)', color: '#a3a27c', border: '1px solid rgba(255,255,255,0.09)' }}>
                         Cargar imágenes
                         <input type="file" accept="image/*" multiple className="hidden"
                                onChange={e => handleImages(c.id, e.target.files)} />
@@ -1663,7 +1663,7 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
                       ) : (
                         <div className="flex items-center gap-2 flex-wrap">
                           <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded cursor-pointer text-[10px]"
-                                 style={{ background: 'rgba(34,211,238,0.07)', border: '1px solid rgba(34,211,238,0.18)', color: '#22d3ee' }}>
+                                 style={{ background: 'rgba(212,189,85,0.07)', border: '1px solid rgba(212,189,85,0.18)', color: '#d4bd55' }}>
                             {teamDocUploading[c.id] ? 'Subiendo...' : (teamDocFiles[c.id] ? teamDocFiles[c.id]!.name : 'Seleccionar PDF/Word...')}
                             <input type="file" accept=".pdf,.docx,.doc" className="hidden" disabled={Boolean(teamDocUploading[c.id])}
                                    onChange={e => { const f = e.target.files?.[0]; if (f) setTeamDocFiles(p => ({ ...p, [c.id]: f })) }} />
@@ -1671,7 +1671,7 @@ ${ds ? `<h2>Dataset explorado: ${escapeHtml(ds.name)}</h2><p>${escapeHtml(ds.des
                           {teamDocFiles[c.id] && !teamDocUploading[c.id] && (
                             <button onClick={() => uploadTeamDoc(c.id, teamDocFiles[c.id]!)}
                                     className="px-2.5 py-1.5 rounded text-[10px] font-bold"
-                                    style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: '#22d3ee' }}>
+                                    style={{ background: 'rgba(212,189,85,0.1)', border: '1px solid rgba(212,189,85,0.3)', color: '#d4bd55' }}>
                               Subir →
                             </button>
                           )}
@@ -1810,7 +1810,7 @@ export default function ChallengeArena() {
       )}
 
       {challenges.length === 0 ? (
-        <div className="rounded-xl p-10 text-center" style={{ background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="rounded-xl p-10 text-center" style={{ background: 'rgba(26,31,19,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <p className="text-slate-600 text-sm">No tienes retos asignados aún.</p>
           <p className="text-slate-700 text-xs mt-1">Tu instructor te asignará datasets y desafíos próximamente.</p>
         </div>
@@ -1821,7 +1821,7 @@ export default function ChallengeArena() {
             const pass = path[0]?.path_pass_score ?? 50
             const done = path.filter(c => c.my_score != null && c.my_score >= pass).length
             return (
-              <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.2)' }}>
+              <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(212,189,85,0.05)', border: '1px solid rgba(212,189,85,0.2)' }}>
                 <div className="flex items-center gap-2">
                   <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest flex-1">Tu ruta individual</p>
                   <span className="text-xs font-bold text-cyan-300">{done}/{path.length} completados</span>
@@ -1835,7 +1835,7 @@ export default function ChallengeArena() {
           })()}
           {challenges.map(c => {
             const tierColor  = c.badge_tier ? (TIER_COLOR[c.badge_tier] ?? '#facc15') : undefined
-            const diffColor  = c.difficulty ? (DIFF_COLOR[c.difficulty] ?? '#64748b') : undefined
+            const diffColor  = c.difficulty ? (DIFF_COLOR[c.difficulty] ?? '#7f8360') : undefined
             const earned     = Boolean(c.badge_earned)
             const scoreOk    = c.my_score != null && c.min_score_badge != null && c.my_score >= c.min_score_badge
             const borderColor = c.submitted > 0 ? 'rgba(74,222,128,0.18)' : 'rgba(255,255,255,0.07)'
@@ -1843,7 +1843,7 @@ export default function ChallengeArena() {
             return (
               <div key={c.id}
                    className={`rounded-xl overflow-hidden group transition-all ${c.locked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-white/[0.02]'}`}
-                   style={{ background: 'rgba(15,23,42,0.55)', border: `1px solid ${borderColor}` }}
+                   style={{ background: 'rgba(26,31,19,0.55)', border: `1px solid ${borderColor}` }}
                    onClick={() => { if (!c.locked) setActive(c) }}>
 
                 {/* Badge earned top bar */}
@@ -1864,7 +1864,7 @@ export default function ChallengeArena() {
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       {c.path_order && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
-                              style={{ background: 'rgba(34,211,238,0.1)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.25)' }}>
+                              style={{ background: 'rgba(212,189,85,0.1)', color: '#d4bd55', border: '1px solid rgba(212,189,85,0.25)' }}>
                           {c.path_order}/{c.path_total}
                         </span>
                       )}
@@ -1879,7 +1879,7 @@ export default function ChallengeArena() {
 
                       {c.stage && c.stage !== 'individual' && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
-                              style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.22)' }}>
+                              style={{ background: 'rgba(212,189,85,0.08)', color: '#d4bd55', border: '1px solid rgba(212,189,85,0.22)' }}>
                           {c.stage === 'parejas' ? 'Por parejas' : c.stage}
                         </span>
                       )}
@@ -1892,7 +1892,7 @@ export default function ChallengeArena() {
                       ) : (
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
                               style={c.locked
-                                ? { background: 'rgba(100,116,139,0.1)', color: '#64748b', border: '1px solid rgba(100,116,139,0.2)' }
+                                ? { background: 'rgba(127,131,96,0.1)', color: '#7f8360', border: '1px solid rgba(127,131,96,0.2)' }
                                 : { background: 'rgba(250,204,21,0.08)', color: '#facc15', border: '1px solid rgba(250,204,21,0.15)' }}>
                           {c.locked ? 'Bloqueado' : 'Pendiente'}
                         </span>
@@ -1932,7 +1932,7 @@ export default function ChallengeArena() {
                                 .catch(err => alert(String(err)))
                             }}
                             className="text-[9px] px-2 py-0.5 rounded font-bold"
-                            style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.22)' }}>
+                            style={{ background: 'rgba(212,189,85,0.08)', color: '#d4bd55', border: '1px solid rgba(212,189,85,0.22)' }}>
                             Descargar CSV
                           </button>
                         </div>

@@ -143,10 +143,10 @@ REGLAS:
         className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-2xl"
         style={{
           background: abierto && !minimizado
-            ? 'rgba(167,139,250,0.25)'
-            : 'linear-gradient(135deg, rgba(167,139,250,0.35), rgba(34,211,238,0.2))',
-          border: '1px solid rgba(167,139,250,0.45)',
-          boxShadow: abierto && !minimizado ? 'none' : '0 0 24px rgba(167,139,250,0.35)',
+            ? 'rgba(147,169,84,0.25)'
+            : 'linear-gradient(135deg, rgba(147,169,84,0.35), rgba(212,189,85,0.2))',
+          border: '1px solid rgba(147,169,84,0.45)',
+          boxShadow: abierto && !minimizado ? 'none' : '0 0 24px rgba(147,169,84,0.35)',
         }}
         title="Asistente ARIA">
         {!abierto || minimizado ? (
@@ -165,8 +165,8 @@ REGLAS:
         <div className="fixed bottom-20 right-6 z-50 w-88 flex flex-col rounded-2xl overflow-hidden shadow-2xl"
              style={{
                width: 340,
-               background: 'rgba(10,15,30,0.97)',
-               border: '1px solid rgba(167,139,250,0.25)',
+               background: 'rgba(21,26,15,0.97)',
+               border: '1px solid rgba(147,169,84,0.25)',
                backdropFilter: 'blur(20px)',
                height: minimizado ? 'auto' : 500,
              }}>
@@ -175,7 +175,7 @@ REGLAS:
           <div className="px-4 py-2.5 border-b flex items-center gap-2 shrink-0"
                style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
             <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
-                 style={{ background: 'rgba(167,139,250,0.2)' }}>
+                 style={{ background: 'rgba(147,169,84,0.2)' }}>
               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-violet-400" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
@@ -210,12 +210,12 @@ REGLAS:
             <div className="flex border-b shrink-0" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
               <button onClick={() => setTab('ideas')}
                       className="flex-1 py-2 text-[10px] font-bold transition-all"
-                      style={{ color: tab === 'ideas' ? '#a78bfa' : '#475569', borderBottom: tab === 'ideas' ? '2px solid #a78bfa' : '2px solid transparent', background: tab === 'ideas' ? 'rgba(167,139,250,0.05)' : 'transparent' }}>
+                      style={{ color: tab === 'ideas' ? '#93a954' : '#5f6646', borderBottom: tab === 'ideas' ? '2px solid #93a954' : '2px solid transparent', background: tab === 'ideas' ? 'rgba(147,169,84,0.05)' : 'transparent' }}>
                 💡 Ideas y Pistas
               </button>
               <button onClick={irAChat}
                       className="flex-1 py-2 text-[10px] font-bold transition-all"
-                      style={{ color: tab === 'chat' ? '#22d3ee' : '#475569', borderBottom: tab === 'chat' ? '2px solid #22d3ee' : '2px solid transparent', background: tab === 'chat' ? 'rgba(34,211,238,0.05)' : 'transparent' }}>
+                      style={{ color: tab === 'chat' ? '#d4bd55' : '#5f6646', borderBottom: tab === 'chat' ? '2px solid #d4bd55' : '2px solid transparent', background: tab === 'chat' ? 'rgba(212,189,85,0.05)' : 'transparent' }}>
                 💬 Chat con ARIA
               </button>
             </div>
@@ -227,7 +227,7 @@ REGLAS:
 
               {/* Descripción del reto */}
               {challengeDesc && (
-                <div className="rounded-lg p-3" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.12)' }}>
+                <div className="rounded-lg p-3" style={{ background: 'rgba(212,189,85,0.05)', border: '1px solid rgba(212,189,85,0.12)' }}>
                   <p className="text-[9px] font-bold text-cyan-600 uppercase mb-1">📌 Contexto del reto</p>
                   <p className="text-[10px] text-slate-400 leading-relaxed">{challengeDesc}</p>
                 </div>
@@ -243,12 +243,12 @@ REGLAS:
                     <div key={i}
                          className="rounded-lg p-3 space-y-2 transition-all"
                          style={{
-                           background: pistaActiva === i ? 'rgba(167,139,250,0.12)' : 'rgba(255,255,255,0.02)',
-                           border: `1px solid ${pistaActiva === i ? 'rgba(167,139,250,0.35)' : 'rgba(255,255,255,0.06)'}`,
+                           background: pistaActiva === i ? 'rgba(147,169,84,0.12)' : 'rgba(255,255,255,0.02)',
+                           border: `1px solid ${pistaActiva === i ? 'rgba(147,169,84,0.35)' : 'rgba(255,255,255,0.06)'}`,
                          }}>
                       <div className="flex items-start gap-2">
                         <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 mt-0.5"
-                              style={{ background: pistaActiva === i ? 'rgba(167,139,250,0.3)' : 'rgba(255,255,255,0.06)', color: pistaActiva === i ? '#c4b5fd' : '#64748b' }}>
+                              style={{ background: pistaActiva === i ? 'rgba(147,169,84,0.3)' : 'rgba(255,255,255,0.06)', color: pistaActiva === i ? '#c4b5fd' : '#7f8360' }}>
                           {i + 1}
                         </span>
                         <p className="text-[10px] text-slate-300 leading-relaxed flex-1">{pista}</p>
@@ -258,9 +258,9 @@ REGLAS:
                         disabled={cargando}
                         className="w-full text-[9px] py-1 rounded font-bold transition-all disabled:opacity-40"
                         style={{
-                          background: pistaActiva === i ? 'rgba(167,139,250,0.2)' : 'rgba(167,139,250,0.06)',
-                          border: `1px solid rgba(167,139,250,${pistaActiva === i ? '0.4' : '0.15'})`,
-                          color: '#a78bfa',
+                          background: pistaActiva === i ? 'rgba(147,169,84,0.2)' : 'rgba(147,169,84,0.06)',
+                          border: `1px solid rgba(147,169,84,${pistaActiva === i ? '0.4' : '0.15'})`,
+                          color: '#93a954',
                         }}>
                         {pistaActiva === i ? '✓ Pista solicitada — ver en Chat →' : `💬 Pedir ayuda con el paso ${i + 1}`}
                       </button>
@@ -279,7 +279,7 @@ REGLAS:
 
               <button onClick={irAChat}
                       className="w-full py-2 rounded-lg text-[10px] font-bold transition-all"
-                      style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: '#22d3ee' }}>
+                      style={{ background: 'rgba(212,189,85,0.08)', border: '1px solid rgba(212,189,85,0.2)', color: '#d4bd55' }}>
                 💬 Ir al chat con ARIA →
               </button>
             </div>
@@ -293,11 +293,11 @@ REGLAS:
                   <div key={i} className={`flex ${m.rol === 'usuario' ? 'justify-end' : 'justify-start'}`}>
                     <div className="max-w-[88%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap"
                          style={m.rol === 'usuario' ? {
-                           background: 'rgba(167,139,250,0.2)', border: '1px solid rgba(167,139,250,0.25)', color: '#e2e8f0',
+                           background: 'rgba(147,169,84,0.2)', border: '1px solid rgba(147,169,84,0.25)', color: '#d8d4b6',
                          } : {
-                           background: m.tipo === 'error' ? 'rgba(239,68,68,0.08)' : m.tipo === 'idea' ? 'rgba(167,139,250,0.07)' : 'rgba(255,255,255,0.04)',
-                           border: `1px solid ${m.tipo === 'error' ? 'rgba(239,68,68,0.2)' : m.tipo === 'idea' ? 'rgba(167,139,250,0.15)' : 'rgba(255,255,255,0.07)'}`,
-                           color: m.tipo === 'error' ? '#fca5a5' : '#94a3b8',
+                           background: m.tipo === 'error' ? 'rgba(239,68,68,0.08)' : m.tipo === 'idea' ? 'rgba(147,169,84,0.07)' : 'rgba(255,255,255,0.04)',
+                           border: `1px solid ${m.tipo === 'error' ? 'rgba(239,68,68,0.2)' : m.tipo === 'idea' ? 'rgba(147,169,84,0.15)' : 'rgba(255,255,255,0.07)'}`,
+                           color: m.tipo === 'error' ? '#fca5a5' : '#a3a27c',
                          }}>
                       {m.texto}
                     </div>
@@ -319,14 +319,14 @@ REGLAS:
                 {SUGERENCIAS.map(s => (
                   <button key={s} onClick={() => enviar(s)} disabled={cargando}
                           className="text-[9px] px-2 py-1 rounded-full transition-colors disabled:opacity-40"
-                          style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.15)', color: '#0891b2' }}>
+                          style={{ background: 'rgba(212,189,85,0.06)', border: '1px solid rgba(212,189,85,0.15)', color: '#9c8535' }}>
                     {s}
                   </button>
                 ))}
                 {enReto && (
                   <button onClick={() => setTab('ideas')}
                           className="text-[9px] px-2 py-1 rounded-full transition-colors"
-                          style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', color: '#7c3aed' }}>
+                          style={{ background: 'rgba(147,169,84,0.08)', border: '1px solid rgba(147,169,84,0.2)', color: '#5f7231' }}>
                     Ver ideas →
                   </button>
                 )}
@@ -345,7 +345,7 @@ REGLAS:
                 />
                 <button onClick={() => enviar()} disabled={cargando || !entrada.trim()}
                         className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40 transition-all"
-                        style={{ background: 'rgba(167,139,250,0.2)', border: '1px solid rgba(167,139,250,0.35)', color: '#a78bfa' }}>
+                        style={{ background: 'rgba(147,169,84,0.2)', border: '1px solid rgba(147,169,84,0.35)', color: '#93a954' }}>
                   Enviar
                 </button>
               </div>

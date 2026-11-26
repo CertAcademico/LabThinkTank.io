@@ -11,7 +11,7 @@ const TACTICS = [
   { name: 'Acceso Inicial', color: '#ef4444', pct: 82 },
   { name: 'Ejecución',      color: '#f97316', pct: 67 },
   { name: 'Persistencia',   color: '#eab308', pct: 54 },
-  { name: 'Mov. Lateral',   color: '#a855f7', pct: 41 },
+  { name: 'Mov. Lateral',   color: '#7a903f', pct: 41 },
   { name: 'Exfiltración',   color: '#ef4444', pct: 28 },
 ]
 
@@ -47,31 +47,31 @@ const [TX, TY] = [23, 36]   // target %
 
 const MODULES = [
   [
-    { label: 'SIEM',                icon: '🗄️', color: '#22d3ee' },
-    { label: 'Redes Neuronales',    icon: '🧠', color: '#22d3ee' },
-    { label: 'Feature Engineering', icon: '📊', color: '#22d3ee' },
-    { label: 'SOAR',                icon: '⚡', color: '#22d3ee' },
-    { label: 'Regresión Logística', icon: '📈', color: '#a855f7' },
-    { label: 'EDA',                 icon: '🔬', color: '#a855f7' },
-    { label: 'MITRE ATT&CK',       icon: '🗺️', color: '#a855f7' },
+    { label: 'SIEM',                icon: '🗄️', color: '#d4bd55' },
+    { label: 'Redes Neuronales',    icon: '🧠', color: '#d4bd55' },
+    { label: 'Feature Engineering', icon: '📊', color: '#d4bd55' },
+    { label: 'SOAR',                icon: '⚡', color: '#d4bd55' },
+    { label: 'Regresión Logística', icon: '📈', color: '#7a903f' },
+    { label: 'EDA',                 icon: '🔬', color: '#7a903f' },
+    { label: 'MITRE ATT&CK',       icon: '🗺️', color: '#7a903f' },
   ],
   [
     { label: 'Random Forest',       icon: '🌲', color: '#4ade80' },
     { label: 'Data Wrangling',      icon: '🔧', color: '#4ade80' },
     { label: 'Zero Trust',          icon: '🛡️', color: '#4ade80' },
-    { label: 'Deep Learning',       icon: '⚗️', color: '#60a5fa' },
-    { label: 'ETL Pipeline',        icon: '🔁', color: '#60a5fa' },
+    { label: 'Deep Learning',       icon: '⚗️', color: '#aec174' },
+    { label: 'ETL Pipeline',        icon: '🔁', color: '#aec174' },
     { label: 'Ransomware',          icon: '🔒', color: '#f87171' },
     { label: 'Anomaly Detection',   icon: '📡', color: '#fb923c' },
   ],
   [
-    { label: 'Visualización',       icon: '📉', color: '#94a3b8' },
-    { label: 'Threat Hunting',      icon: '🎯', color: '#94a3b8' },
-    { label: 'NLP en Seguridad',    icon: '💬', color: '#94a3b8' },
-    { label: 'Pandas & SQL',        icon: '🐼', color: '#94a3b8' },
-    { label: 'Dark Web Intel',      icon: '🌐', color: '#94a3b8' },
-    { label: 'Precisión & Recall',  icon: '🎯', color: '#94a3b8' },
-    { label: 'Digital Forensics',   icon: '🔍', color: '#94a3b8' },
+    { label: 'Visualización',       icon: '📉', color: '#a3a27c' },
+    { label: 'Threat Hunting',      icon: '🎯', color: '#a3a27c' },
+    { label: 'NLP en Seguridad',    icon: '💬', color: '#a3a27c' },
+    { label: 'Pandas & SQL',        icon: '🐼', color: '#a3a27c' },
+    { label: 'Dark Web Intel',      icon: '🌐', color: '#a3a27c' },
+    { label: 'Precisión & Recall',  icon: '🎯', color: '#a3a27c' },
+    { label: 'Digital Forensics',   icon: '🔍', color: '#a3a27c' },
   ],
 ]
 
@@ -99,10 +99,10 @@ function KPICards({ iocs, ioas }: { iocs: IOC[]; ioas: IOA[] }) {
   const active   = ioas.filter(i => ['critical', 'high'].includes(i.priority)).length
 
   const cards = [
-    { label: 'Eventos SIEM / 24h',  value: '1,247',              color: '#22d3ee', glow: 'rgba(34,211,238,0.15)' },
+    { label: 'Eventos SIEM / 24h',  value: '1,247',              color: '#d4bd55', glow: 'rgba(212,189,85,0.15)' },
     { label: 'Alertas Críticas',    value: String(critical || 23), color: '#f87171', glow: 'rgba(248,113,113,0.15)' },
     { label: 'Alertas Activas',     value: String(active   || 87), color: '#fb923c', glow: 'rgba(251,146,60,0.15)' },
-    { label: 'MTTR Promedio',       value: '12m',                color: '#c084fc', glow: 'rgba(192,132,252,0.15)' },
+    { label: 'MTTR Promedio',       value: '12m',                color: '#aec174', glow: 'rgba(192,132,252,0.15)' },
     { label: 'Automatización SOAR', value: '94%',                color: '#4ade80', glow: 'rgba(74,222,128,0.15)' },
     { label: 'Score de Riesgo',     value: '78',                 color: '#facc15', glow: 'rgba(250,204,21,0.15)' },
   ]
@@ -112,7 +112,7 @@ function KPICards({ iocs, ioas }: { iocs: IOC[]; ioas: IOA[] }) {
       {cards.map(c => (
         <div key={c.label}
              className="rounded-xl border border-slate-800 p-4 text-center relative overflow-hidden"
-             style={{ background: `linear-gradient(135deg, ${c.glow} 0%, #0f172a 60%)` }}>
+             style={{ background: `linear-gradient(135deg, ${c.glow} 0%, #1a1f13 60%)` }}>
           <div className="absolute inset-x-0 top-0 h-0.5 rounded-t-xl"
                style={{ backgroundColor: c.color }} />
           <p className="text-3xl font-black tabular-nums mt-1" style={{ color: c.color }}>
@@ -134,7 +134,7 @@ function ThreatMap() {
     <Panel className="overflow-hidden relative" style={{ minHeight: 300 }}>
       {/* dark gradient background */}
       <div className="absolute inset-0"
-           style={{ background: 'radial-gradient(ellipse at 30% 40%, #071826 0%, #020617 70%)' }} />
+           style={{ background: 'radial-gradient(ellipse at 30% 40%, #071826 0%, #0e110a 70%)' }} />
 
       {/* header overlay */}
       <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
@@ -152,12 +152,12 @@ function ThreatMap() {
         {/* latitude grid lines */}
         {[0.2, 0.4, 0.6, 0.8].map(p => (
           <line key={`h${p}`} x1={0} y1={p * H} x2={W} y2={p * H}
-                stroke="#1e293b" strokeWidth="0.6" />
+                stroke="#2c3320" strokeWidth="0.6" />
         ))}
         {/* longitude grid lines */}
         {[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9].map(p => (
           <line key={`v${p}`} x1={p * W} y1={0} x2={p * W} y2={H}
-                stroke="#1e293b" strokeWidth="0.6" />
+                stroke="#2c3320" strokeWidth="0.6" />
         ))}
 
         {/* connection lines */}
@@ -194,16 +194,16 @@ function ThreatMap() {
         })}
 
         {/* target */}
-        <circle cx={tx} cy={ty} r="22" fill="none" stroke="#22d3ee" strokeWidth="0.7" opacity="0.25">
+        <circle cx={tx} cy={ty} r="22" fill="none" stroke="#d4bd55" strokeWidth="0.7" opacity="0.25">
           <animate attributeName="r"       values="10;26;10"  dur="3s"   repeatCount="indefinite" />
           <animate attributeName="opacity" values="0.3;0;0.3" dur="3s"   repeatCount="indefinite" />
         </circle>
-        <circle cx={tx} cy={ty} r="10" fill="none" stroke="#22d3ee" strokeWidth="1" opacity="0.5">
+        <circle cx={tx} cy={ty} r="10" fill="none" stroke="#d4bd55" strokeWidth="1" opacity="0.5">
           <animate attributeName="r"       values="6;13;6"    dur="2s"   repeatCount="indefinite" />
           <animate attributeName="opacity" values="0.5;0;0.5" dur="2s"   repeatCount="indefinite" />
         </circle>
-        <circle cx={tx} cy={ty} r="5" fill="#22d3ee" />
-        <text x={tx + 9} y={ty - 8} fill="#22d3ee" fontSize="9"
+        <circle cx={tx} cy={ty} r="5" fill="#d4bd55" />
+        <text x={tx + 9} y={ty - 8} fill="#d4bd55" fontSize="9"
               fontFamily="monospace" fontWeight="bold">TARGET</text>
       </svg>
     </Panel>
@@ -310,7 +310,7 @@ function LiveLogFeed() {
         {logs.map((log, i) => (
           <div key={`${i}-${log.slice(0, 10)}`}
                className="leading-relaxed"
-               style={{ color: i === 0 ? '#86efac' : '#334155' }}>
+               style={{ color: i === 0 ? '#86efac' : '#444c32' }}>
             {log}
           </div>
         ))}

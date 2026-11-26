@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
 const glass = {
-  background: 'rgba(15,23,42,0.55)',
+  background: 'rgba(26,31,19,0.55)',
   backdropFilter: 'blur(16px)',
   border: '1px solid rgba(255,255,255,0.07)',
   borderRadius: 12,
@@ -54,20 +54,20 @@ const SEVERITY_COLOR: Record<string, string> = {
   high:     '#f97316',
   medium:   '#facc15',
   low:      '#4ade80',
-  info:     '#22d3ee',
+  info:     '#d4bd55',
 }
 
 const SOURCE_STYLE: Record<string, { color: string; bg: string }> = {
-  VirusTotal:     { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)' },
+  VirusTotal:     { color: '#aec174', bg: 'rgba(96,165,250,0.12)' },
   ThreatFox:      { color: '#f87171', bg: 'rgba(248,113,113,0.12)' },
   'Abuse.ch':     { color: '#fb923c', bg: 'rgba(251,146,60,0.12)' },
-  MISP:           { color: '#a78bfa', bg: 'rgba(167,139,250,0.12)' },
-  malwarebazaar:  { color: '#a78bfa', bg: 'rgba(167,139,250,0.12)' },
+  MISP:           { color: '#93a954', bg: 'rgba(147,169,84,0.12)' },
+  malwarebazaar:  { color: '#93a954', bg: 'rgba(147,169,84,0.12)' },
   urlhaus:        { color: '#fb923c', bg: 'rgba(251,146,60,0.12)' },
   OpenCTI:        { color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
   AbuseIPDB:      { color: '#fbbf24', bg: 'rgba(251,191,36,0.12)' },
-  Shodan:         { color: '#22d3ee', bg: 'rgba(34,211,238,0.12)' },
-  Internal:       { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' },
+  Shodan:         { color: '#d4bd55', bg: 'rgba(212,189,85,0.12)' },
+  Internal:       { color: '#a3a27c', bg: 'rgba(163,162,124,0.1)' },
 }
 
 const STATIC_FEED: FeedEntry[] = [
@@ -84,7 +84,7 @@ const STATIC_FEED: FeedEntry[] = [
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function SourceTag({ source }: { source: string }) {
-  const st = SOURCE_STYLE[source] ?? { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' }
+  const st = SOURCE_STYLE[source] ?? { color: '#a3a27c', bg: 'rgba(163,162,124,0.1)' }
   const label = source === 'malwarebazaar' ? 'MalwareBazaar' : source === 'urlhaus' ? 'URLhaus' : source
   return (
     <span className="text-[10px] font-semibold px-2 py-0.5 rounded shrink-0"
@@ -95,7 +95,7 @@ function SourceTag({ source }: { source: string }) {
 }
 
 function SevBadge({ sev }: { sev: string }) {
-  const c = SEVERITY_COLOR[sev] ?? '#64748b'
+  const c = SEVERITY_COLOR[sev] ?? '#7f8360'
   return (
     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase shrink-0"
           style={{ color: c, background: `${c}18` }}>
@@ -178,7 +178,7 @@ function MispPanel() {
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
                  style={status.configured
-                   ? { background: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)' }
+                   ? { background: 'rgba(147,169,84,0.12)', color: '#93a954', border: '1px solid rgba(147,169,84,0.3)' }
                    : { background: 'rgba(251,146,60,0.1)',   color: '#fb923c', border: '1px solid rgba(251,146,60,0.25)' }}>
               <span className={`w-1.5 h-1.5 rounded-full ${status.configured ? 'bg-violet-400' : 'bg-orange-400'} animate-pulse`} />
               {status.configured ? `MISP Privado · ${status.url}` : 'Modo Público'}
@@ -195,14 +195,14 @@ function MispPanel() {
           {/* limit selector */}
           <select value={limit} onChange={e => setLimit(Number(e.target.value))}
                   className="text-xs rounded-lg px-2 py-1.5 border outline-none"
-                  style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: '#94a3b8' }}>
+                  style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: '#a3a27c' }}>
             {[10, 20, 30, 50, 100].map(n => <option key={n} value={n}>{n} IOCs</option>)}
           </select>
 
           {/* refresh */}
           <button onClick={fetchIocs} disabled={loading}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-all disabled:opacity-40"
-                  style={{ background: 'rgba(34,211,238,0.07)', borderColor: 'rgba(34,211,238,0.25)', color: '#22d3ee' }}>
+                  style={{ background: 'rgba(212,189,85,0.07)', borderColor: 'rgba(212,189,85,0.25)', color: '#d4bd55' }}>
             <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`}
                  fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M23 4v6h-6M1 20v-6h6" />
@@ -214,7 +214,7 @@ function MispPanel() {
           {/* import */}
           <button onClick={handleImport} disabled={importing || iocs.length === 0}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-all disabled:opacity-40"
-                  style={{ background: 'rgba(167,139,250,0.1)', borderColor: 'rgba(167,139,250,0.3)', color: '#a78bfa' }}>
+                  style={{ background: 'rgba(147,169,84,0.1)', borderColor: 'rgba(147,169,84,0.3)', color: '#93a954' }}>
             <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 ${importing ? 'animate-pulse' : ''}`}
                  fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -229,7 +229,7 @@ function MispPanel() {
       {/* Config hint */}
       {status && !status.configured && (
         <div className="rounded-xl px-4 py-3 text-xs flex items-start gap-3"
-             style={{ background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.15)' }}>
+             style={{ background: 'rgba(147,169,84,0.06)', border: '1px solid rgba(147,169,84,0.15)' }}>
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-violet-400 shrink-0 mt-0.5"
                fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -278,8 +278,8 @@ function MispPanel() {
                 <button key={t} onClick={() => setFilterType(t)}
                         className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all capitalize"
                         style={filterType === t
-                          ? { background: 'rgba(34,211,238,0.1)', color: '#22d3ee' }
-                          : { color: '#475569' }}>
+                          ? { background: 'rgba(212,189,85,0.1)', color: '#d4bd55' }
+                          : { color: '#5f6646' }}>
                   <span>{t === 'all' ? 'Todos' : t}</span>
                   <span className="font-mono text-[10px]">
                     {t === 'all' ? iocs.length : iocs.filter(i => i.type === t).length}
@@ -301,8 +301,8 @@ function MispPanel() {
                   <button key={s} onClick={() => setFilterSev(s)}
                           className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs capitalize transition-all"
                           style={filterSev === s
-                            ? { background: s === 'all' ? 'rgba(255,255,255,0.08)' : `${c}18`, color: s === 'all' ? '#e2e8f0' : c }
-                            : { color: '#475569' }}>
+                            ? { background: s === 'all' ? 'rgba(255,255,255,0.08)' : `${c}18`, color: s === 'all' ? '#d8d4b6' : c }
+                            : { color: '#5f6646' }}>
                     <span>{s === 'all' ? 'Todas' : s}</span>
                     <span className="font-mono text-[10px]">
                       {s === 'all' ? iocs.length : iocs.filter(i => i.severity === s).length}
@@ -352,7 +352,7 @@ function MispPanel() {
                       </td>
                       <td className="px-4 py-2.5 whitespace-nowrap">
                         <span className="font-mono text-[10px] px-1.5 py-0.5 rounded"
-                              style={{ background: 'rgba(255,255,255,0.05)', color: '#64748b' }}>
+                              style={{ background: 'rgba(255,255,255,0.05)', color: '#7f8360' }}>
                           {ioc.type}
                         </span>
                       </td>
@@ -443,13 +443,13 @@ export default function IntelFeed() {
               <button key={id} onClick={() => setTab(id)}
                       className="px-4 py-1.5 transition-all"
                       style={tab === id
-                        ? { background: id === 'misp' ? 'rgba(167,139,250,0.15)' : 'rgba(34,211,238,0.1)',
-                            color: id === 'misp' ? '#a78bfa' : '#22d3ee' }
-                        : { color: '#475569' }}>
+                        ? { background: id === 'misp' ? 'rgba(147,169,84,0.15)' : 'rgba(212,189,85,0.1)',
+                            color: id === 'misp' ? '#93a954' : '#d4bd55' }
+                        : { color: '#5f6646' }}>
                 {label}
                 {id === 'misp' && (
                   <span className="ml-1.5 text-[9px] font-bold px-1 py-0.5 rounded"
-                        style={{ background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}>
+                        style={{ background: 'rgba(147,169,84,0.15)', color: '#93a954' }}>
                     LIVE
                   </span>
                 )}
@@ -479,7 +479,7 @@ export default function IntelFeed() {
               <div className="p-2 space-y-0.5">
                 <button onClick={() => setActiveSource('all')}
                         className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all"
-                        style={activeSource === 'all' ? { background: 'rgba(255,255,255,0.08)', color: '#e2e8f0' } : { color: '#475569' }}>
+                        style={activeSource === 'all' ? { background: 'rgba(255,255,255,0.08)', color: '#d8d4b6' } : { color: '#5f6646' }}>
                   <span>Todas</span><span className="font-mono text-[10px]">{feed.length}</span>
                 </button>
                 {SOURCES.map(s => {
@@ -489,7 +489,7 @@ export default function IntelFeed() {
                   return (
                     <button key={s} onClick={() => setActiveSource(s)}
                             className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all"
-                            style={activeSource === s ? { background: st.bg, color: st.color } : { color: '#475569' }}>
+                            style={activeSource === s ? { background: st.bg, color: st.color } : { color: '#5f6646' }}>
                       <span>{s}</span><span className="font-mono text-[10px]">{count}</span>
                     </button>
                   )
@@ -506,8 +506,8 @@ export default function IntelFeed() {
                           className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all capitalize"
                           style={activeSev === sev
                             ? { background: sev === 'all' ? 'rgba(255,255,255,0.08)' : `${SEVERITY_COLOR[sev]}18`,
-                                color: sev === 'all' ? '#e2e8f0' : SEVERITY_COLOR[sev] }
-                            : { color: '#475569' }}>
+                                color: sev === 'all' ? '#d8d4b6' : SEVERITY_COLOR[sev] }
+                            : { color: '#5f6646' }}>
                     <span>{sev}</span>
                     <span className="font-mono text-[10px]">
                       {sev === 'all' ? feed.length : feed.filter(e => e.severity === sev).length}
@@ -530,12 +530,12 @@ export default function IntelFeed() {
                 <div key={`${entry.id}-${i}`}
                      className="flex items-start gap-3 px-4 py-3.5 hover:bg-white/[0.02] transition-colors">
                   <div className="w-0.5 self-stretch rounded-full shrink-0 mt-0.5"
-                       style={{ background: SEVERITY_COLOR[entry.severity] ?? '#475569', opacity: 0.7 }} />
+                       style={{ background: SEVERITY_COLOR[entry.severity] ?? '#5f6646', opacity: 0.7 }} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start gap-2 flex-wrap">
                       <SourceTag source={entry.source} />
                       <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded shrink-0"
-                            style={{ background: 'rgba(255,255,255,0.05)', color: '#64748b' }}>
+                            style={{ background: 'rgba(255,255,255,0.05)', color: '#7f8360' }}>
                         {entry.type}
                       </span>
                       <SevBadge sev={entry.severity} />

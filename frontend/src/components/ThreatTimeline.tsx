@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
 const glass = {
-  background: 'rgba(15,23,42,0.55)',
+  background: 'rgba(26,31,19,0.55)',
   backdropFilter: 'blur(16px)',
   border: '1px solid rgba(255,255,255,0.07)',
   borderRadius: 12,
@@ -39,13 +39,13 @@ const SEVERITY_COLOR: Record<string, string> = {
   high:     '#f97316',
   medium:   '#facc15',
   low:      '#4ade80',
-  info:     '#22d3ee',
+  info:     '#d4bd55',
 }
 
 const KILL_CHAIN = [
   { phase: 'Reconnaissance',   color: '#818cf8', id: 'recon' },
-  { phase: 'Weaponization',    color: '#a78bfa', id: 'weapon' },
-  { phase: 'Delivery',         color: '#c084fc', id: 'delivery' },
+  { phase: 'Weaponization',    color: '#93a954', id: 'weapon' },
+  { phase: 'Delivery',         color: '#aec174', id: 'delivery' },
   { phase: 'Exploitation',     color: '#ef4444', id: 'exploit' },
   { phase: 'Installation',     color: '#f97316', id: 'install' },
   { phase: 'C2',               color: '#facc15', id: 'c2' },
@@ -140,7 +140,7 @@ export default function ThreatTimeline() {
             {today} · {filtered.length} de {events.length} eventos
             {liveCount > 0 && (
               <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold"
-                    style={{ background: 'rgba(34,211,238,0.12)', color: '#22d3ee' }}>
+                    style={{ background: 'rgba(212,189,85,0.12)', color: '#d4bd55' }}>
                 {liveCount} live IOAs
               </span>
             )}
@@ -156,8 +156,8 @@ export default function ThreatTimeline() {
                       className="px-2.5 py-1 text-xs transition-all capitalize"
                       style={showOrigin === o ? {
                         background: 'rgba(255,255,255,0.08)',
-                        color: '#e2e8f0',
-                      } : { color: '#475569' }}>
+                        color: '#d8d4b6',
+                      } : { color: '#5f6646' }}>
                 {o === 'all' ? 'Todos' : o === 'live' ? 'Live IOA' : 'Simulación'}
               </button>
             ))}
@@ -170,11 +170,11 @@ export default function ThreatTimeline() {
                     style={filter === f ? {
                       background: SEVERITY_COLOR[f] ? `${SEVERITY_COLOR[f]}22` : 'rgba(255,255,255,0.08)',
                       border: `1px solid ${SEVERITY_COLOR[f] ?? 'rgba(255,255,255,0.2)'}`,
-                      color: SEVERITY_COLOR[f] ?? '#e2e8f0',
+                      color: SEVERITY_COLOR[f] ?? '#d8d4b6',
                     } : {
                       background: 'rgba(255,255,255,0.03)',
                       border: '1px solid rgba(255,255,255,0.07)',
-                      color: '#475569',
+                      color: '#5f6646',
                     }}>
               {f}
             </button>
@@ -245,7 +245,7 @@ export default function ThreatTimeline() {
             </div>
           )}
           {filtered.map((e, i) => {
-            const phaseColor = KILL_CHAIN.find(k => k.phase === e.phase)?.color ?? '#64748b'
+            const phaseColor = KILL_CHAIN.find(k => k.phase === e.phase)?.color ?? '#7f8360'
             const isExpanded = expanded === i
             return (
               <div key={i}
@@ -257,7 +257,7 @@ export default function ThreatTimeline() {
                     <span className="font-mono text-xs text-slate-600">{e.time}</span>
                     {e.origin === 'live' && (
                       <span className="text-[8px] font-bold px-1 py-0.5 rounded text-center"
-                            style={{ background: 'rgba(34,211,238,0.1)', color: '#22d3ee' }}>
+                            style={{ background: 'rgba(212,189,85,0.1)', color: '#d4bd55' }}>
                         LIVE
                       </span>
                     )}

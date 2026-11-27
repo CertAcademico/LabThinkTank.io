@@ -40,7 +40,14 @@ def open_signup_until() -> Optional[datetime]:
     return until
 
 
+def open_domains_always() -> bool:
+    """OPEN_SIGNUP=true: el registro acepta cualquier dominio de correo, sin fecha límite."""
+    return os.getenv("OPEN_SIGNUP", "").strip().lower() in ("1", "true", "yes")
+
+
 def open_domains_active() -> bool:
+    if open_domains_always():
+        return True
     until = open_signup_until()
     return bool(until and datetime.now(timezone.utc) < until)
 

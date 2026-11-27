@@ -22,7 +22,8 @@ export function DomainChips({ id }: { id: number }) {
 }
 
 /** Ficha táctica del reto: dominio, metodologías, actores, PIR y dossier del dataset. */
-export default function MissionBriefing({ id, onTeacherDeck }: { id: number; onTeacherDeck?: () => void }) {
+export default function MissionBriefing({ id, onTeacherDeck, deckLabel = '🎓 Presentación docente' }:
+  { id: number; onTeacherDeck?: () => void; deckLabel?: string }) {
   const b = BRIEFINGS[id]
   const [tab, setTab] = useState<'mision' | 'metodo' | 'dataset'>('mision')
   if (!b) return null
@@ -41,7 +42,7 @@ export default function MissionBriefing({ id, onTeacherDeck }: { id: number; onT
         {onTeacherDeck && (
           <button onClick={onTeacherDeck} className="rounded-lg px-3 py-1.5 text-[11px] font-semibold"
                   style={{ background: 'rgba(212,189,85,0.15)', border: '1px solid rgba(212,189,85,0.45)', color: '#e0cf74' }}>
-            🎓 Presentación docente
+            {deckLabel}
           </button>
         )}
       </div>

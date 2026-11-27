@@ -460,6 +460,14 @@ def auth_change_password(payload: dict = Body(...), authorization: str = Header(
     return {"ok": True}
 
 
+@app.get("/admin/orion/answers/{challenge_id}")
+def admin_orion_answers(challenge_id: int, authorization: str = Header(None)):
+    """Respuestas esperadas de un reto ORION: solo admin (no viajan en el bundle del frontend)."""
+    _require_admin(authorization)
+    from orion_answers import ORION_ANSWERS
+    return {"challenge_id": challenge_id, "expected": ORION_ANSWERS.get(challenge_id, [])}
+
+
 @app.post("/live/ticket")
 def live_ticket(authorization: str = Header(None)):
     """Ticket de 60 s para abrir /live/feed sin exponer el token de sesión en la URL."""

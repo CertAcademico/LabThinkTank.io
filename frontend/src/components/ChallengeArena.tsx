@@ -609,9 +609,11 @@ if not uploaded_df.empty:
       </div>
 
       {getBriefing(challenge.id) && (
-        <MissionBriefing id={challenge.id} onTeacherDeck={user?.role === 'admin' ? () => setShowDeck(true) : undefined} />
+        <MissionBriefing id={challenge.id} onTeacherDeck={() => setShowDeck(true)}
+                         deckLabel={user?.role === 'admin' ? '🎓 Presentación docente' : '🎓 Ver presentación del reto'} />
       )}
-      {showDeck && <TeacherDeck retoId={challenge.id} title={challenge.title} criteria={challenge.criteria} onClose={() => setShowDeck(false)} />}
+      {showDeck && <TeacherDeck retoId={challenge.id} title={challenge.title} criteria={challenge.criteria}
+                                audience={user?.role === 'admin' ? 'docente' : 'estudiante'} onClose={() => setShowDeck(false)} />}
 
       {teacherNotes.length > 0 && (
         <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(250,204,21,0.07)', border: '1px solid rgba(250,204,21,0.4)' }}>

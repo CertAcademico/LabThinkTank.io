@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useAuth } from '../contexts/AuthContext'
 import { BRIEFINGS, DOMAINS, METHODS, ORION_INTRO, PHASES } from '../data/orionBriefings'
 import OrionLogo, { GotecLogo } from './OrionLogo'
 
 const GOLD = '#d4bd55'
+const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
-interface Slide { kicker: string; title: string; body: ReactNode; teacherOnly?: boolean }
+export type DeckAudience = 'docente' | 'estudiante'
+
+interface Slide { kicker: string; title: string; body: ReactNode; teacherOnly?: boolean; docenteOnly?: boolean }
 
 const List = ({ items }: { items: ReactNode[] }) => (
   <ul className="space-y-4 text-xl md:text-2xl text-slate-200 leading-snug">
@@ -15,7 +19,7 @@ const List = ({ items }: { items: ReactNode[] }) => (
   </ul>
 )
 
-function buildSlides(retoId: number | undefined, title: string, criteria: string): Slide[] {
+function buildSlides(retoId: number | undefined, title: string, criteria: string, expected: string[] | null): Slide[] {
   if (retoId == null || !BRIEFINGS[retoId]) {
     return ORION_INTRO.map((s, i) => ({
       kicker: `Programa ORION · ${i + 1}/${ORION_INTRO.length}`, title: s.title,
@@ -88,7 +92,7 @@ function buildSlides(retoId: number | undefined, title: string, criteria: string
           <List items={b.dataset.lookFor} />
         </div>
       ) },
-    { kicker: 'Conducción de la clase', title: `Guion de la sesión · ${total} min`,
+    { kicker: 'Conducción de la clase', title: `Guion de la sesión · ${total} min`, docenteOnly: true,
       body: (
         <div className="space-y-5">
           {b.teacher.flow.map((f, i) => (
@@ -103,8 +107,8 @@ function buildSlides(retoId: number | undefined, title: string, criteria: string
         </div>
       ) },
     { kicker: 'Discusión guiada', title: 'Preguntas para el grupo', body: <List items={b.teacher.questions} /> },
-    { kicker: 'Solo docente', title: 'Respuestas esperadas', teacherOnly: true,
-      body: <><List items={b.teacher.expected} /><p className="text-base text-slate-500 mt-6">Calculadas sobre el dataset real de la plataforma. No proyectar ante el grupo antes de la entrega.</p></> },
+    { kicker: 'Solo docente', title: 'Respuestas esperadas', teacherOnly: true, docenteOnly: true,
+      body: <><List items={expected ?? ['Cargando…']} /><p className="text-base text-slate-500 mt-6">Calculadas sobre el dataset real de la plataforma. No proyectar ante el grupo antes de la entrega.</p></> },
     { kicker: 'Evaluación', title: 'Errores comunes y criterios',
       body: (
         <div className="grid gap-6 md:grid-cols-2">
@@ -117,10 +121,25 @@ function buildSlides(retoId: number | undefined, title: string, criteria: string
   ]
 }
 
-/** Presentación a pantalla completa para el docente. Sin retoId muestra la introducción general del programa. */
-export default function TeacherDeck({ retoId, title = '', criteria = '', onClose }:
-  { retoId?: number; title?: string; criteria?: string; onClose: () => void }) {
-  const slides = useMemo(() => buildSlides(retoId, title, criteria), [retoId, title, criteria])
+/** Presentación a pantalla completa. Sin retoId muestra la introducción general del programa.
+ *  audience 'docente': incluye guion de clase y respuestas esperadas (pedidas al backend, solo admin).
+ *  audience 'estudiante': mismo contenido del tema, sin guion ni respuestas. */
+export default function TeacherDeck({ retoId, title = '', criteria = '', audience = 'docente', onClose }:
+  { retoId?: number; title?: string; criteria?: string; audience?: DeckAudience; onClose: () => void }) {
+  const { token } = useAuth()
+  const [expected, setExpected] = useState<string[] | null>(null)
+  useEffect(() => {
+    if (audience !== 'docente' || retoId == null) return
+    let alive = true
+    fetch(`${API}/admin/orion/answers/${retoId}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : { expected: ['No disponible'] }))
+      .then(d => { if (alive) setExpected(d.expected?.length ? d.expected : ['Sin respuestas registradas']) })
+      .catch(() => { if (alive) setExpected(['No se pudieron cargar las respuestas']) })
+    return () => { alive = false }
+  }, [audience, retoId, token])
+  const slides = useMemo(
+    () => buildSlides(retoId, title, criteria, expected).filter(sl => audience === 'docente' || !sl.docenteOnly),
+    [retoId, title, criteria, expected, audience])
   const [i, setI] = useState(0)
   const [hideAnswers, setHideAnswers] = useState(true)
   const s = slides[i]
@@ -148,7 +167,9 @@ export default function TeacherDeck({ retoId, title = '', criteria = '', onClose
       <div className="flex items-center gap-3 px-6 py-3 border-b" style={{ borderColor: 'rgba(212,189,85,0.2)' }}>
         <OrionLogo size={34} />
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold tracking-[0.25em]" style={{ color: GOLD }}>ORION · CCOCI</p>
+          <p className="text-xs font-bold tracking-[0.25em]" style={{ color: GOLD }}>
+            ORION · CCOCI · {audience === 'docente' ? 'PRESENTACIÓN DOCENTE' : 'PRESENTACIÓN DEL RETO'}
+          </p>
           <p className="text-[11px] text-slate-500 truncate">{s.kicker}</p>
         </div>
         <GotecLogo height={28} />

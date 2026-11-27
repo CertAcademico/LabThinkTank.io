@@ -2,7 +2,8 @@
  * Fichas tácticas ORION (CCOCI) para los retos 1–10.
  * - Presentación al estudiante: dominio, metodologías, actores, escenario, PIR y dossier del dataset.
  * - Presentación docente: tema, conceptos, guion de clase, preguntas, respuestas esperadas y errores comunes.
- * Las "respuestas esperadas" se calcularon sobre los datasets reales de la plataforma.
+ * Las respuestas esperadas NO están aquí (este archivo llega al navegador de los estudiantes):
+ * las sirve el backend solo al admin en GET /admin/orion/answers/{id} (backend/orion_answers.py).
  */
 
 export type Domain = 'ciberdefensa' | 'ciberinteligencia' | 'actores'
@@ -57,7 +58,6 @@ export interface TeacherNotes {
   concepts: { t: string; d: string }[]
   flow: { min: number; step: string }[]
   questions: string[]
-  expected: string[]
   errors: string[]
 }
 
@@ -144,12 +144,6 @@ export const BRIEFINGS: Record<number, Briefing> = {
         '¿Por qué la atribución del sensor no basta para afirmar que es APT28?',
         'Si solo pudiera bloquear una cosa, ¿qué bloquearía y por qué?',
       ],
-      expected: [
-        'C2 entrante: 185.220.101.47 (RU) hacia 10.0.0.24 por 443; intento por 4444 bloqueado.',
-        'Paciente cero: 10.0.0.24 (recibe C2 y luego pivota por SMB, SSH, RDP y WinRM).',
-        'Exfiltración (T1041) hacia 91.108.4.11 (NL): 2 429 440 bytes (~2,3 MB) desde 10.0.0.31 y 10.0.0.100.',
-        'Ventana de la intrusión: 02:14:33 → 02:50:00 (≈36 min).',
-      ],
       errors: [
         'Contar 8.8.8.8 como C2.',
         'Sumar todos los bytes en lugar de solo los eventos de exfiltración.',
@@ -209,12 +203,6 @@ export const BRIEFINGS: Record<number, Briefing> = {
         '¿Qué evento debió activar la alarma más temprana?',
         '¿Por qué atacar BACKUP-SRV antes de cifrar?',
       ],
-      expected: [
-        'Paciente cero: WEB-SRV-01, phishing con enlace (T1566.002) a las 08:12:00.',
-        'Ruta: WEB-SRV-01 → DC-01 (PrintNightmare T1068, LSASS T1003.001) → FILE-SRV-02 (Pass-the-Hash T1550.002) → BACKUP-SRV (T1490).',
-        'Exfiltración por SFTP (T1048) a las 10:15, antes del cifrado (10:45).',
-        'Tiempo total intrusión → cifrado del DC: 2 h 48 min (08:12 → 11:00).',
-      ],
       errors: [
         'Confundir la fecha del cifrado con la de la intrusión.',
         'Recomendaciones genéricas ("tener antivirus") sin vincularlas a una técnica concreta.',
@@ -273,11 +261,6 @@ export const BRIEFINGS: Record<number, Briefing> = {
         '¿Qué feature confiarían a un sensor en producción y cuál no?',
         '¿Qué dominios comparten IP y qué dice eso del actor?',
       ],
-      expected: [
-        'FIN7 es el actor con más dominios (5); APT29 y Lazarus con 3 cada uno.',
-        'secure-paypal-login.info se aloja en 91.108.4.11, la misma IP de exfiltración del Reto 01.',
-        'Features más útiles esperadas: TLD sospechoso, palabras clave de urgencia y antigüedad del registro.',
-      ],
       errors: [
         'Reportar accuracy sin precision/recall.',
         'No declarar cómo se generó la clase legítima.',
@@ -334,11 +317,6 @@ export const BRIEFINGS: Record<number, Briefing> = {
         '¿Qué IOC descartaría aunque sea "critical"?',
         '¿Qué indicador también aparece en otros retos?',
       ],
-      expected: [
-        '15 IOC: 6 IP, 6 dominios, 3 hashes; 6 critical, 6 high, 2 medium, 1 low.',
-        'RU concentra la infraestructura (5 IOC).',
-        '185.220.101.47 (APT28, critical, 95) debe estar en el top: es el C2 del Reto 01.',
-      ],
       errors: ['Ordenar severity como texto.', 'No explicar la fórmula del puntaje.'],
     },
   },
@@ -388,11 +366,6 @@ export const BRIEFINGS: Record<number, Briefing> = {
         { min: 10, step: 'Conclusión: ¿qué capacidad amenaza más a la unidad?' },
       ],
       questions: ['¿Qué IP conecta familias distintas?', '¿Qué familia elegiría para una regla YARA y por qué?', '¿Qué capacidad cambia la prioridad de respuesta?'],
-      expected: [
-        'Familias: AgentTesla 3, Emotet 2, Cobalt Strike 2, LockBit 2, Mimikatz 1.',
-        'C2 únicos: 185.220.101.47, 91.108.4.11, 203.0.113.45, 198.51.100.22.',
-        '203.0.113.45 es compartida por Emotet y el dropper de LockBit; 185.220.101.47 ya apareció como C2 de APT28 (Reto 01).',
-      ],
       errors: ['Contar técnicas sin separar la lista.', 'Atribuir AgentTesla a un único actor estatal.'],
     },
   },
@@ -441,11 +414,6 @@ export const BRIEFINGS: Record<number, Briefing> = {
         { min: 15, step: 'Exposición del reporte técnico y defensa de las reglas YARA.' },
       ],
       questions: ['¿Qué features eliminaron por fuga de información?', '¿Qué familias confunde el modelo y por qué tiene sentido?', '¿Su regla YARA detectaría una variante nueva?'],
-      expected: [
-        'Clases desbalanceadas: AgentTesla 3 vs. Mimikatz 1.',
-        'Cobalt Strike y Emotet comparten conducta de movimiento/propagación; es esperable que se confundan.',
-        'Strings YARA razonables: update-microsoft-cdn.com, office365-auth.xyz, extensión .lockbit3.',
-      ],
       errors: ['Usar los hashes como features.', 'Presentar 100 % de accuracy sin advertir el tamaño de muestra.'],
     },
   },
@@ -494,10 +462,6 @@ export const BRIEFINGS: Record<number, Briefing> = {
         { min: 10, step: 'Lectura del reporte ejecutivo.' },
       ],
       questions: ['¿Qué actor es el más conectado de la red?', '¿Qué evidencia necesitaría para afirmar que dos actores cooperan?', '¿Cómo cambia su top 10 si sube el peso de confidence?'],
-      expected: [
-        'T1566.002, T1486 y T1204.002 aparecen 2 veces cada una: enlazan actores distintos por conducta.',
-        'Pivote cruzado: 185.220.101.47 vincula APT28 (Reto 01/04) con AgentTesla (Reto 05).',
-      ],
       errors: ['Concluir colaboración entre actores solo por compartir IP.', 'Red ilegible sin colores por tipo de nodo.'],
     },
   },
@@ -545,10 +509,6 @@ export const BRIEFINGS: Record<number, Briefing> = {
         { min: 10, step: 'Cada equipo "despliega" una regla y la defiende ante el grupo.' },
       ],
       questions: ['¿Qué técnica detectarían primero y por qué?', '¿Qué telemetría falta en la unidad para esas reglas?', '¿Qué técnicas compartidas generan riesgo de atribución errónea?'],
-      expected: [
-        'Initial Access y Defense Evasion concentran 3 técnicas cada una.',
-        'APT28 es el grupo con más técnicas en la muestra (3).',
-      ],
       errors: ['Reglas Sigma sin logsource.', 'Heatmap sin conclusión operativa.'],
     },
   },
@@ -595,11 +555,6 @@ export const BRIEFINGS: Record<number, Briefing> = {
         { min: 10, step: 'Comparar modelos y discutir la clase que más se confunde.' },
       ],
       questions: ['¿Su modelo supera al clasificador trivial "todo es botnet"?', '¿Qué familia es más fácil de reconocer y por qué?', '¿Usar dst_port como feature es trampa?'],
-      expected: [
-        '12 flujos Botnet (Neris 6, Rbot 4, Virut 2) y 3 benignos.',
-        'Neris usa 6667/TCP (IRC), además de 53 y 80; Rbot usa 443 y 4444; Virut usa 1032.',
-        'Cada familia muestra un par "beacon corto + sesión larga" (p. ej. Neris 80/TCP: 64 B → 420 000 B en 600 s).',
-      ],
       errors: ['Reportar accuracy del 80 % como éxito.', 'Dividir por packets sin manejar ceros.'],
     },
   },
@@ -646,11 +601,6 @@ export const BRIEFINGS: Record<number, Briefing> = {
         { min: 15, step: 'Briefing al "comandante" (docente) con recomendación única.' },
       ],
       questions: ['¿Prioriza por número de víctimas o por rescate exigido?', '¿Qué controles del Reto 02 aplican a este grupo?', '¿Qué limita la confianza en estos datos?'],
-      expected: [
-        'LockBit 3.0 es el grupo con más víctimas (3; 1,48 M USD en total).',
-        'Mayor rescate individual: Trigona, Energy (FR), 4 M USD; BlackCat suma 2,2 M en 2 víctimas.',
-        'Ventana analizada: 1–20 de marzo de 2024, ~1 publicación cada 1,7 días.',
-      ],
       errors: ['Concluir tendencias sectoriales con una víctima por sector.', 'Recomendaciones sin vincular a TTP.'],
     },
   },

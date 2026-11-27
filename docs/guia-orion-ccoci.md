@@ -31,7 +31,7 @@ Esta guía orienta a los integrantes del **grupo ORION** en el uso del **SandBox
 1. Abre la dirección de la plataforma y pulsa **Registrarse**.
 2. Escribe tu **nombre completo** y tu **correo electrónico**.
 3. En **Grupo**, verifica que esté seleccionado **ORION**.
-4. Crea una **contraseña de al menos 8 caracteres** y confírmala.
+4. Crea una **contraseña de al menos 10 caracteres que combine letras y números** (no puede contener tu usuario de correo) y confírmala. Puedes cambiarla después con **🔑 Cambiar contraseña**, en el menú lateral.
 5. Pulsa **Crear cuenta →** y luego inicia sesión con tu correo y tu contraseña.
 
 Al registrarte en ORION recibes automáticamente los **10 retos tácticos** del grupo y el acceso al **Canal del grupo**.

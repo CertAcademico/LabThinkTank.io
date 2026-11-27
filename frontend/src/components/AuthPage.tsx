@@ -235,8 +235,8 @@ export default function AuthPage() {
               </div>
 
               <Field label="Contraseña" type="password" value={password} onChange={setPassword}
-                     placeholder="Mínimo 8 caracteres"
-                     hint={mode === 'register' ? 'Mínimo 8 caracteres' : undefined} />
+                     placeholder={mode === 'register' ? 'Mínimo 10, con letras y números' : 'Tu contraseña'}
+                     hint={mode === 'register' ? 'Mínimo 10 caracteres, con letras y números' : undefined} />
 
               {mode === 'register' && (
                 <Field label="Confirmar contraseña" type="password" value={confirm} onChange={setConfirm}

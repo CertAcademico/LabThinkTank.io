@@ -37,7 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
 from db import init_db, get_conn
-from auth import register, login, verify_token, ensure_admin, domain_allowed, open_domains_active, open_signup_until, ALLOWED_DOMAIN
+from auth import register, login, verify_token, ensure_admin, change_password, create_stream_ticket, verify_stream_ticket, domain_allowed, open_domains_active, open_signup_until, ALLOWED_DOMAIN
 import grading
 import hints as hints_mod
 from intelligence.threat_engine import get_threat_feed, add_uploaded_iocs
@@ -445,7 +445,26 @@ def auth_login(payload: dict = Body(...)):
         )
         return {"token": token}
     except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        code = 429 if "Demasiados intentos" in str(e) else 401
+        raise HTTPException(status_code=code, detail=str(e))
+
+
+@app.post("/auth/change-password")
+def auth_change_password(payload: dict = Body(...), authorization: str = Header(None)):
+    """Cambio de contraseña del propio usuario. Invalida todas sus sesiones abiertas."""
+    user = _require_user(authorization)
+    try:
+        change_password(user["email"], payload.get("current", ""), payload.get("new", ""))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True}
+
+
+@app.post("/live/ticket")
+def live_ticket(authorization: str = Header(None)):
+    """Ticket de 60 s para abrir /live/feed sin exponer el token de sesión en la URL."""
+    user = _require_user(authorization)
+    return {"ticket": create_stream_ticket(user["email"])}
 
 
 @app.get("/auth/signup-policy")
@@ -3995,8 +4014,8 @@ async def live_feed(request: Request):
     The first batch of events replays the last 100 from history so
     freshly-connected clients are not starting cold.
     """
-    token = request.query_params.get("token", "")
-    if not verify_token(token):
+    ticket = request.query_params.get("ticket", "")
+    if not verify_stream_ticket(ticket):
         raise HTTPException(status_code=401, detail="No autenticado")
     queue = live_service.subscribe()
 

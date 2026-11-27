@@ -273,6 +273,9 @@ def _migrate(conn) -> None:
     user_cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
     if "password_expires_at" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN password_expires_at TEXT")
+    if "tokens_valid_after" not in user_cols:
+        # Epoch (s): tokens emitidos antes se rechazan (cambio de clave / cierre de sesiones).
+        conn.execute("ALTER TABLE users ADD COLUMN tokens_valid_after INTEGER")
 
     cols = {r[1] for r in conn.execute("PRAGMA table_info(challenges)").fetchall()}
     if "badge_id" not in cols:

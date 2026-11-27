@@ -7,6 +7,7 @@ import GroupOverviewTab from './GroupOverviewTab'
 import { useAuth } from '../contexts/AuthContext'
 import { BadgeCard, TIER, type Badge } from './BadgeCard'
 import { GotecLogo } from './OrionLogo'
+import ChangePasswordButton from './ChangePassword'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -2700,6 +2701,7 @@ export default function AdminPanel({ onExitAdmin }: { onExitAdmin: () => void })
               Salir
             </button>
           </div>
+          <ChangePasswordButton className="w-full" />
         </div>
       </aside>
 

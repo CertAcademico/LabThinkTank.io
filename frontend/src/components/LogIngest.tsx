@@ -419,17 +419,35 @@ export default function LogIngest() {
 
   useEffect(() => {
     if (!token) return
-    const es = new EventSource(`${API}/live/feed?token=${encodeURIComponent(token)}`)
-    eventSourceRef.current = es
-    es.onopen = () => setLiveConnected(true)
-    es.onmessage = (e) => {
+    // El token de sesión nunca va en la URL (quedaría en los logs): se pide un ticket de 60 s por conexión.
+    let alive = true
+    let retry: ReturnType<typeof setTimeout> | undefined
+    const connect = async () => {
       try {
-        const ev: LiveEvent = JSON.parse(e.data)
-        setLiveEvents(prev => [ev, ...prev].slice(0, 200))
-      } catch { /* ignore parse errors */ }
+        const r = await fetch(`${API}/live/ticket`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+        if (!r.ok || !alive) return
+        const { ticket } = await r.json()
+        const es = new EventSource(`${API}/live/feed?ticket=${encodeURIComponent(ticket)}`)
+        eventSourceRef.current = es
+        es.onopen = () => setLiveConnected(true)
+        es.onmessage = (e) => {
+          try {
+            const ev: LiveEvent = JSON.parse(e.data)
+            setLiveEvents(prev => [ev, ...prev].slice(0, 200))
+          } catch { /* ignore parse errors */ }
+        }
+        es.onerror = () => {
+          // el ticket ya caducó: cerrar y reconectar con uno nuevo
+          setLiveConnected(false)
+          es.close()
+          if (alive) retry = setTimeout(connect, 5000)
+        }
+      } catch {
+        if (alive) retry = setTimeout(connect, 10000)
+      }
     }
-    es.onerror = () => { setLiveConnected(false) }
-    return () => { es.close() }
+    connect()
+    return () => { alive = false; clearTimeout(retry); eventSourceRef.current?.close() }
   }, [token])
 
   // ── Live format detection ────────────────────────────────────────────────────

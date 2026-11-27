@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { BadgeRow, type Badge } from './components/BadgeCard'
 import IOCSearch from './components/IOCSearch'
 import { GotecLogo } from './components/OrionLogo'
+import ChangePasswordButton from './components/ChangePassword'
 
 // Tras un despliegue, una pestaña abierta puede pedir pantallas (chunks) que ya no existen y quedaría en blanco.
 // Si pasa, recargamos una sola vez para traer la versión nueva.
@@ -242,6 +243,7 @@ function Shell() {
                   Salir
                 </button>
               </div>
+              <ChangePasswordButton className="w-full" />
               {isAdmin && (
                 <button onClick={() => setAdminMode(true)}
                         className="w-full text-[10px] font-bold py-1.5 rounded-lg transition-all"

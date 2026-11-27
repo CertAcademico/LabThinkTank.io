@@ -14,7 +14,7 @@
     }
   ],
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://name-feels-wishes-fall.trycloudflare.com/api/:path*" },
+    { "source": "/api/:path*", "destination": "https://aside-infinite-keyword-essential.trycloudflare.com/api/:path*" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

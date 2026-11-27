@@ -226,6 +226,14 @@ Resuélvelos en orden: la dificultad crece de **básico** a **avanzado**. En los
 | **III. Comportamiento adversario** | 07, 08 | Correlación de fuentes, TTP y detección |
 | **IV. Analítica avanzada** | 03, 06, 09 | Machine Learning aplicado a CTI |
 
+En **Mis Retos** los retos aparecen ordenados por estas fases. Cada uno trae su ficha táctica (misión, metodología y dossier del dataset), la presentación del reto, pistas en 5 niveles, el asistente y el canal con el instructor.
+
+### Escalafón e insignias militares
+
+- **Grado:** se sube un grado por cada reto aprobado (50/100 o más): Recluta → Soldado → Cabo Tercero → Cabo Segundo → Sargento Segundo → Sargento Viceprimero → Subteniente → Teniente → Capitán → Mayor → Coronel.
+- **Distintivo del reto:** cada reto otorga un distintivo con el nombre de su operación (por ejemplo, Distintivo «Oso de Fuego» en el Reto 01) al alcanzar la nota indicada en su tarjeta (entre 70 y 85 puntos).
+- Puedes volver a entregar un reto para subir tu nota, tu grado y ganar el distintivo.
+
 ---
 
 ## 7. Canal del grupo ORION (chat con el instructor)

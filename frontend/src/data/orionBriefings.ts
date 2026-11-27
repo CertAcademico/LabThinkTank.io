@@ -623,3 +623,27 @@ export const ORION_INTRO = [
 ]
 
 export function getBriefing(id: number): Briefing | undefined { return BRIEFINGS[id] }
+
+// ── Insignias militares ORION ────────────────────────────────────────────────
+
+/** Escalafón: un grado por cada reto aprobado (≥ 50). Del 1 al 5 suboficiales (galones), del 6 al 10 oficiales (estrellas). */
+export const RANKS = [
+  'Recluta', 'Soldado', 'Cabo Tercero', 'Cabo Segundo', 'Sargento Segundo', 'Sargento Viceprimero',
+  'Subteniente', 'Teniente', 'Capitán', 'Mayor', 'Coronel',
+]
+export const PASS_SCORE = 50
+
+/** Orden de la ruta táctica (fases I→IV). */
+export const ROUTE: { phase: 1 | 2 | 3 | 4; ids: number[] }[] = [
+  { phase: 1, ids: [1, 4] }, { phase: 2, ids: [2, 5, 10] }, { phase: 3, ids: [7, 8] }, { phase: 4, ids: [3, 6, 9] },
+]
+
+export const PHASE_COLOR: Record<number, string> = { 1: '#a3b86c', 2: '#d4bd55', 3: '#e08a3c', 4: '#c9d1d9' }
+
+/** Distintivo del reto: nombre derivado de la operación (OP. OSO DE FUEGO → Distintivo «Oso de Fuego»). */
+export function distintivoName(id: number): string {
+  const b = BRIEFINGS[id]
+  if (!b) return ''
+  const op = b.codename.replace(/^OP\.\s*/, '').toLowerCase().replace(/(^|\s)\S/g, m => m.toUpperCase())
+  return `Distintivo «${op.replace(/\bDe\b/g, 'de')}»`
+}

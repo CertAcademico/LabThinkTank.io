@@ -9,6 +9,9 @@ import TeamChat from './TeamChat'
 import MissionBriefing, { DomainChips } from './MissionBriefing'
 import { getBriefing } from '../data/orionBriefings'
 import TeacherDeck from './TeacherDeck'
+import OrionProgram from './OrionProgram'
+import { Distintivo } from './MilitaryInsignia'
+import { BRIEFINGS, distintivoName, PASS_SCORE } from '../data/orionBriefings'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -25,6 +28,7 @@ interface Challenge {
   hint_levels?: number
   case_key?: string; case_chapter?: number; case_code?: string; no_code?: boolean; learn?: Learn
   path_order?: number; path_total?: number; locked?: boolean; locked_by?: string; path_pass_score?: number
+  program?: string   // integrante de un programa de grupo (ORION): vista y distintivos militares
 }
 
 interface SolvedChallenge {
@@ -231,6 +235,12 @@ function DatasetDiagram({ schema, name }: { schema: Record<string, string>; name
 function Arena({ challenge }: { challenge: Challenge }) {
   const { token, user } = useAuth()
   const [showDeck,   setShowDeck]   = useState(false)
+  const [arenaChat,  setArenaChat]  = useState<{ id: number; name: string } | null>(null)
+  useEffect(() => {
+    if (!challenge.program || !token) return
+    fetch(`${API}/student/team-chat`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null)).then(setArenaChat).catch(() => {})
+  }, [challenge.program, token])
   const [pyodide,    setPyodide]    = useState<PyodideInterface | null>(null)
   const [initStatus, setInitStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [code,       setCode]       = useState('')
@@ -612,6 +622,15 @@ if not uploaded_df.empty:
         <MissionBriefing id={challenge.id} onTeacherDeck={() => setShowDeck(true)}
                          deckLabel={user?.role === 'admin' ? '🎓 Presentación docente' : '🎓 Ver presentación del reto'} />
       )}
+      {arenaChat && (
+        <details className="rounded-xl" open={false}>
+          <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wider px-4 py-2 rounded-xl"
+                   style={{ color: '#d4bd55', background: 'rgba(26,31,19,0.6)', border: '1px solid rgba(212,189,85,0.25)' }}>
+            💬 Preguntar al instructor (canal del grupo {arenaChat.name})
+          </summary>
+          <div className="mt-2"><TeamChat teamId={arenaChat.id} teamName={arenaChat.name} height={240} /></div>
+        </details>
+      )}
       {showDeck && <TeacherDeck retoId={challenge.id} title={challenge.title} criteria={challenge.criteria}
                                 audience={user?.role === 'admin' ? 'docente' : 'estudiante'} onClose={() => setShowDeck(false)} />}
 
@@ -980,7 +999,23 @@ if not uploaded_df.empty:
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex-1">Resultado de tu entrega</p>
               <span className="text-sm font-bold" style={{ color: grading.score >= 70 ? '#4ade80' : grading.score >= 40 ? '#facc15' : '#f87171' }}>{grading.score}/100</span>
             </div>
-            {grading.badge && (() => { const t = TIER[grading.badge.tier] ?? TIER.bronze; return (
+            {challenge.program && BRIEFINGS[challenge.id] && (() => {
+              const min = challenge.min_score_badge ?? 70
+              const won = grading.score >= min
+              return (
+                <div className="rounded-xl p-4 flex items-center gap-4" style={{ background: won ? 'rgba(212,189,85,0.1)' : 'rgba(255,255,255,0.02)', border: `1px solid ${won ? 'rgba(212,189,85,0.5)' : 'rgba(255,255,255,0.08)'}` }}>
+                  <Distintivo id={challenge.id} phase={BRIEFINGS[challenge.id].phase} earned={won} size={56} />
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: won ? '#d4bd55' : '#7f8360' }}>
+                      {won ? '¡Distintivo militar ganado!' : grading.score >= PASS_SCORE ? 'Reto aprobado · distintivo pendiente' : 'Aún no apruebas este reto'}
+                    </p>
+                    <p className="text-sm font-bold text-slate-100">{distintivoName(challenge.id)}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {won ? 'Suma a tu escalafón ORION.' : `Aprobación: ${PASS_SCORE}/100 (sube tu grado) · Distintivo: ${min}/100. Puedes volver a entregar.`}
+                    </p>
+                  </div>
+                </div>) })()}
+            {!challenge.program && grading.badge && (() => { const t = TIER[grading.badge.tier] ?? TIER.bronze; return (
               <div className="rounded-xl p-4 text-center space-y-1" style={{ background: `${t.color}14`, border: `1px solid ${t.color}88`, boxShadow: `0 0 24px ${t.glow}` }}>
                 <p className="text-3xl">🏅</p>
                 <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: t.color }}>¡Insignia de habilidad desbloqueada! · {t.label}</p>
@@ -1776,6 +1811,12 @@ export default function ChallengeArena() {
       </button>
       <Arena challenge={active} />
     </div>
+  )
+
+  const program = !isAdmin ? challenges.find(c => c.program)?.program : undefined
+  if (program) return (
+    <OrionProgram challenges={challenges} onOpen={id => { const c = challenges.find(x => x.id === id); if (c) setActive(c) }}
+                  chat={chatTeam ? <TeamChat teamId={chatTeam.id} teamName={chatTeam.name} height={260} /> : undefined} />
   )
 
   return (

@@ -1054,6 +1054,7 @@ def _assign_pair_range_challenges(conn) -> None:
         SELECT tm.team_id, tm.user_email
         FROM team_members tm JOIN users u ON u.email = tm.user_email
         WHERE u.role = 'student'
+          AND tm.team_id NOT IN (SELECT team_id FROM team_auto_assign)   -- grupos con programa propio (ORION)
         ORDER BY tm.team_id, tm.id
     """).fetchall()
     pair_index = 0

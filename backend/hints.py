@@ -28,6 +28,29 @@ def labels_for(title: str) -> list[str]:
 
 # Dos niveles intermedios por reto: el error típico y cómo comprobar el propio resultado (sin dar la respuesta).
 EXTRA: dict[str, tuple[str, str]] = {
+    # ── ORION (retos 06–10) ──
+    'Grupo Malware — Perfilado Avanzado de Familias': ("No uses md5 ni sha256 como features: cada hash es único y el modelo 'memoriza' en lugar de aprender (fuga "
+                                                       'de información). Las columnas mitre y capability traen varias técnicas separadas por coma.',
+                                                       'Con 10 muestras y 5 familias tu test tendrá 2–3 filas: una accuracy de 100 % no prueba nada. Usa '
+                                                       'validación cruzada (cross_val_score) y reporta también qué familias se confunden.'),
+    'Grupo IOC — Inteligencia y Enriquecimiento de Feeds': ("severity es texto: si ordenas directamente, 'critical' < 'high' < 'low' < 'medium'. Conviértela a "
+                                                            "número antes de calcular el score. country 'Unknown' es un dato faltante, no un país.",
+                                                            'Tu top 10 debe estar encabezado por IOC critical con confianza alta. Revisa que 185.220.101.47 (C2 '
+                                                            'de APT28 en el Reto 01) quede arriba: si no, tu fórmula subvalora severidad o confianza.'),
+    'Grupo IoA — Mapeo de TTPs y Detección de Comportamiento': ('Es una muestra de 15 relaciones grupo–técnica, no ATT&CK completo: concluye sobre la muestra. '
+                                                                'Una regla Sigma sin logsource ni condition no es una regla.',
+                                                                'En tu tabla pivote la suma de todas las celdas debe dar 15. La táctica con más técnicas debería '
+                                                                'empatar entre Initial Access y Defense Evasion; si te sale otra, revisa el agrupamiento.'),
+    'Grupo Botnet — Clasificación de Tráfico de Red': ("12 de 15 flujos son botnet: un modelo que siempre responde 'Botnet' saca 80 % de accuracy. Usa F1 y "
+                                                       'stratify en train_test_split. La columna botnet está vacía en los flujos benignos.',
+                                                       "Compara tu F1 contra el clasificador trivial (todo 'Botnet'). Si tu modelo no lo supera, tus features no "
+                                                       'aportan. bytes/packets debe calcularse protegiendo packets = 0.'),
+    'Grupo Ransomware — Inteligencia de Amenazas y Análisis de Campañas': ('Cada sector aparece una sola vez: un conteo por sector no muestra tendencia. Analiza '
+                                                                           'por grupo y por monto de rescate. url_leak es contexto: nunca se visita.',
+                                                                           'Debes encontrar 7 grupos y 12 víctimas entre el 1 y el 20 de marzo de 2024. El grupo '
+                                                                           'con más víctimas no tiene por qué ser el de mayor rescate total: compara ambas '
+                                                                           'medidas.'),
+    # ── ORION (retos 06–10) ──
     "Caza de IOCs — APT28 Fancy Bear": (
         "No cuentes las IPs internas (10.x, 192.168.x): no son C2. Y un destino con muchas filas no es necesariamente el que recibió más datos: puede ser un beacon (muchas filas, pocos bytes).",
         "Debes obtener muy pocas IPs externas (menos de 5). Si te salen decenas, estás incluyendo IPs internas. Tu total de bytes exfiltrados debe ser mucho mayor que el de cualquier fila individual.",
@@ -73,6 +96,100 @@ EXTRA_AURORA: dict[int, tuple[str, str]] = {
 }
 
 HINTS: dict[str, list[str]] = {
+    # ── ORION (retos 06–10) ──
+    'Grupo Malware — Perfilado Avanzado de Familias': ['Empieza por conocer la muestra: value_counts() de family, type y capability. Cada fila es una muestra '
+                                                       'analizada en sandbox; la etiqueta a predecir es family y los comportamientos (mitre, capability, '
+                                                       'persistence, evasion) son las pistas.',
+                                                       "Convierte las columnas multivalor en columnas binarias: str.get_dummies(sep=',') sobre mitre y "
+                                                       'capability. Entrena un RandomForest con esas features, mide con cross_val_score y visualiza con PCA (2 '
+                                                       'componentes) coloreando por familia. Para YARA conceptual, busca strings repetidos por familia (dominios '
+                                                       'C2, extensiones).',
+                                                       'from sklearn.ensemble import RandomForestClassifier\n'
+                                                       'from sklearn.model_selection import cross_val_score\n'
+                                                       'from sklearn.decomposition import PCA\n'
+                                                       'import matplotlib.pyplot as plt\n'
+                                                       'df = challenge_df.copy()\n'
+                                                       "X = pd.concat([df['mitre'].str.get_dummies(sep=','), df['capability'].str.get_dummies(sep=',')], axis=1)\n"
+                                                       "y = df['___']\n"
+                                                       'm = RandomForestClassifier(random_state=42)\n'
+                                                       "print('CV accuracy:', cross_val_score(m, X, y, cv=___).mean())\n"
+                                                       'm.fit(X, y); print(pd.Series(m.feature_importances_, X.columns).sort_values().tail(8))\n'
+                                                       'p = PCA(2).fit_transform(X)\n'
+                                                       'for fam in y.unique(): plt.scatter(p[y == fam, 0], p[y == fam, 1], label=fam)\n'
+                                                       'plt.legend(); plt.show()'],
+    'Grupo IOC — Inteligencia y Enriquecimiento de Feeds': ['Es un feed de 15 IOC con su actor, severidad y confianza. Tu trabajo es depurar (duplicados, tipos), '
+                                                            'puntuar el riesgo y descubrir qué actores quedan conectados por técnicas o infraestructura '
+                                                            'compartida.',
+                                                            'Score: mapea severity a número (critical=4 … low=1) y combínalo con confidence/100; documenta la '
+                                                            'fórmula. Correlación: agrupa por mitre y lista los actores de cada técnica; las técnicas con más de '
+                                                            'un actor son los enlaces. Red: nodos IOC y nodos actor, con una arista por fila.',
+                                                            'import matplotlib.pyplot as plt\n'
+                                                            "df = challenge_df.drop_duplicates(subset='ioc').copy()\n"
+                                                            "sev = {'critical': 4, 'high': 3, 'medium': 2, 'low': 1}\n"
+                                                            "df['score'] = df['severity'].map(___) * df['confidence'] / 100\n"
+                                                            "top = df.sort_values('score', ascending=False).head(10)\n"
+                                                            "print(top[['ioc', 'type', 'threat_actor', 'severity', 'confidence', 'score']])\n"
+                                                            "enlaces = df.groupby('mitre')['threat_actor'].unique()\n"
+                                                            'print(enlaces[enlaces.apply(len) > ___])\n'
+                                                            "df['score'].plot(kind='hist', bins=8, title='Distribución del score'); plt.show()"],
+    'Grupo IoA — Mapeo de TTPs y Detección de Comportamiento': ['Cada fila es una técnica que usa un grupo APT, con su táctica, la fuente de datos para '
+                                                                'detectarla y una guía de detección. La meta es ver dónde se concentra el comportamiento '
+                                                                'adversario y escribir detecciones para lo más relevante.',
+                                                                "Heatmap: pd.crosstab(df['tactic'], df['group']) y plt.imshow. Diversidad por grupo: nunique de "
+                                                                'technique_id. Overlap entre APT: intersección de los sets de técnicas de cada par de grupos. '
+                                                                'Reglas Sigma: usa la columna detection y data_source para el logsource; cada regla debe tener '
+                                                                'title, logsource, detection y condition.',
+                                                                'import matplotlib.pyplot as plt\n'
+                                                                'df = challenge_df\n'
+                                                                "tabla = pd.crosstab(df['___'], df['group'])\n"
+                                                                "print(tabla); print('Total relaciones:', tabla.values.sum())\n"
+                                                                "plt.imshow(tabla, cmap='YlOrBr'); plt.xticks(range(len(tabla.columns)), tabla.columns, "
+                                                                'rotation=60)\n'
+                                                                'plt.yticks(range(len(tabla.index)), tabla.index); plt.colorbar(); plt.show()\n'
+                                                                "print(df.groupby('group')['technique_id'].___().sort_values(ascending=False))\n"
+                                                                "print(df['data_source'].str.split(',').explode().value_counts())\n"
+                                                                "sigma = 'title: ___\\nlogsource:\\n  category: ___\\ndetection:\\n  sel:\\n    ___: ___\\n  "
+                                                                "condition: sel'\n"
+                                                                'print(sigma)'],
+    'Grupo Botnet — Clasificación de Tráfico de Red': ['Cada fila es un flujo de red (NetFlow) del dataset CTU-13 etiquetado como Botnet o Benign, con la familia '
+                                                       'de botnet. Busca qué hace distinto al tráfico de C2: puertos poco comunes, sesiones cortas repetidas '
+                                                       '(beacon) y sesiones largas con muchos bytes.',
+                                                       'Crea features: bytes por paquete (protege packets = 0), bytes por segundo y si el puerto es estándar. '
+                                                       'Separa con train_test_split(stratify=y) y compara RandomForest con DecisionTree usando f1_score. Analiza '
+                                                       "por familia con groupby('botnet') sobre dst_port y bytes.",
+                                                       'from sklearn.ensemble import RandomForestClassifier\n'
+                                                       'from sklearn.tree import DecisionTreeClassifier\n'
+                                                       'from sklearn.model_selection import train_test_split\n'
+                                                       'from sklearn.metrics import f1_score\n'
+                                                       'df = challenge_df.copy()\n'
+                                                       "df['botnet'] = df['botnet'].replace('', 'Benign')\n"
+                                                       "df['bpp'] = df['bytes'] / df['packets'].replace(0, ___)\n"
+                                                       "df['bps'] = df['bytes'] / df['duration'].clip(lower=0.001)\n"
+                                                       "df['std_port'] = df['dst_port'].isin([53, 80, 443]).astype(int)\n"
+                                                       "X = df[['bpp', 'bps', 'std_port', 'packets', 'duration']]; y = (df['label'] == '___').astype(int)\n"
+                                                       'Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.4, stratify=y, random_state=42)\n'
+                                                       'for m in (RandomForestClassifier(random_state=42), DecisionTreeClassifier(random_state=42)):\n'
+                                                       "    p = m.fit(Xtr, ytr).predict(Xte); print(type(m).__name__, 'F1:', f1_score(yte, p))\n"
+                                                       "print(df.groupby('botnet')[['dst_port', 'bytes']].agg(['unique', 'sum']))"],
+    'Grupo Ransomware — Inteligencia de Amenazas y Análisis de Campañas': ['Cada fila es una víctima publicada por un grupo de ransomware en su sitio de '
+                                                                           'filtración. Es inteligencia estratégica: el objetivo es decidir qué grupo vigilar, '
+                                                                           'con base en número de víctimas, montos y sectores críticos.',
+                                                                           'Cuenta víctimas y suma ransom_usd por grupo (groupby + agg). Línea temporal: '
+                                                                           'pd.to_datetime(published) y conteo por fecha. Cruza el grupo prioritario con las TTP '
+                                                                           'de LockBit del Reto 02 (T1566, T1003, T1490, T1486) para proponer controles.',
+                                                                           'import matplotlib.pyplot as plt\n'
+                                                                           'df = challenge_df.copy()\n'
+                                                                           "df['published'] = pd.to_datetime(df['published'])\n"
+                                                                           "res = df.groupby('group').agg(victimas=('victim', 'count'), rescate=('___', 'sum'))\n"
+                                                                           "print(res.sort_values('victimas', ascending=False))\n"
+                                                                           "print('Ventana:', df['published'].min().date(), '→', df['published'].max().date())\n"
+                                                                           "res['rescate'].sort_values().plot(kind='barh', title='Rescate total por grupo "
+                                                                           "(USD)'); plt.show()\n"
+                                                                           "df.set_index('published').resample('___')['victim'].count().plot(title='Víctimas por "
+                                                                           "día'); plt.show()\n"
+                                                                           "print(df[df['sector'].isin(['Healthcare', 'Energy', 'Government', "
+                                                                           "'Transportation'])][['group', 'sector', 'country']])"],
+    # ── ORION (retos 06–10) ──
     "Caza de IOCs — APT28 Fancy Bear": [
         "Trabaja solo con las filas de APT28: filtra por la columna threat_actor y usa len() para contarlas. "
         "Un 'C2' es una IP externa (que no empieza por 10. ni 192.168.) que se comunica con la red interna; "

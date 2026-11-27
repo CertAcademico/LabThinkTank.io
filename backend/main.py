@@ -1663,12 +1663,23 @@ def student_challenges(authorization: str = Header(None)):
               1 if is_admin else 0, user["email"])).fetchall()
         from db import path_status, PATH_PASS_SCORE
         pstat = path_status(conn, user["email"])
+        # Integrante de un grupo con programa propio (ORION): solo ve los retos de ese programa, a su ritmo.
+        program = None if is_admin else conn.execute("""
+            SELECT t.id, t.name FROM team_members tm JOIN teams t ON t.id = tm.team_id
+            WHERE tm.user_email = ? AND EXISTS (SELECT 1 FROM team_auto_assign a WHERE a.team_id = t.id)
+            LIMIT 1""", (user["email"],)).fetchone()
+        program_ids = {r2["challenge_id"] for r2 in conn.execute(
+            "SELECT challenge_id FROM team_auto_assign WHERE team_id = ?", (program["id"],))} if program else set()
 
     out = []
     for r in rows:
-        if not is_admin and not _is_started(r["starts_at"]):
+        if program and r["id"] not in program_ids:
+            continue
+        if not is_admin and not program and not _is_started(r["starts_at"]):
             continue
         d = dict(r)
+        if program:
+            d.update(program=program["name"], starts_at=None, deadline=None)
         if is_admin:
             d["admin_preview"] = True
         if d.get("case_key") == "aurora":
@@ -2999,12 +3010,18 @@ def admin_scoreboard(authorization: str = Header(None)):
 
 @app.get("/student/announcements")
 def student_announcements(authorization: str = Header(None)):
-    _require_user(authorization)
+    user = _require_user(authorization)
     now = _now_utc()
     with get_conn() as conn:
         rows = conn.execute("SELECT id, title, body, publish_at, expires_at FROM announcements ORDER BY publish_at DESC").fetchall()
+        # Integrantes de un programa de grupo (ORION): no heredan anuncios de cursos anteriores a su ingreso.
+        joined = conn.execute("""
+            SELECT MIN(tm.joined_at) AS j FROM team_members tm
+            WHERE tm.user_email = ? AND tm.team_id IN (SELECT team_id FROM team_auto_assign)""", (user["email"],)).fetchone()
+    since = _parse_iso(joined["j"].replace(" ", "T") + "Z") if joined and joined["j"] else None
     return [dict(r) for r in rows
-            if (_parse_iso(r["publish_at"]) or now) <= now and (not r["expires_at"] or (_parse_iso(r["expires_at"]) or now) > now)]
+            if (_parse_iso(r["publish_at"]) or now) <= now and (not r["expires_at"] or (_parse_iso(r["expires_at"]) or now) > now)
+            and not (since and (_parse_iso(r["publish_at"]) or now) < since)]
 
 
 @app.get("/admin/announcements")

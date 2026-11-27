@@ -6,6 +6,7 @@ export interface User {
   email: string
   name:  string
   role:  string
+  password_expires_at?: string | null   // presente = contraseña temporal asignada por el admin
 }
 
 interface AuthCtx {

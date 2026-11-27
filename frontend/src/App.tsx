@@ -311,6 +311,17 @@ function Shell() {
         <Suspense fallback={null}><MilestoneBar /><GlobalAnnouncements /></Suspense>
 
         <main className="flex-1 overflow-y-auto p-5">
+          {user?.password_expires_at && (
+            <div className="mb-4 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3"
+                 style={{ background: 'rgba(250,204,21,0.08)', border: '1px solid rgba(250,204,21,0.4)' }}>
+              <p className="flex-1 min-w-0 text-xs text-yellow-300">
+                🔑 Estás usando una <b>contraseña temporal</b> que vence el{' '}
+                {new Date(user.password_expires_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}.
+                Cámbiala ahora por una propia para no perder el acceso.
+              </p>
+              <ChangePasswordButton className="px-3" />
+            </div>
+          )}
           <Suspense fallback={<LoadingPanel />}>
             {renderView()}
           </Suspense>

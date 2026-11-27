@@ -590,7 +590,9 @@ def auth_me(authorization: str = Header(None)):
     user = verify_token(authorization[7:])
     if not user:
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
-    return user
+    with get_conn() as conn:
+        row = conn.execute("SELECT password_expires_at FROM users WHERE email = ?", (user["email"],)).fetchone()
+    return {**user, "password_expires_at": (row["password_expires_at"] if row else None)}
 
 
 # ── Health ────────────────────────────────────────────────────────────────────

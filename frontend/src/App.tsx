@@ -2,6 +2,7 @@ import { Suspense, lazy, useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { BadgeRow, type Badge } from './components/BadgeCard'
 import IOCSearch from './components/IOCSearch'
+import { GotecLogo } from './components/OrionLogo'
 
 // Tras un despliegue, una pestaña abierta puede pedir pantallas (chunks) que ya no existen y quedaría en blanco.
 // Si pasa, recargamos una sola vez para traer la versión nueva.
@@ -178,6 +179,9 @@ function Shell() {
             <p className="text-sm font-bold text-white leading-none">CTI Nexus</p>
             <p className="text-[9px] font-mono text-slate-600 tracking-widest mt-0.5">INTELLIGENCE OS</p>
           </div>
+        </div>
+        <div className="flex items-center justify-center px-4 py-2.5 border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+          <GotecLogo height={26} />
         </div>
 
         <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">

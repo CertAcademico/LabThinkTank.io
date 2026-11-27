@@ -6,6 +6,9 @@ import type { PyodideInterface } from '../types/pyodide'
 import CasePrimer, { type Learn } from './CasePrimer'
 import { TIER } from './BadgeCard'
 import TeamChat from './TeamChat'
+import MissionBriefing, { DomainChips } from './MissionBriefing'
+import { getBriefing } from '../data/orionBriefings'
+import TeacherDeck from './TeacherDeck'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -227,6 +230,7 @@ function DatasetDiagram({ schema, name }: { schema: Record<string, string>; name
 
 function Arena({ challenge }: { challenge: Challenge }) {
   const { token, user } = useAuth()
+  const [showDeck,   setShowDeck]   = useState(false)
   const [pyodide,    setPyodide]    = useState<PyodideInterface | null>(null)
   const [initStatus, setInitStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [code,       setCode]       = useState('')
@@ -603,6 +607,11 @@ if not uploaded_df.empty:
           )}
         </div>
       </div>
+
+      {getBriefing(challenge.id) && (
+        <MissionBriefing id={challenge.id} onTeacherDeck={user?.role === 'admin' ? () => setShowDeck(true) : undefined} />
+      )}
+      {showDeck && <TeacherDeck retoId={challenge.id} title={challenge.title} criteria={challenge.criteria} onClose={() => setShowDeck(false)} />}
 
       {teacherNotes.length > 0 && (
         <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(250,204,21,0.07)', border: '1px solid rgba(250,204,21,0.4)' }}>
@@ -1929,6 +1938,7 @@ export default function ChallengeArena() {
                         🔒 Se desbloquea al sacar al menos {c.path_pass_score ?? 50}/100 en «{c.locked_by}».
                       </p>
                     )}
+                    {getBriefing(c.id) && <div className="mb-2"><DomainChips id={c.id} /></div>}
                     {c.description && (
                       <p className="text-xs text-slate-500 mb-2 leading-relaxed line-clamp-2">{c.description}</p>
                     )}

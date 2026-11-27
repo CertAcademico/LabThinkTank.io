@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import TeamChat from './TeamChat'
+import OrionLogo, { GotecLogo } from './OrionLogo'
+import TeacherDeck from './TeacherDeck'
+import MissionBriefing, { DomainChips } from './MissionBriefing'
+import { getBriefing } from '../data/orionBriefings'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 const glass = { background: 'rgba(26,31,19,0.6)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }
@@ -20,6 +24,7 @@ export default function GroupOverviewTab({ teams, token }: { teams: { id: number
   const [data, setData]     = useState<Overview | null>(null)
   const [open, setOpen]     = useState<number | null>(null)
   const [error, setError]   = useState('')
+  const [deck, setDeck]     = useState<{ id?: number; title?: string; criteria?: string } | null>(null)
   const headers = { Authorization: `Bearer ${token}` }
 
   useEffect(() => { if (!teamId && def) setTeamId(def.id) }, [def, teamId])
@@ -40,12 +45,20 @@ export default function GroupOverviewTab({ teams, token }: { teams: { id: number
     load()
   }
 
+  const deckView = deck && <TeacherDeck retoId={deck.id} title={deck.title} criteria={deck.criteria} onClose={() => setDeck(null)} />
+
   if (!teams.length) return <p className="text-sm text-slate-500">No hay grupos creados.</p>
 
   return (
     <div className="space-y-5">
+      {deckView}
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-lg font-bold text-slate-100">🎖️ Grupo {data?.name ?? ''}</h2>
+        <GotecLogo height={36} />
+        <OrionLogo size={44} />
+        <div>
+          <h2 className="text-lg font-bold text-slate-100">Grupo {data?.name ?? ''}</h2>
+          <p className="text-[10px] tracking-[0.2em] font-bold" style={{ color: GOLD }}>ENTRENAMIENTO TÁCTICO CTI · CCOCI</p>
+        </div>
         <select value={teamId} onChange={e => setTeamId(Number(e.target.value))}
                 className="rounded-lg px-3 py-1.5 text-xs text-slate-200"
                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
@@ -53,6 +66,10 @@ export default function GroupOverviewTab({ teams, token }: { teams: { id: number
         </select>
         {data && (
           <div className="flex gap-2 ml-auto">
+            <button onClick={() => setDeck({})} className="rounded-lg px-3 py-1.5 text-[11px] font-semibold"
+                    style={{ background: 'rgba(212,189,85,0.15)', border: '1px solid rgba(212,189,85,0.45)', color: '#e0cf74' }}>
+              🎓 Presentación del programa
+            </button>
             <button onClick={() => toggle('signup', !data.open_signup)} className="rounded-lg px-3 py-1.5 text-[11px]"
                     style={{ border: `1px solid ${data.open_signup ? '#4ade80' : 'rgba(255,255,255,0.12)'}`, color: data.open_signup ? '#4ade80' : '#a3a27c' }}>
               Registro {data.open_signup ? 'abierto' : 'cerrado'}
@@ -82,13 +99,19 @@ export default function GroupOverviewTab({ teams, token }: { teams: { id: number
                   <div key={r.id} className="rounded-lg" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
                     <button onClick={() => setOpen(open === r.id ? null : r.id)} className="w-full flex items-center gap-3 px-3 py-2 text-left">
                       <span className="w-6 text-[11px] font-mono" style={{ color: GOLD }}>{String(i + 1).padStart(2, '0')}</span>
-                      <span className="flex-1 text-xs text-slate-200">{r.title}</span>
+                      <span className="flex-1 min-w-0 space-y-1">
+                        <span className="block text-xs text-slate-200">{r.title}</span>
+                        {getBriefing(r.id) && <DomainChips id={r.id} />}
+                      </span>
                       <span className="text-[10px] text-slate-500">{r.difficulty}</span>
                       <span className="text-[10px]" style={{ color: st.color }}>{st.label}</span>
                       <span className="text-[10px] text-slate-500">{done}/{data.members.length} entregas</span>
                     </button>
                     {open === r.id && (
-                      <div className="px-4 pb-3 space-y-2 text-xs text-slate-400 whitespace-pre-wrap">
+                      <div className="px-4 pb-3 space-y-3 text-xs text-slate-400 whitespace-pre-wrap">
+                        {getBriefing(r.id) && (
+                          <MissionBriefing id={r.id} onTeacherDeck={() => setDeck({ id: r.id, title: r.title, criteria: r.criteria })} />
+                        )}
                         {r.description && <p>{r.description}</p>}
                         {r.objective && <p><b className="text-slate-300">Objetivo:</b> {r.objective}</p>}
                         {r.criteria && <p><b className="text-slate-300">Criterios:</b> {r.criteria}</p>}

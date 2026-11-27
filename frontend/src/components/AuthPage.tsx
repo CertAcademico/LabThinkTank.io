@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import OrionLogo, { GotecLogo } from './OrionLogo'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 const DOMAIN  = 'universidadean.edu.co'
@@ -136,6 +137,10 @@ export default function AuthPage() {
             </div>
           </div>
 
+          <div className="flex items-center gap-4 mb-8">
+            <GotecLogo height={48} />
+            <OrionLogo size={56} />
+          </div>
           <h1 className="text-3xl font-bold text-white leading-tight mb-4">
             SandBox Entrenamiento CTI<br />
             <span style={{ color: '#d4bd55' }}>y ORION</span>

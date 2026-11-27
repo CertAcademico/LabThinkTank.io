@@ -6,6 +6,7 @@ import CaseDashboard from './CaseDashboard'
 import GroupOverviewTab from './GroupOverviewTab'
 import { useAuth } from '../contexts/AuthContext'
 import { BadgeCard, TIER, type Badge } from './BadgeCard'
+import { GotecLogo } from './OrionLogo'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -2640,6 +2641,9 @@ export default function AdminPanel({ onExitAdmin }: { onExitAdmin: () => void })
             <p className="text-sm font-bold text-white leading-none">Admin Panel</p>
             <p className="text-[9px] font-mono text-orange-900 tracking-widest mt-0.5">CTI NEXUS</p>
           </div>
+        </div>
+        <div className="flex items-center justify-center px-4 py-2.5 border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+          <GotecLogo height={26} />
         </div>
 
         <nav className="flex-1 px-2 py-4 space-y-0.5">

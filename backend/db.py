@@ -273,6 +273,15 @@ def _migrate(conn) -> None:
     user_cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
     if "password_expires_at" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN password_expires_at TEXT")
+    aa_cols = {r[1] for r in conn.execute("PRAGMA table_info(team_auto_assign)").fetchall()}
+    if aa_cols and "unlocked" not in aa_cols:
+        # 1 = habilitado por el admin. Se crea con 1 para no cambiar grupos existentes;
+        # ORION arranca con solo el primer reto de la ruta habilitado (ver abajo).
+        conn.execute("ALTER TABLE team_auto_assign ADD COLUMN unlocked INTEGER NOT NULL DEFAULT 1")
+        orion = conn.execute("SELECT id FROM teams WHERE UPPER(name) = 'ORION'").fetchone()
+        if orion:
+            conn.execute("UPDATE team_auto_assign SET unlocked = CASE WHEN challenge_id = 1 THEN 1 ELSE 0 END WHERE team_id = ?",
+                         (orion[0],))
     if "tokens_valid_after" not in user_cols:
         # Epoch (s): tokens emitidos antes se rechazan (cambio de clave / cierre de sesiones).
         conn.execute("ALTER TABLE users ADD COLUMN tokens_valid_after INTEGER")
@@ -1539,6 +1548,14 @@ def team_auto_challenges(conn, team_id) -> list:
         return []
     return [r[0] for r in conn.execute(
         "SELECT challenge_id FROM team_auto_assign WHERE team_id = ? ORDER BY challenge_id", (team_id,))]
+
+
+def program_locked(conn, challenge_id: int, email: str) -> bool:
+    """True si el reto pertenece al programa del grupo del usuario (p. ej. ORION) y el admin aún no lo habilitó."""
+    row = conn.execute("""
+        SELECT a.unlocked FROM team_auto_assign a JOIN team_members tm ON tm.team_id = a.team_id
+        WHERE tm.user_email = ? AND a.challenge_id = ? LIMIT 1""", (email, challenge_id)).fetchone()
+    return bool(row) and not row[0]
 
 
 def assign_team_auto_challenges(conn, team_id, email: str) -> int:

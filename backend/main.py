@@ -460,6 +460,19 @@ def auth_change_password(payload: dict = Body(...), authorization: str = Header(
     return {"ok": True}
 
 
+@app.patch("/admin/teams/{team_id}/challenges/{challenge_id}/unlock")
+def admin_team_challenge_unlock(team_id: int, challenge_id: int, payload: dict = Body(...), authorization: str = Header(None)):
+    """Habilita o bloquea un reto del programa de un grupo (p. ej. ORION) para todos sus integrantes."""
+    _require_admin(authorization)
+    unlocked = 1 if payload.get("unlocked") else 0
+    with get_conn() as conn:
+        n = conn.execute("UPDATE team_auto_assign SET unlocked = ? WHERE team_id = ? AND challenge_id = ?",
+                         (unlocked, team_id, challenge_id)).rowcount
+    if not n:
+        raise HTTPException(status_code=404, detail="Ese reto no pertenece al programa del grupo")
+    return {"ok": True, "team_id": team_id, "challenge_id": challenge_id, "unlocked": bool(unlocked)}
+
+
 @app.get("/admin/orion/answers/{challenge_id}")
 def admin_orion_answers(challenge_id: int, authorization: str = Header(None)):
     """Respuestas esperadas de un reto ORION: solo admin (no viajan en el bundle del frontend)."""
@@ -575,7 +588,7 @@ def admin_team_overview(team_id: int, authorization: str = Header(None)):
             raise HTTPException(status_code=404, detail="Grupo no encontrado")
         retos = [dict(r) for r in conn.execute("""
             SELECT c.id, c.title, c.description, c.objective, c.criteria, c.difficulty, c.status, c.stage,
-                   d.name AS dataset_name
+                   d.name AS dataset_name, ta.unlocked
             FROM team_auto_assign ta JOIN challenges c ON c.id = ta.challenge_id
             LEFT JOIN datasets d ON d.id = c.dataset_id
             WHERE ta.team_id = ? ORDER BY c.id""", (team_id,))]
@@ -1668,8 +1681,9 @@ def student_challenges(authorization: str = Header(None)):
             SELECT t.id, t.name FROM team_members tm JOIN teams t ON t.id = tm.team_id
             WHERE tm.user_email = ? AND EXISTS (SELECT 1 FROM team_auto_assign a WHERE a.team_id = t.id)
             LIMIT 1""", (user["email"],)).fetchone()
-        program_ids = {r2["challenge_id"] for r2 in conn.execute(
-            "SELECT challenge_id FROM team_auto_assign WHERE team_id = ?", (program["id"],))} if program else set()
+        program_unlocked = {r2["challenge_id"]: bool(r2["unlocked"]) for r2 in conn.execute(
+            "SELECT challenge_id, unlocked FROM team_auto_assign WHERE team_id = ?", (program["id"],))} if program else {}
+        program_ids = set(program_unlocked)
 
     out = []
     for r in rows:
@@ -1680,6 +1694,10 @@ def student_challenges(authorization: str = Header(None)):
         d = dict(r)
         if program:
             d.update(program=program["name"], starts_at=None, deadline=None)
+            if not program_unlocked.get(d["id"], True):
+                # bloqueado hasta que el admin lo habilite: no se filtra enunciado, pistas ni dataset
+                d.update(locked=True, locked_by="habilitación del instructor", objective="", criteria="",
+                         hints_json="[]", schema_json=None, dataset_name=None, hint_levels=0)
         if is_admin:
             d["admin_preview"] = True
         if d.get("case_key") == "aurora":
@@ -1961,6 +1979,9 @@ def _has_challenge_access(conn, challenge_id: int, user_email: str):
     st = path_status(conn, user_email).get(challenge_id)
     if st and st["locked"]:
         return None
+    from db import program_locked
+    if program_locked(conn, challenge_id, user_email):
+        return None                           # reto de programa (ORION) aún no habilitado por el admin
     return _has_challenge_access_raw(conn, challenge_id, user_email)
 
 

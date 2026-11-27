@@ -10,6 +10,7 @@ const box = { background: 'rgba(26,31,19,0.6)', border: '1px solid rgba(212,189,
 
 export interface ProgramChallenge {
   id: number; title: string; difficulty?: string; submitted: number; my_score?: number; min_score_badge?: number; badge_earned?: number
+  locked?: boolean
 }
 
 const CICLO = ['Planear (PIR)', 'Recolectar', 'Procesar', 'Analizar', 'Difundir (BLUF · TLP)', 'Retroalimentar']
@@ -44,7 +45,7 @@ export default function OrionProgram({ challenges, onOpen, chat }:
           <div className="flex-1 min-w-[200px]">
             <p className="text-[10px] font-bold tracking-[0.25em]" style={{ color: GOLD }}>PROGRAMA ORION · CCOCI</p>
             <h2 className="text-xl font-bold text-slate-100">Entrenamiento táctico en Ciberinteligencia</h2>
-            <p className="text-xs text-slate-500">{challenges.length} retos en 4 fases · a tu ritmo · con pistas, asistente y canal con el instructor</p>
+            <p className="text-xs text-slate-500">{challenges.length} retos en 4 fases · {challenges.filter(c => !c.locked).length} habilitados por el instructor · con pistas, asistente y canal con el instructor</p>
           </div>
           <div className="flex items-center gap-3 rounded-xl px-4 py-2" style={{ background: 'rgba(212,189,85,0.07)', border: '1px solid rgba(212,189,85,0.3)' }}>
             <RankInsignia level={rank} size={58} />
@@ -139,8 +140,8 @@ export default function OrionProgram({ challenges, onOpen, chat }:
               const ok = (c.my_score ?? -1) >= PASS_SCORE
               const dist = hasDistintivo(c)
               return (
-                <div key={c.id} onClick={() => onOpen(c.id)}
-                     className="rounded-xl p-4 flex gap-4 items-start cursor-pointer hover:bg-white/[0.02] transition-colors"
+                <div key={c.id} onClick={() => { if (!c.locked) onOpen(c.id) }}
+                     className={`rounded-xl p-4 flex gap-4 items-start transition-colors ${c.locked ? 'opacity-55 cursor-not-allowed' : 'cursor-pointer hover:bg-white/[0.02]'}`}
                      style={{ background: 'rgba(26,31,19,0.55)', border: `1px solid ${ok ? `${pc}55` : 'rgba(255,255,255,0.07)'}` }}>
                   <Distintivo id={c.id} phase={phase} earned={dist} size={52} />
                   <div className="flex-1 min-w-0 space-y-1.5">
@@ -157,14 +158,17 @@ export default function OrionProgram({ challenges, onOpen, chat }:
                     </div>
                   </div>
                   <div className="shrink-0 text-right space-y-1">
-                    {c.submitted > 0
+                    {c.locked
+                      ? <><span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ color: '#a3a27c', border: '1px solid rgba(163,162,124,0.3)' }}>🔒 Bloqueado</span>
+                          <p className="text-[10px] text-slate-600 max-w-[150px]">Se habilita cuando el instructor lo indique</p></>
+                      : c.submitted > 0
                       ? <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={ok
                           ? { background: 'rgba(74,222,128,0.1)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.25)' }
                           : { background: 'rgba(250,204,21,0.08)', color: '#facc15', border: '1px solid rgba(250,204,21,0.25)' }}>
                           {ok ? '✓ Aprobado' : 'Entregado'}{c.my_score != null ? ` · ${c.my_score}/100` : ''}
                         </span>
                       : <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ color: '#facc15', border: '1px solid rgba(250,204,21,0.2)' }}>Pendiente</span>}
-                    <p className="text-[10px] text-slate-600">Abrir arena →</p>
+                    {!c.locked && <p className="text-[10px] text-slate-600">Abrir arena →</p>}
                   </div>
                 </div>
               )
